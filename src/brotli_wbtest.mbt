@@ -99,6 +99,63 @@ fn make_tree_group(
 }
 
 ///|
+fn make_single_block_body_header(
+  command_symbol : Int,
+  distance_symbol : Int,
+) -> BrotliCompressedMetablockHeader raise FzipError {
+  let literal_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  literal_trees.push(make_one_symbol_tree(65, brotli_num_literal_symbols))
+  let command_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  command_trees.push(
+    make_one_symbol_tree(command_symbol, brotli_num_command_symbols),
+  )
+  let distance_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  distance_trees.push(
+    make_one_symbol_tree(
+      distance_symbol,
+      brotli_distance_alphabet_size(0, 0, 24),
+    ),
+  )
+  {
+    literal_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    command_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    distance_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    distance_postfix_bits: 0,
+    num_direct_distance_codes: 0,
+    context_modes: [0],
+    literal_context_map: {
+      num_trees: 1,
+      map: FixedArray::make(1 << brotli_literal_context_bits, b'\x00'),
+    },
+    distance_context_map: {
+      num_trees: 1,
+      map: FixedArray::make(1 << brotli_distance_context_bits, b'\x00'),
+    },
+    literal_trees: make_tree_group(brotli_num_literal_symbols, literal_trees),
+    command_trees: make_tree_group(brotli_num_command_symbols, command_trees),
+    distance_trees: make_tree_group(
+      brotli_distance_alphabet_size(0, 0, 24),
+      distance_trees,
+    ),
+  }
+}
+
+///|
 test "brotli error codes show stable names" {
   inspect(BrotliInvalidWindowBits, content="BrotliInvalidWindowBits")
   inspect(BrotliInvalidMetablock, content="BrotliInvalidMetablock")
@@ -636,7 +693,13 @@ test "compressed body switches literal blocks" {
   }
   let reader = BrotliBitReader::new([0x00, 0x00], 0, 2)
   let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
-  brotli_decode_compressed_metablock_body(reader, header, output, 2)
+  brotli_decode_compressed_metablock_body(
+    reader,
+    header,
+    output,
+    2,
+    BrotliDecoderState::new(),
+  )
   inspect(str_from_u8(output.finish()), content="AB")
 }
 
@@ -698,8 +761,39 @@ test "compressed body selects literal tree by LSB context" {
   }
   let reader = BrotliBitReader::new([0x00, 0x00], 0, 2)
   let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
-  brotli_decode_compressed_metablock_body(reader, header, output, 2)
+  brotli_decode_compressed_metablock_body(
+    reader,
+    header,
+    output,
+    2,
+    BrotliDecoderState::new(),
+  )
   inspect(str_from_u8(output.finish()), content="AB")
+}
+
+///|
+test "compressed body preserves distance ring in decoder state" {
+  let state = BrotliDecoderState::new()
+  let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
+  let first_reader = BrotliBitReader::new([0x01], 0, 1)
+  brotli_decode_compressed_metablock_body(
+    first_reader,
+    make_single_block_body_header(144, 16),
+    output,
+    4,
+    state,
+  )
+  inspect(str_from_u8(output.finish()), content="AAAA")
+
+  let second_reader = BrotliBitReader::new([0x00], 0, 1)
+  brotli_decode_compressed_metablock_body(
+    second_reader,
+    make_single_block_body_header(0, 0),
+    output,
+    2,
+    state,
+  )
+  inspect(str_from_u8(output.finish()), content="AAAAAA")
 }
 
 ///|

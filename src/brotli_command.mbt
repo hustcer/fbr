@@ -105,8 +105,8 @@ fn brotli_decode_compressed_metablock_body(
   header : BrotliCompressedMetablockHeader,
   output : BrotliOutputBuilder,
   length : Int,
+  state : BrotliDecoderState,
 ) -> Unit raise FzipError {
-  let distance_ring = BrotliDistanceRing::new()
   let literal_blocks = BrotliBlockTracker::new_with_length(
     header.literal_block.num_types,
     header.literal_block.first_length,
@@ -183,7 +183,7 @@ fn brotli_decode_compressed_metablock_body(
       )
     }
     let distance = if command.distance_code >= 0 {
-      distance_ring.take_short_code(command.distance_code)
+      state.distance_ring.take_short_code(command.distance_code)
     } else {
       distance_blocks.ensure_ready(reader, header.distance_block)
       let distance_tree_index = brotli_context_map_tree_index(
@@ -197,13 +197,13 @@ fn brotli_decode_compressed_metablock_body(
       brotli_read_distance(
         reader,
         distance_tree,
-        distance_ring,
+        state.distance_ring,
         header.distance_postfix_bits,
         header.num_direct_distance_codes,
       )
     }
     output.copy_from_distance(distance, command.copy_length)
-    distance_ring.record(distance)
+    state.distance_ring.record(distance)
     remaining -= command.copy_length
   }
 }

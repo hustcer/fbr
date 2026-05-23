@@ -52,6 +52,16 @@ priv struct BrotliOutputBuilder {
 }
 
 ///|
+priv struct BrotliDecoderState {
+  distance_ring : BrotliDistanceRing
+}
+
+///|
+fn BrotliDecoderState::new() -> BrotliDecoderState {
+  { distance_ring: BrotliDistanceRing::new() }
+}
+
+///|
 fn BrotliOutputBuilder::new(opts : UnbrotliOptions) -> BrotliOutputBuilder {
   match opts.out {
     Some(out) =>
@@ -232,6 +242,7 @@ fn brotli_decode_scaffold(
   let window_bits = brotli_decode_window_bits(reader)
   brotli_validate_window_bits(window_bits)
   let output = BrotliOutputBuilder::new(opts)
+  let state = BrotliDecoderState::new()
   while true {
     let header = brotli_decode_metablock_header(reader)
     if header.is_empty {
@@ -254,6 +265,7 @@ fn brotli_decode_scaffold(
         compressed_header,
         output,
         header.length,
+        state,
       )
     }
     if header.is_last {
