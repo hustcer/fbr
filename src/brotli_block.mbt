@@ -49,18 +49,29 @@ priv struct BrotliBlockTracker {
 fn BrotliBlockTracker::new(
   num_types : Int,
 ) -> BrotliBlockTracker raise FzipError {
+  BrotliBlockTracker::new_with_length(num_types, brotli_block_size_cap)
+}
+
+///|
+fn BrotliBlockTracker::new_with_length(
+  num_types : Int,
+  initial_length : Int,
+) -> BrotliBlockTracker raise FzipError {
   if num_types < 1 {
     raise fzip_err(
       BrotliInvalidMetablock,
       msg="block type count must be positive",
     )
   }
+  if initial_length < 1 {
+    raise fzip_err(BrotliInvalidMetablock, msg="block length must be positive")
+  }
   {
     num_types,
     current_type: 0,
     previous_type_2: 1,
     previous_type_1: 0,
-    remaining: brotli_block_size_cap,
+    remaining: initial_length,
   }
 }
 
@@ -103,4 +114,34 @@ fn BrotliBlockTracker::switch_with_code(
   }
   ignore(self.resolve_type_code(code))
   self.remaining = length
+}
+
+///|
+fn BrotliBlockTracker::ensure_ready(
+  self : BrotliBlockTracker,
+  reader : BrotliBitReader,
+  header : BrotliBlockSwitchHeader,
+) -> Unit raise FzipError {
+  if self.remaining > 0 {
+    return
+  }
+  if header.num_types == 1 {
+    self.current_type = 0
+    self.remaining = brotli_block_size_cap
+    return
+  }
+  guard header.type_tree is Some(type_tree) else {
+    raise fzip_err(BrotliInvalidMetablock, msg="missing Brotli block type tree")
+  }
+  guard header.length_tree is Some(length_tree) else {
+    raise fzip_err(
+      BrotliInvalidMetablock,
+      msg="missing Brotli block length tree",
+    )
+  }
+  let type_code = brotli_read_symbol(
+    reader, type_tree, brotli_huffman_table_bits,
+  )
+  let length = brotli_read_block_length(reader, length_tree)
+  self.switch_with_code(type_code, length)
 }

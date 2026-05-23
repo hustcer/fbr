@@ -76,6 +76,29 @@ fn write_window10_final_metablock_header(
 }
 
 ///|
+fn make_one_symbol_tree(
+  symbol : Int,
+  alphabet_size : Int,
+) -> FixedArray[BrotliHuffmanCode] raise FzipError {
+  let lengths = FixedArray::make(alphabet_size, b'\x00')
+  lengths[symbol] = b'\x01'
+  brotli_build_huffman_table(lengths, alphabet_size, brotli_huffman_table_bits)
+}
+
+///|
+fn make_tree_group(
+  alphabet_size : Int,
+  trees : Array[FixedArray[BrotliHuffmanCode]],
+) -> BrotliHuffmanTreeGroup {
+  {
+    alphabet_size_max: alphabet_size,
+    alphabet_size_limit: alphabet_size,
+    root_bits: brotli_huffman_table_bits,
+    trees,
+  }
+}
+
+///|
 test "brotli error codes show stable names" {
   inspect(BrotliInvalidWindowBits, content="BrotliInvalidWindowBits")
   inspect(BrotliInvalidMetablock, content="BrotliInvalidMetablock")
@@ -558,6 +581,63 @@ test "brotli distance formula decodes direct and postfix distances" {
   inspect(brotli_distance_offset(17, 0, 0), content="3")
   inspect(brotli_distance_extra_bits(20, 1, 4), content="1")
   inspect(brotli_distance_offset(20, 1, 4), content="5")
+}
+
+///|
+test "compressed body switches literal blocks" {
+  let literal_map = FixedArray::make(2 << brotli_literal_context_bits, b'\x00')
+  for i in (1 << brotli_literal_context_bits)..<literal_map.length() {
+    literal_map[i] = b'\x01'
+  }
+  let literal_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  literal_trees.push(make_one_symbol_tree(65, brotli_num_literal_symbols))
+  literal_trees.push(make_one_symbol_tree(66, brotli_num_literal_symbols))
+  let command_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  command_trees.push(make_one_symbol_tree(16, brotli_num_command_symbols))
+  let distance_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  distance_trees.push(
+    make_one_symbol_tree(0, brotli_distance_alphabet_size(0, 0, 24)),
+  )
+  let header : BrotliCompressedMetablockHeader = {
+    literal_block: {
+      num_types: 2,
+      type_tree: Some(make_one_symbol_tree(1, 4)),
+      length_tree: Some(
+        make_one_symbol_tree(0, brotli_num_block_length_symbols),
+      ),
+      first_length: 1,
+    },
+    command_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    distance_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    distance_postfix_bits: 0,
+    num_direct_distance_codes: 0,
+    context_modes: [0, 0],
+    literal_context_map: { num_trees: 2, map: literal_map },
+    distance_context_map: {
+      num_trees: 1,
+      map: FixedArray::make(1 << brotli_distance_context_bits, b'\x00'),
+    },
+    literal_trees: make_tree_group(brotli_num_literal_symbols, literal_trees),
+    command_trees: make_tree_group(brotli_num_command_symbols, command_trees),
+    distance_trees: make_tree_group(
+      brotli_distance_alphabet_size(0, 0, 24),
+      distance_trees,
+    ),
+  }
+  let reader = BrotliBitReader::new([0x00, 0x00], 0, 2)
+  let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
+  brotli_decode_compressed_metablock_body(reader, header, output, 2)
+  inspect(str_from_u8(output.finish()), content="AB")
 }
 
 ///|

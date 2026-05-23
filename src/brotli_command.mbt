@@ -107,9 +107,26 @@ fn brotli_decode_compressed_metablock_body(
   length : Int,
 ) -> Unit raise FzipError {
   let distance_ring = BrotliDistanceRing::new()
+  let literal_blocks = BrotliBlockTracker::new_with_length(
+    header.literal_block.num_types,
+    header.literal_block.first_length,
+  )
+  let command_blocks = BrotliBlockTracker::new_with_length(
+    header.command_block.num_types,
+    header.command_block.first_length,
+  )
+  let distance_blocks = BrotliBlockTracker::new_with_length(
+    header.distance_block.num_types,
+    header.distance_block.first_length,
+  )
   let mut remaining = length
   while remaining > 0 {
-    let command = brotli_read_command(reader, header.command_trees.tree(0))
+    command_blocks.ensure_ready(reader, header.command_block)
+    let command = brotli_read_command(
+      reader,
+      header.command_trees.tree(command_blocks.current_type),
+    )
+    command_blocks.remaining -= 1
     if command.insert_length > remaining {
       raise fzip_err(
         BrotliInvalidMetablock,
@@ -117,10 +134,18 @@ fn brotli_decode_compressed_metablock_body(
       )
     }
     output.ensure(command.insert_length)
-    let literal_tree = header.literal_trees.tree(0)
     for _ in 0..<command.insert_length {
+      literal_blocks.ensure_ready(reader, header.literal_block)
+      let literal_tree_index = brotli_context_map_tree_index(
+        header.literal_context_map,
+        literal_blocks.current_type,
+        brotli_literal_context_bits,
+        0,
+      )
       let literal = brotli_read_symbol(
-        reader, literal_tree, brotli_huffman_table_bits,
+        reader,
+        header.literal_trees.tree(literal_tree_index),
+        brotli_huffman_table_bits,
       )
       if literal < 0 || literal > 255 {
         raise fzip_err(
@@ -130,6 +155,7 @@ fn brotli_decode_compressed_metablock_body(
       }
       output.buf[output.len] = literal.to_byte()
       output.len += 1
+      literal_blocks.remaining -= 1
     }
     remaining -= command.insert_length
     if remaining == 0 {
@@ -144,9 +170,18 @@ fn brotli_decode_compressed_metablock_body(
     let distance = if command.distance_code >= 0 {
       distance_ring.take_short_code(command.distance_code)
     } else {
+      distance_blocks.ensure_ready(reader, header.distance_block)
+      let distance_tree_index = brotli_context_map_tree_index(
+        header.distance_context_map,
+        distance_blocks.current_type,
+        brotli_distance_context_bits,
+        command.distance_context,
+      )
+      let distance_tree = header.distance_trees.tree(distance_tree_index)
+      distance_blocks.remaining -= 1
       brotli_read_distance(
         reader,
-        header.distance_trees.tree(0),
+        distance_tree,
         distance_ring,
         header.distance_postfix_bits,
         header.num_direct_distance_codes,
