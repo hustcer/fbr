@@ -641,6 +641,68 @@ test "compressed body switches literal blocks" {
 }
 
 ///|
+test "brotli literal context modes match reference categories" {
+  inspect(brotli_literal_context_id(0, 65, 0), content="1")
+  inspect(brotli_literal_context_id(1, 255, 0), content="63")
+  inspect(brotli_literal_context_id(2, 65, 32), content="48")
+  inspect(brotli_literal_context_id(2, 97, 65), content="58")
+  inspect(brotli_literal_context_id(3, 255, 128), content="60")
+}
+
+///|
+test "compressed body selects literal tree by LSB context" {
+  let literal_map = FixedArray::make(1 << brotli_literal_context_bits, b'\x00')
+  literal_map[1] = b'\x01'
+  let literal_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  literal_trees.push(make_one_symbol_tree(65, brotli_num_literal_symbols))
+  literal_trees.push(make_one_symbol_tree(66, brotli_num_literal_symbols))
+  let command_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  command_trees.push(make_one_symbol_tree(16, brotli_num_command_symbols))
+  let distance_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  distance_trees.push(
+    make_one_symbol_tree(0, brotli_distance_alphabet_size(0, 0, 24)),
+  )
+  let header : BrotliCompressedMetablockHeader = {
+    literal_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    command_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    distance_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    distance_postfix_bits: 0,
+    num_direct_distance_codes: 0,
+    context_modes: [0],
+    literal_context_map: { num_trees: 2, map: literal_map },
+    distance_context_map: {
+      num_trees: 1,
+      map: FixedArray::make(1 << brotli_distance_context_bits, b'\x00'),
+    },
+    literal_trees: make_tree_group(brotli_num_literal_symbols, literal_trees),
+    command_trees: make_tree_group(brotli_num_command_symbols, command_trees),
+    distance_trees: make_tree_group(
+      brotli_distance_alphabet_size(0, 0, 24),
+      distance_trees,
+    ),
+  }
+  let reader = BrotliBitReader::new([0x00, 0x00], 0, 2)
+  let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
+  brotli_decode_compressed_metablock_body(reader, header, output, 2)
+  inspect(str_from_u8(output.finish()), content="AB")
+}
+
+///|
 test "brotli_build_huffman_table rejects malformed length sets" {
   let empty : FixedArray[Byte] = [0, 0, 0, 0]
   let empty_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_build_huffman_table(

@@ -111,3 +111,129 @@ fn brotli_context_map_tree_index(
   }
   tree_index
 }
+
+///|
+fn brotli_ascii_utf8_context1(byte : Int) -> Int {
+  if byte == 9 || byte == 10 || byte == 13 {
+    1
+  } else if byte == 32 {
+    2
+  } else if byte == 34 || byte == 39 {
+    4
+  } else if byte == 37 {
+    5
+  } else if byte == 40 || byte == 60 || byte == 91 || byte == 123 {
+    6
+  } else if byte == 41 || byte == 62 || byte == 93 || byte == 125 {
+    7
+  } else if byte == 44 || byte == 59 || byte == 58 {
+    8
+  } else if byte == 46 {
+    9
+  } else if byte == 61 {
+    10
+  } else if byte >= 48 && byte <= 57 {
+    11
+  } else if byte == 65 || byte == 69 || byte == 73 || byte == 79 || byte == 85 {
+    12
+  } else if byte >= 65 && byte <= 90 {
+    13
+  } else if byte == 97 ||
+    byte == 101 ||
+    byte == 105 ||
+    byte == 111 ||
+    byte == 117 {
+    14
+  } else if byte >= 97 && byte <= 122 {
+    15
+  } else if byte < 32 {
+    0
+  } else {
+    3
+  }
+}
+
+///|
+fn brotli_ascii_utf8_context2(byte : Int) -> Int {
+  if byte <= 32 {
+    0
+  } else if byte >= 48 && byte <= 57 {
+    2
+  } else if byte >= 65 && byte <= 90 {
+    2
+  } else if byte >= 97 && byte <= 122 {
+    3
+  } else {
+    1
+  }
+}
+
+///|
+fn brotli_literal_context_id(
+  mode : Int,
+  previous_byte_1 : Int,
+  previous_byte_2 : Int,
+) -> Int raise FzipError {
+  let p1 = previous_byte_1 & 0xff
+  let p2 = previous_byte_2 & 0xff
+  match mode & 3 {
+    0 => p1 & 0x3f
+    1 => p1 >> 2
+    2 => {
+      let first = if p1 < 128 {
+        brotli_ascii_utf8_context1(p1) << 2
+      } else if p1 < 192 {
+        p1 & 1
+      } else {
+        2 | (p1 & 1)
+      }
+      let second = if p2 < 128 {
+        brotli_ascii_utf8_context2(p2)
+      } else if p2 < 208 {
+        0
+      } else {
+        2
+      }
+      first | second
+    }
+    3 => {
+      let first = if p1 == 0 {
+        0
+      } else if p1 < 16 {
+        8
+      } else if p1 < 64 {
+        16
+      } else if p1 < 128 {
+        24
+      } else if p1 < 192 {
+        32
+      } else if p1 < 240 {
+        40
+      } else if p1 < 255 {
+        48
+      } else {
+        56
+      }
+      let second = if p2 == 0 {
+        0
+      } else if p2 < 16 {
+        1
+      } else if p2 < 64 {
+        2
+      } else if p2 < 128 {
+        3
+      } else if p2 < 192 {
+        4
+      } else if p2 < 240 {
+        5
+      } else if p2 < 255 {
+        6
+      } else {
+        7
+      }
+      first | second
+    }
+    _ =>
+      raise fzip_err(BrotliInvalidContextMap, msg="invalid Brotli context mode")
+  }
+}

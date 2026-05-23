@@ -136,11 +136,26 @@ fn brotli_decode_compressed_metablock_body(
     output.ensure(command.insert_length)
     for _ in 0..<command.insert_length {
       literal_blocks.ensure_ready(reader, header.literal_block)
+      let previous_byte_1 = if output.len > 0 {
+        output.buf[output.len - 1].to_int()
+      } else {
+        0
+      }
+      let previous_byte_2 = if output.len > 1 {
+        output.buf[output.len - 2].to_int()
+      } else {
+        0
+      }
+      let literal_context = brotli_literal_context_id(
+        header.context_modes[literal_blocks.current_type].to_int(),
+        previous_byte_1,
+        previous_byte_2,
+      )
       let literal_tree_index = brotli_context_map_tree_index(
         header.literal_context_map,
         literal_blocks.current_type,
         brotli_literal_context_bits,
-        0,
+        literal_context,
       )
       let literal = brotli_read_symbol(
         reader,
