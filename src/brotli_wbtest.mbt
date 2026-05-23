@@ -170,6 +170,54 @@ test "brotli_read_huffman_code rejects malformed simple tables" {
 }
 
 ///|
+test "brotli_read_huffman_code reads complex two-symbol table" {
+  let encoded = FixedArray::make(8, b'\x00')
+  let mut pos = 0
+  wbits(encoded, pos, 0) // complex marker, no skipped code-length codes
+  pos += 2
+  wbits(encoded, pos, 7) // code-length-code symbol 1 has length 1
+  pos += 4
+  for _ in 0..<17 {
+    wbits(encoded, pos, 0) // remaining code-length-code lengths are zero
+    pos += 2
+  }
+  wbits(encoded, pos, 0) // decoded table payload: symbol 0
+  pos += 1
+  wbits(encoded, pos, 1) // decoded table payload: symbol 1
+  let reader = BrotliBitReader::new(encoded, 0, encoded.length())
+  let table = brotli_read_huffman_code(reader, 2, 2, 2)
+  inspect(brotli_read_symbol(reader, table, 2), content="0")
+  inspect(brotli_read_symbol(reader, table, 2), content="1")
+}
+
+///|
+test "brotli_read_huffman_code rejects complex repeat overflow" {
+  let encoded = FixedArray::make(8, b'\x00')
+  let mut pos = 0
+  wbits(encoded, pos, 0)
+  pos += 2
+  for _ in 0..<6 {
+    wbits(encoded, pos, 0)
+    pos += 2
+  }
+  wbits(encoded, pos, 7) // code-length-code symbol 17 has length 1
+  pos += 4
+  for _ in 0..<11 {
+    wbits(encoded, pos, 0)
+    pos += 2
+  }
+  wbits(encoded, pos, 7) // repeat-zero extra bits: 10 zeros for alphabet 4
+  let reader = BrotliBitReader::new(encoded, 0, encoded.length())
+  let result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_read_huffman_code(
+    reader, 4, 4, 2,
+  )
+  guard result is Err(FzipError(code~, ..)) else {
+    fail("expected complex repeat overflow error")
+  }
+  assert_eq(code, BrotliInvalidHuffman)
+}
+
+///|
 test "brotli_build_huffman_table rejects malformed length sets" {
   let empty : FixedArray[Byte] = [0, 0, 0, 0]
   let empty_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_build_huffman_table(

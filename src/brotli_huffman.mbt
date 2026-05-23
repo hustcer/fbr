@@ -302,6 +302,146 @@ fn brotli_read_simple_huffman_code(
 }
 
 ///|
+fn brotli_read_code_length_code_lengths(
+  reader : BrotliBitReader,
+  skip : Int,
+) -> FixedArray[Byte] raise FzipError {
+  let lengths = FixedArray::make(brotli_num_code_length_codes, b'\x00')
+  let mut num_codes = 0
+  let mut space = 32
+  for i in skip..<brotli_num_code_length_codes {
+    let ix = reader.peek_bits(4).reinterpret_as_int()
+    let prefix_len = brotli_code_length_prefix_length[ix]
+    let value = brotli_code_length_prefix_value[ix]
+    reader.drop_bits(prefix_len)
+    let code_len_idx = brotli_code_length_code_order[i]
+    lengths[code_len_idx] = value.to_byte()
+    if value != 0 {
+      space -= 32 >> value
+      num_codes += 1
+      if space < 0 {
+        raise fzip_err(
+          BrotliInvalidHuffman,
+          msg="over-subscribed code-length-code lengths",
+        )
+      }
+    }
+  }
+  if !(num_codes == 1 || space == 0) {
+    raise fzip_err(
+      BrotliInvalidHuffman,
+      msg="invalid code-length-code length space",
+    )
+  }
+  lengths
+}
+
+///|
+fn brotli_decode_symbol_code_lengths(
+  reader : BrotliBitReader,
+  code_length_table : FixedArray[BrotliHuffmanCode],
+  alphabet_size : Int,
+) -> FixedArray[Byte] raise FzipError {
+  let lengths = FixedArray::make(alphabet_size, b'\x00')
+  let mut symbol = 0
+  let mut repeat = 0
+  let mut space = 32768
+  let mut prev_code_len = brotli_initial_repeated_code_length
+  let mut repeat_code_len = 0
+  while symbol < alphabet_size && space > 0 {
+    let code_len = brotli_read_symbol(
+      reader, code_length_table, brotli_huffman_max_code_length_code_length,
+    )
+    if code_len < brotli_repeat_previous_code_length {
+      repeat = 0
+      lengths[symbol] = code_len.to_byte()
+      if code_len != 0 {
+        prev_code_len = code_len
+        space -= 32768 >> code_len
+        if space < 0 {
+          raise fzip_err(
+            BrotliInvalidHuffman,
+            msg="over-subscribed Huffman code lengths",
+          )
+        }
+      }
+      symbol += 1
+    } else {
+      let extra_bits = if code_len == brotli_repeat_previous_code_length {
+        2
+      } else if code_len == brotli_repeat_zero_code_length {
+        3
+      } else {
+        raise fzip_err(BrotliInvalidHuffman, msg="invalid code-length repeat")
+      }
+      let new_len = if code_len == brotli_repeat_previous_code_length {
+        prev_code_len
+      } else {
+        0
+      }
+      if repeat_code_len != new_len {
+        repeat = 0
+        repeat_code_len = new_len
+      }
+      let old_repeat = repeat
+      if repeat > 0 {
+        repeat -= 2
+        repeat = repeat << extra_bits
+      }
+      repeat += reader.take_bits(extra_bits).reinterpret_as_int() + 3
+      let repeat_delta = repeat - old_repeat
+      if symbol > alphabet_size - repeat_delta {
+        raise fzip_err(
+          BrotliInvalidHuffman,
+          msg="code-length repeat overflows alphabet",
+        )
+      }
+      if repeat_code_len != 0 {
+        for _ in 0..<repeat_delta {
+          lengths[symbol] = repeat_code_len.to_byte()
+          symbol += 1
+        }
+        space -= repeat_delta << (15 - repeat_code_len)
+        if space < 0 {
+          raise fzip_err(
+            BrotliInvalidHuffman,
+            msg="over-subscribed repeated Huffman code lengths",
+          )
+        }
+      } else {
+        symbol += repeat_delta
+      }
+    }
+  }
+  if space != 0 {
+    raise fzip_err(
+      BrotliInvalidHuffman,
+      msg="under-subscribed Huffman code lengths",
+    )
+  }
+  lengths
+}
+
+///|
+fn brotli_read_complex_huffman_code(
+  reader : BrotliBitReader,
+  marker : Int,
+  alphabet_size_limit : Int,
+  root_bits : Int,
+) -> FixedArray[BrotliHuffmanCode] raise FzipError {
+  let code_length_code_lengths = brotli_read_code_length_code_lengths(
+    reader, marker,
+  )
+  let code_length_table = brotli_build_huffman_table(
+    code_length_code_lengths, brotli_num_code_length_codes, brotli_huffman_max_code_length_code_length,
+  )
+  let code_lengths = brotli_decode_symbol_code_lengths(
+    reader, code_length_table, alphabet_size_limit,
+  )
+  brotli_build_huffman_table(code_lengths, alphabet_size_limit, root_bits)
+}
+
+///|
 fn brotli_read_huffman_code(
   reader : BrotliBitReader,
   alphabet_size_max : Int,
@@ -314,9 +454,8 @@ fn brotli_read_huffman_code(
       reader, alphabet_size_max, alphabet_size_limit, root_bits,
     )
   } else {
-    raise fzip_err(
-      BrotliInvalidHuffman,
-      msg="complex Brotli Huffman reader is not implemented yet",
+    brotli_read_complex_huffman_code(
+      reader, marker, alphabet_size_limit, root_bits,
     )
   }
 }
