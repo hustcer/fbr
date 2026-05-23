@@ -797,6 +797,28 @@ test "compressed body preserves distance ring in decoder state" {
 }
 
 ///|
+test "BrotliOutputBuilder copies identity dictionary word" {
+  let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
+  output.copy_from_dictionary(1, 4)
+  inspect(str_from_u8(output.finish()), content="time")
+}
+
+///|
+test "compressed body decodes identity dictionary reference" {
+  let state = BrotliDecoderState::new()
+  let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
+  let reader = BrotliBitReader::new([0x00], 0, 1)
+  brotli_decode_compressed_metablock_body(
+    reader,
+    make_single_block_body_header(130, 16),
+    output,
+    4,
+    state,
+  )
+  inspect(str_from_u8(output.finish()), content="time")
+}
+
+///|
 test "brotli_build_huffman_table rejects malformed length sets" {
   let empty : FixedArray[Byte] = [0, 0, 0, 0]
   let empty_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_build_huffman_table(

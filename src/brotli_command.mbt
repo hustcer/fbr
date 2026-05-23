@@ -202,7 +202,11 @@ fn brotli_decode_compressed_metablock_body(
         header.num_direct_distance_codes,
       )
     }
-    output.copy_from_distance(distance, command.copy_length)
+    if distance <= output.len {
+      output.copy_from_distance(distance, command.copy_length)
+    } else {
+      output.copy_from_dictionary(distance, command.copy_length)
+    }
     state.distance_ring.record(distance)
     remaining -= command.copy_length
   }
