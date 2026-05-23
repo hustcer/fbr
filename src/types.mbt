@@ -79,10 +79,11 @@ pub fn UnbrotliOptions::default() -> UnbrotliOptions {
 ///|
 /// Options for Brotli compression.
 ///
-/// `quality` follows Brotli's 0-11 scale. The first encoder backend supports
-/// the fast-path qualities 0 and 1; higher quality levels are enabled by later
-/// encoder phases. `window_bits` controls the advertised Brotli window and must
-/// stay within the standard RFC 7932 range 10 through 24.
+/// `quality` follows Brotli's 0-11 scale. Quality levels 0 through 9 are
+/// supported by the current encoder backend; quality levels 10 and 11 are
+/// enabled by the high-quality encoder phase. `window_bits` controls the
+/// advertised Brotli window and must stay within the standard RFC 7932 range 10
+/// through 24.
 pub(all) struct BrotliOptions {
   /// Compression quality, from 0 (fastest) to 11 (maximum compression).
   quality : Int
@@ -93,7 +94,7 @@ pub(all) struct BrotliOptions {
 ///|
 /// Return the default Brotli compression options.
 pub fn BrotliOptions::default() -> BrotliOptions {
-  { quality: 1, window_bits: 22 }
+  { quality: 9, window_bits: 22 }
 }
 
 ///|

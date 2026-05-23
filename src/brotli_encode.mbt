@@ -170,19 +170,17 @@ fn brotli_validate_options(opts : BrotliOptions) -> Unit raise FzipError {
 ///|
 /// Compress bytes into a Brotli stream.
 ///
-/// The current encoder backend supports Brotli quality levels 0 and 1. It
+/// The current encoder backend supports Brotli quality levels 0 through 9. It
 /// emits valid uncompressed meta-blocks with a final empty terminator, which
 /// prioritizes interoperability and decoder round-trip correctness while the
-/// higher-ratio encoder phases are built.
+/// higher-ratio search and entropy-coding work is built.
 pub fn brotli_sync(
   data : FixedArray[Byte],
   opts? : BrotliOptions = BrotliOptions::default(),
 ) -> FixedArray[Byte] raise FzipError {
   brotli_validate_options(opts)
   match opts.quality {
-    0 | 1 => brotli_encode_uncompressed(data, opts)
-    2..=9 =>
-      raise fzip_err(InvalidZipData, msg="Brotli quality requires phase P3")
+    0..=9 => brotli_encode_uncompressed(data, opts)
     10 | 11 =>
       raise fzip_err(InvalidZipData, msg="Brotli quality requires phase P4")
     _ => raise fzip_err(InvalidZipData, msg="Brotli quality must be 0..=11")
