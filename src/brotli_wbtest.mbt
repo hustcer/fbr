@@ -80,6 +80,96 @@ test "brotli_build_huffman_table supports single-symbol tree" {
 }
 
 ///|
+test "brotli_build_huffman_table decodes two-level table entries" {
+  let lengths : FixedArray[Byte] = [1, 3, 3, 3, 3]
+  let table = brotli_build_huffman_table(lengths, 5, 2)
+  let encoded = FixedArray::make(4, b'\x00')
+  let mut pos = 0
+  wbits(encoded, pos, 0)
+  pos += 1
+  wbits(encoded, pos, 1)
+  pos += 3
+  wbits(encoded, pos, 5)
+  pos += 3
+  wbits(encoded, pos, 3)
+  pos += 3
+  wbits(encoded, pos, 7)
+  let reader = BrotliBitReader::new(encoded, 0, encoded.length())
+  inspect(brotli_read_symbol(reader, table, 2), content="0")
+  inspect(brotli_read_symbol(reader, table, 2), content="1")
+  inspect(brotli_read_symbol(reader, table, 2), content="2")
+  inspect(brotli_read_symbol(reader, table, 2), content="3")
+  inspect(brotli_read_symbol(reader, table, 2), content="4")
+}
+
+///|
+test "brotli_read_huffman_code reads simple three-symbol table" {
+  let encoded = FixedArray::make(4, b'\x00')
+  let mut pos = 0
+  wbits(encoded, pos, 1) // simple marker
+  pos += 2
+  wbits(encoded, pos, 2) // read 3 symbols
+  pos += 2
+  wbits(encoded, pos, 0)
+  pos += 2
+  wbits(encoded, pos, 1)
+  pos += 2
+  wbits(encoded, pos, 2)
+  pos += 2
+  wbits(encoded, pos, 0)
+  pos += 1
+  wbits(encoded, pos, 1)
+  pos += 2
+  wbits(encoded, pos, 3)
+  let reader = BrotliBitReader::new(encoded, 0, encoded.length())
+  let table = brotli_read_huffman_code(reader, 4, 4, 3)
+  inspect(brotli_read_symbol(reader, table, 3), content="0")
+  inspect(brotli_read_symbol(reader, table, 3), content="1")
+  inspect(brotli_read_symbol(reader, table, 3), content="2")
+}
+
+///|
+test "brotli_read_huffman_code rejects malformed simple tables" {
+  let duplicate = FixedArray::make(2, b'\x00')
+  let mut pos = 0
+  wbits(duplicate, pos, 1)
+  pos += 2
+  wbits(duplicate, pos, 1)
+  pos += 2
+  wbits(duplicate, pos, 1)
+  pos += 2
+  wbits(duplicate, pos, 1)
+  let duplicate_reader = BrotliBitReader::new(duplicate, 0, duplicate.length())
+  let duplicate_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_read_huffman_code(
+    duplicate_reader, 4, 4, 3,
+  )
+  guard duplicate_result is Err(FzipError(code=duplicate_code, ..)) else {
+    fail("expected duplicate simple Huffman error")
+  }
+  assert_eq(duplicate_code, BrotliInvalidHuffman)
+
+  let out_of_range = FixedArray::make(2, b'\x00')
+  pos = 0
+  wbits(out_of_range, pos, 1)
+  pos += 2
+  wbits(out_of_range, pos, 0)
+  pos += 2
+  wbits(out_of_range, pos, 3)
+  let out_of_range_reader = BrotliBitReader::new(
+    out_of_range,
+    0,
+    out_of_range.length(),
+  )
+  let out_of_range_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_read_huffman_code(
+    out_of_range_reader, 4, 3, 3,
+  )
+  guard out_of_range_result is Err(FzipError(code=range_code, ..)) else {
+    fail("expected out-of-range simple Huffman error")
+  }
+  assert_eq(range_code, BrotliInvalidHuffman)
+}
+
+///|
 test "brotli_build_huffman_table rejects malformed length sets" {
   let empty : FixedArray[Byte] = [0, 0, 0, 0]
   let empty_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_build_huffman_table(
