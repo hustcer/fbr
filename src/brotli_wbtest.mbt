@@ -218,6 +218,55 @@ test "brotli_read_huffman_code rejects complex repeat overflow" {
 }
 
 ///|
+test "brotli_decode_var_len_uint8 reads RFC encodings" {
+  let encoded = FixedArray::make(4, b'\x00')
+  let mut pos = 0
+  wbits(encoded, pos, 0)
+  pos += 1
+  wbits(encoded, pos, 1)
+  pos += 1
+  wbits(encoded, pos, 0)
+  pos += 3
+  wbits(encoded, pos, 1)
+  pos += 1
+  wbits(encoded, pos, 3)
+  pos += 3
+  wbits(encoded, pos, 2)
+  let reader = BrotliBitReader::new(encoded, 0, encoded.length())
+  inspect(brotli_decode_var_len_uint8(reader), content="0")
+  inspect(brotli_decode_var_len_uint8(reader), content="1")
+  inspect(brotli_decode_var_len_uint8(reader), content="10")
+}
+
+///|
+test "brotli_read_block_type_count adds one to encoded value" {
+  let reader = BrotliBitReader::new([0x00], 0, 1)
+  inspect(brotli_read_block_type_count(reader), content="1")
+}
+
+///|
+test "brotli_read_block_length decodes base plus extra bits" {
+  let lengths = FixedArray::make(brotli_num_block_length_symbols, b'\x00')
+  lengths[0] = b'\x01'
+  let table = brotli_build_huffman_table(
+    lengths, brotli_num_block_length_symbols, brotli_huffman_table_bits,
+  )
+  let reader = BrotliBitReader::new([0x02], 0, 1)
+  inspect(brotli_read_block_length(reader, table), content="3")
+}
+
+///|
+test "BrotliBlockTracker resolves block type ring codes" {
+  let tracker = BrotliBlockTracker::new(3)
+  inspect(tracker.resolve_type_code(0), content="1")
+  inspect(tracker.resolve_type_code(1), content="2")
+  inspect(tracker.resolve_type_code(4), content="2")
+  tracker.switch_with_code(2, 7)
+  inspect(tracker.current_type, content="0")
+  inspect(tracker.remaining, content="7")
+}
+
+///|
 test "brotli_build_huffman_table rejects malformed length sets" {
   let empty : FixedArray[Byte] = [0, 0, 0, 0]
   let empty_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_build_huffman_table(

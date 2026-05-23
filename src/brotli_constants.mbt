@@ -43,3 +43,11 @@ let brotli_huffman_max_code_length_code_length : Int = 5
 ///|
 /// Initial previous length used by repeat-previous code-length symbols.
 let brotli_initial_repeated_code_length : Int = 8
+
+///|
+/// Number of block-length prefix-code symbols.
+let brotli_num_block_length_symbols : Int = 26
+
+///|
+/// Sentinel block length used when a stream has a single block type.
+let brotli_block_size_cap : Int = 1 << 24
