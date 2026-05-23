@@ -543,6 +543,14 @@ test "brotli_read_command applies insert and copy extra bits" {
 }
 
 ///|
+test "BrotliDistanceRing resolves initial implicit distance" {
+  let ring = BrotliDistanceRing::new()
+  inspect(ring.take_short_code(0), content="4")
+  ring.record(4)
+  inspect(ring.take_short_code(0), content="4")
+}
+
+///|
 test "brotli_build_huffman_table rejects malformed length sets" {
   let empty : FixedArray[Byte] = [0, 0, 0, 0]
   let empty_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_build_huffman_table(
@@ -601,12 +609,12 @@ test "unbrotli_sync enforces max_input_size" {
 }
 
 ///|
-test "unbrotli_sync rejects unsupported meta-block path with Brotli error" {
+test "unbrotli_sync rejects invalid compressed back-reference distance" {
   let compressed = FixedArray::make(12, b'\x00')
-  let pos = write_window10_final_metablock_header(compressed, 1)
+  let pos = write_window10_final_metablock_header(compressed, 2)
   ignore(write_trivial_compressed_header(compressed, pos, 0))
   let result = try? unbrotli_sync(compressed)
-  assert_brotli_error(result, BrotliInvalidMetablock)
+  assert_brotli_error(result, BrotliInvalidDistance)
 }
 
 ///|
@@ -616,6 +624,15 @@ test "unbrotli_sync decodes literal-only compressed meta-block" {
   ignore(write_trivial_compressed_header(compressed, pos, 16))
   let decoded = unbrotli_sync(compressed)
   inspect(str_from_u8(decoded), content="AA")
+}
+
+///|
+test "unbrotli_sync decodes compressed implicit-distance copy" {
+  let compressed = FixedArray::make(12, b'\x00')
+  let pos = write_window10_final_metablock_header(compressed, 6)
+  ignore(write_trivial_compressed_header(compressed, pos, 32))
+  let decoded = unbrotli_sync(compressed)
+  inspect(str_from_u8(decoded), content="AAAAAA")
 }
 
 ///|

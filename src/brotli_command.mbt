@@ -106,33 +106,51 @@ fn brotli_decode_compressed_metablock_body(
   output : BrotliOutputBuilder,
   length : Int,
 ) -> Unit raise FzipError {
-  let command = brotli_read_command(reader, header.command_trees.tree(0))
-  if command.insert_length > length {
-    raise fzip_err(
-      BrotliInvalidMetablock,
-      msg="Brotli insert length exceeds meta-block",
-    )
-  }
-  output.ensure(command.insert_length)
-  let literal_tree = header.literal_trees.tree(0)
-  for _ in 0..<command.insert_length {
-    let literal = brotli_read_symbol(
-      reader, literal_tree, brotli_huffman_table_bits,
-    )
-    if literal < 0 || literal > 255 {
+  let distance_ring = BrotliDistanceRing::new()
+  let mut remaining = length
+  while remaining > 0 {
+    let command = brotli_read_command(reader, header.command_trees.tree(0))
+    if command.insert_length > remaining {
       raise fzip_err(
         BrotliInvalidMetablock,
-        msg="Brotli literal out of byte range",
+        msg="Brotli insert length exceeds meta-block",
       )
     }
-    output.buf[output.len] = literal.to_byte()
-    output.len += 1
+    output.ensure(command.insert_length)
+    let literal_tree = header.literal_trees.tree(0)
+    for _ in 0..<command.insert_length {
+      let literal = brotli_read_symbol(
+        reader, literal_tree, brotli_huffman_table_bits,
+      )
+      if literal < 0 || literal > 255 {
+        raise fzip_err(
+          BrotliInvalidMetablock,
+          msg="Brotli literal out of byte range",
+        )
+      }
+      output.buf[output.len] = literal.to_byte()
+      output.len += 1
+    }
+    remaining -= command.insert_length
+    if remaining == 0 {
+      return
+    }
+    if command.copy_length > remaining {
+      raise fzip_err(
+        BrotliInvalidMetablock,
+        msg="Brotli copy length exceeds meta-block",
+      )
+    }
+    let distance = if command.distance_code >= 0 {
+      distance_ring.take_short_code(command.distance_code)
+    } else {
+      raise fzip_err(
+        BrotliInvalidMetablock,
+        msg="Brotli explicit distance decoder is not implemented yet",
+      )
+    }
+    output.copy_from_distance(distance, command.copy_length)
+    distance_ring.record(distance)
+    remaining -= command.copy_length
   }
-  if command.insert_length == length {
-    return
-  }
-  raise fzip_err(
-    BrotliInvalidMetablock,
-    msg="Brotli copy/distance body decoder is not implemented yet",
-  )
 }

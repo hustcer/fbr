@@ -115,6 +115,28 @@ fn BrotliOutputBuilder::finish(self : BrotliOutputBuilder) -> FixedArray[Byte] {
 }
 
 ///|
+fn BrotliOutputBuilder::copy_from_distance(
+  self : BrotliOutputBuilder,
+  distance : Int,
+  length : Int,
+) -> Unit raise FzipError {
+  if length < 0 {
+    raise fzip_err(BrotliInvalidMetablock, msg="negative Brotli copy length")
+  }
+  if distance <= 0 || distance > self.len {
+    raise fzip_err(
+      BrotliInvalidDistance,
+      msg="Brotli backward distance out of range",
+    )
+  }
+  self.ensure(length)
+  for _ in 0..<length {
+    self.buf[self.len] = self.buf[self.len - distance]
+    self.len += 1
+  }
+}
+
+///|
 fn brotli_decode_metablock_header(
   reader : BrotliBitReader,
 ) -> BrotliMetablockHeader raise FzipError {
@@ -246,9 +268,9 @@ fn brotli_decode_scaffold(
 /// Decompress a Brotli stream.
 ///
 /// This public entry point enforces fzip's input and output caps and returns a
-/// freshly trimmed output buffer. The full RFC 7932 decoder is being filled in
-/// behind this API; the current scaffold accepts the legal empty Brotli stream
-/// and rejects unsupported meta-block paths with `FzipError`.
+/// freshly trimmed output buffer. The RFC 7932 decoder is being filled in behind
+/// this API with each intermediate path still reporting unsupported or malformed
+/// Brotli constructs as `FzipError`.
 pub fn unbrotli_sync(
   data : FixedArray[Byte],
   opts? : UnbrotliOptions = UnbrotliOptions::default(),
