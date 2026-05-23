@@ -98,3 +98,41 @@ fn brotli_read_command(
     distance_context: info.distance_context,
   }
 }
+
+///|
+fn brotli_decode_compressed_metablock_body(
+  reader : BrotliBitReader,
+  header : BrotliCompressedMetablockHeader,
+  output : BrotliOutputBuilder,
+  length : Int,
+) -> Unit raise FzipError {
+  let command = brotli_read_command(reader, header.command_trees.tree(0))
+  if command.insert_length > length {
+    raise fzip_err(
+      BrotliInvalidMetablock,
+      msg="Brotli insert length exceeds meta-block",
+    )
+  }
+  output.ensure(command.insert_length)
+  let literal_tree = header.literal_trees.tree(0)
+  for _ in 0..<command.insert_length {
+    let literal = brotli_read_symbol(
+      reader, literal_tree, brotli_huffman_table_bits,
+    )
+    if literal < 0 || literal > 255 {
+      raise fzip_err(
+        BrotliInvalidMetablock,
+        msg="Brotli literal out of byte range",
+      )
+    }
+    output.buf[output.len] = literal.to_byte()
+    output.len += 1
+  }
+  if command.insert_length == length {
+    return
+  }
+  raise fzip_err(
+    BrotliInvalidMetablock,
+    msg="Brotli copy/distance body decoder is not implemented yet",
+  )
+}

@@ -226,17 +226,12 @@ fn brotli_decode_scaffold(
     } else if header.length == 0 {
       ()
     } else {
-      let bit_offset = reader.bits_consumed()
       let compressed_header = brotli_read_compressed_metablock_header(reader)
-      let first_command = brotli_read_command(
+      brotli_decode_compressed_metablock_body(
         reader,
-        compressed_header.command_trees.tree(0),
-      )
-      ignore(first_command)
-      raise fzip_err(
-        BrotliInvalidMetablock,
-        msg="Brotli compressed meta-block decoder is not implemented yet at bit " +
-          bit_offset.to_string(),
+        compressed_header,
+        output,
+        header.length,
       )
     }
     if header.is_last {

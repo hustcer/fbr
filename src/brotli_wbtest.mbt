@@ -30,6 +30,7 @@ fn write_simple_one_symbol_huffman(
 fn write_trivial_compressed_header(
   encoded : FixedArray[Byte],
   start : Int,
+  command_symbol : Int,
 ) -> Int {
   let mut pos = start
   wbits(encoded, pos, 0) // one literal block type
@@ -47,8 +48,30 @@ fn write_trivial_compressed_header(
   wbits(encoded, pos, 0) // distance context map has one tree
   pos += 1
   pos = write_simple_one_symbol_huffman(encoded, pos, 65, 8)
-  pos = write_simple_one_symbol_huffman(encoded, pos, 0, 10)
+  pos = write_simple_one_symbol_huffman(encoded, pos, command_symbol, 10)
   write_simple_one_symbol_huffman(encoded, pos, 0, 6)
+}
+
+///|
+fn write_window10_final_metablock_header(
+  encoded : FixedArray[Byte],
+  length : Int,
+) -> Int {
+  let mut pos = 0
+  wbits(encoded, pos, 1) // WBITS: standard 10-bit window
+  pos += 1
+  wbits(encoded, pos, 0)
+  pos += 3
+  wbits(encoded, pos, 2)
+  pos += 3
+  wbits(encoded, pos, 1) // final meta-block, not empty
+  pos += 1
+  wbits(encoded, pos, 0)
+  pos += 1
+  wbits(encoded, pos, 0) // MNIBBLES = 0
+  pos += 2
+  wbits16(encoded, pos, length - 1)
+  pos + 16
 }
 
 ///|
@@ -450,7 +473,7 @@ test "brotli_read_huffman_tree_group validates parameters" {
 ///|
 test "brotli_read_compressed_metablock_header reads trivial header" {
   let encoded = FixedArray::make(16, b'\x00')
-  ignore(write_trivial_compressed_header(encoded, 0))
+  ignore(write_trivial_compressed_header(encoded, 0, 0))
   let reader = BrotliBitReader::new(encoded, 0, encoded.length())
   let header = brotli_read_compressed_metablock_header(reader)
   inspect(header.literal_block.num_types, content="1")
@@ -580,24 +603,19 @@ test "unbrotli_sync enforces max_input_size" {
 ///|
 test "unbrotli_sync rejects unsupported meta-block path with Brotli error" {
   let compressed = FixedArray::make(12, b'\x00')
-  let mut pos = 0
-  wbits(compressed, pos, 1) // WBITS: standard 10-bit window
-  pos += 1
-  wbits(compressed, pos, 0)
-  pos += 3
-  wbits(compressed, pos, 2)
-  pos += 3
-  wbits(compressed, pos, 1) // final meta-block, not empty
-  pos += 1
-  wbits(compressed, pos, 0)
-  pos += 1
-  wbits(compressed, pos, 0) // MNIBBLES = 0, length = 1
-  pos += 2
-  wbits16(compressed, pos, 0)
-  pos += 16
-  ignore(write_trivial_compressed_header(compressed, pos))
+  let pos = write_window10_final_metablock_header(compressed, 1)
+  ignore(write_trivial_compressed_header(compressed, pos, 0))
   let result = try? unbrotli_sync(compressed)
   assert_brotli_error(result, BrotliInvalidMetablock)
+}
+
+///|
+test "unbrotli_sync decodes literal-only compressed meta-block" {
+  let compressed = FixedArray::make(12, b'\x00')
+  let pos = write_window10_final_metablock_header(compressed, 2)
+  ignore(write_trivial_compressed_header(compressed, pos, 16))
+  let decoded = unbrotli_sync(compressed)
+  inspect(str_from_u8(decoded), content="AA")
 }
 
 ///|
