@@ -228,7 +228,11 @@ fn brotli_decode_scaffold(
     } else {
       let bit_offset = reader.bits_consumed()
       let compressed_header = brotli_read_compressed_metablock_header(reader)
-      ignore(compressed_header)
+      let first_command = brotli_read_command(
+        reader,
+        compressed_header.command_trees.tree(0),
+      )
+      ignore(first_command)
       raise fzip_err(
         BrotliInvalidMetablock,
         msg="Brotli compressed meta-block decoder is not implemented yet at bit " +

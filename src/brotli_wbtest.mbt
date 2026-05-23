@@ -479,6 +479,47 @@ test "brotli_read_compressed_metablock_header reads trivial header" {
 }
 
 ///|
+test "brotli_command_info matches reference lookup cases" {
+  let first = brotli_command_info(0)
+  inspect(first.insert_len_extra_bits, content="0")
+  inspect(first.copy_len_extra_bits, content="0")
+  inspect(first.distance_code, content="0")
+  inspect(first.distance_context, content="0")
+  inspect(first.insert_len_offset, content="0")
+  inspect(first.copy_len_offset, content="2")
+
+  let insert_extra = brotli_command_info(48)
+  inspect(insert_extra.insert_len_extra_bits, content="1")
+  inspect(insert_extra.copy_len_extra_bits, content="0")
+  inspect(insert_extra.insert_len_offset, content="6")
+  inspect(insert_extra.copy_len_offset, content="2")
+
+  let copy_extra = brotli_command_info(64)
+  inspect(copy_extra.insert_len_extra_bits, content="0")
+  inspect(copy_extra.copy_len_extra_bits, content="1")
+  inspect(copy_extra.distance_context, content="3")
+  inspect(copy_extra.copy_len_offset, content="10")
+
+  let explicit_distance = brotli_command_info(128)
+  inspect(explicit_distance.distance_code, content="-1")
+}
+
+///|
+test "brotli_read_command applies insert and copy extra bits" {
+  let lengths = FixedArray::make(brotli_num_command_symbols, b'\x00')
+  lengths[48] = b'\x01'
+  let command_tree = brotli_build_huffman_table(
+    lengths, brotli_num_command_symbols, brotli_huffman_table_bits,
+  )
+  let reader = BrotliBitReader::new([0x01], 0, 1)
+  let command = brotli_read_command(reader, command_tree)
+  inspect(command.insert_length, content="7")
+  inspect(command.copy_length, content="2")
+  inspect(command.distance_code, content="0")
+  inspect(command.distance_context, content="0")
+}
+
+///|
 test "brotli_build_huffman_table rejects malformed length sets" {
   let empty : FixedArray[Byte] = [0, 0, 0, 0]
   let empty_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_build_huffman_table(
