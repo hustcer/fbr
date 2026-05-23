@@ -91,12 +91,48 @@ fn BrotliBitReader::take_bits(
 fn BrotliBitReader::align_to_byte(
   self : BrotliBitReader,
 ) -> Unit raise FzipError {
-  let extra = self.bits_avail & 7
+  let extra = self.consumed & 7
   if extra > 0 {
-    let padding = self.take_bits(extra)
+    let padding = self.take_bits(8 - extra)
     if padding != 0U {
       raise fzip_err(BrotliInvalidPadding)
     }
+  }
+}
+
+///|
+fn BrotliBitReader::take_bytes(
+  self : BrotliBitReader,
+  out : FixedArray[Byte],
+  offset : Int,
+  length : Int,
+) -> Unit raise FzipError {
+  self.align_to_byte()
+  if offset < 0 || length < 0 || offset > out.length() - length {
+    raise fzip_err(InvalidZipData, msg="output buffer too small")
+  }
+  let mut dst = offset
+  let end = offset + length
+  while dst < end && self.bits_avail >= 8 {
+    out[dst] = (self.bit_buf & 0xffU).to_byte()
+    self.bit_buf = self.bit_buf >> 8
+    self.bits_avail -= 8
+    self.consumed += 8
+    dst += 1
+  }
+  let remaining = end - dst
+  if remaining > self.byte_end - self.byte_pos {
+    raise fzip_err(UnexpectedEOF, msg="brotli input ended while reading bytes")
+  }
+  if remaining > 0 {
+    self.buf.blit_to(
+      out,
+      len=remaining,
+      src_offset=self.byte_pos,
+      dst_offset=dst,
+    )
+    self.byte_pos += remaining
+    self.consumed += remaining * 8
   }
 }
 

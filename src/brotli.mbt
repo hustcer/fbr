@@ -35,6 +35,173 @@ fn brotli_empty_output(opts : UnbrotliOptions) -> FixedArray[Byte] {
 }
 
 ///|
+priv struct BrotliMetablockHeader {
+  is_last : Bool
+  is_empty : Bool
+  is_metadata : Bool
+  is_uncompressed : Bool
+  length : Int
+}
+
+///|
+priv struct BrotliOutputBuilder {
+  mut buf : FixedArray[Byte]
+  mut len : Int
+  fixed : Bool
+  max_output_size : Int
+}
+
+///|
+fn BrotliOutputBuilder::new(opts : UnbrotliOptions) -> BrotliOutputBuilder {
+  match opts.out {
+    Some(out) =>
+      { buf: out, len: 0, fixed: true, max_output_size: opts.max_output_size }
+    None => {
+      let initial = if opts.max_output_size < 4096 {
+        opts.max_output_size
+      } else {
+        4096
+      }
+      {
+        buf: FixedArray::make(initial, b'\x00'),
+        len: 0,
+        fixed: false,
+        max_output_size: opts.max_output_size,
+      }
+    }
+  }
+}
+
+///|
+fn BrotliOutputBuilder::ensure(
+  self : BrotliOutputBuilder,
+  additional : Int,
+) -> Unit raise FzipError {
+  if additional < 0 {
+    raise fzip_err(BrotliInvalidMetablock, msg="negative Brotli output length")
+  }
+  if self.len > self.max_output_size - additional {
+    raise fzip_err(InvalidZipData, msg="output exceeds max_output_size")
+  }
+  let needed = self.len + additional
+  if needed <= self.buf.length() {
+    return
+  }
+  if self.fixed {
+    raise fzip_err(InvalidZipData, msg="output buffer too small")
+  }
+  let mut capacity = self.buf.length()
+  if capacity == 0 {
+    capacity = 1
+  }
+  while capacity < needed {
+    if capacity > max_int_val() / 2 {
+      capacity = needed
+      break
+    }
+    capacity *= 2
+  }
+  if capacity > self.max_output_size {
+    capacity = self.max_output_size
+  }
+  let grown = FixedArray::make(capacity, b'\x00')
+  self.buf.blit_to(grown, len=self.len, src_offset=0, dst_offset=0)
+  self.buf = grown
+}
+
+///|
+fn BrotliOutputBuilder::finish(self : BrotliOutputBuilder) -> FixedArray[Byte] {
+  trim_buf(self.buf, self.len)
+}
+
+///|
+fn brotli_decode_metablock_header(
+  reader : BrotliBitReader,
+) -> BrotliMetablockHeader raise FzipError {
+  let is_last = reader.take_bits(1) == 1U
+  if is_last && reader.take_bits(1) == 1U {
+    return {
+      is_last,
+      is_empty: true,
+      is_metadata: false,
+      is_uncompressed: false,
+      length: 0,
+    }
+  }
+  let mnibbles = reader.take_bits(2).reinterpret_as_int()
+  if mnibbles == 3 {
+    let reserved = reader.take_bits(1)
+    if reserved != 0U {
+      raise fzip_err(BrotliReserved, msg="reserved metadata meta-block bit set")
+    }
+    let size_bytes = reader.take_bits(2).reinterpret_as_int()
+    if size_bytes == 0 {
+      return {
+        is_last,
+        is_empty: false,
+        is_metadata: true,
+        is_uncompressed: false,
+        length: 0,
+      }
+    }
+    let mut length = 0
+    for i in 0..<size_bytes {
+      let part = reader.take_bits(8).reinterpret_as_int()
+      if i + 1 == size_bytes && size_bytes > 1 && part == 0 {
+        raise fzip_err(BrotliInvalidMetablock, msg="exuberant metadata length")
+      }
+      length = length | (part << (i * 8))
+    }
+    return {
+      is_last,
+      is_empty: false,
+      is_metadata: true,
+      is_uncompressed: false,
+      length: length + 1,
+    }
+  }
+  let size_nibbles = mnibbles + 4
+  let mut length = 0
+  for i in 0..<size_nibbles {
+    let part = reader.take_bits(4).reinterpret_as_int()
+    if i + 1 == size_nibbles && size_nibbles > 4 && part == 0 {
+      raise fzip_err(BrotliInvalidMetablock, msg="exuberant meta-block length")
+    }
+    length = length | (part << (i * 4))
+  }
+  length += 1
+  if length > brotli_max_metablock_bytes {
+    raise fzip_err(BrotliInvalidMetablock, msg="Brotli meta-block too large")
+  }
+  let is_uncompressed = if is_last { false } else { reader.take_bits(1) == 1U }
+  { is_last, is_empty: false, is_metadata: false, is_uncompressed, length }
+}
+
+///|
+fn brotli_skip_metadata(
+  reader : BrotliBitReader,
+  length : Int,
+) -> Unit raise FzipError {
+  if length == 0 {
+    reader.align_to_byte()
+    return
+  }
+  let scratch = FixedArray::make(length, b'\x00')
+  reader.take_bytes(scratch, 0, length)
+}
+
+///|
+fn brotli_copy_uncompressed(
+  reader : BrotliBitReader,
+  output : BrotliOutputBuilder,
+  length : Int,
+) -> Unit raise FzipError {
+  output.ensure(length)
+  reader.take_bytes(output.buf, output.len, length)
+  output.len += length
+}
+
+///|
 fn brotli_decode_scaffold(
   data : FixedArray[Byte],
   opts : UnbrotliOptions,
@@ -42,18 +209,36 @@ fn brotli_decode_scaffold(
   let reader = BrotliBitReader::new(data, 0, data.length())
   let window_bits = brotli_decode_window_bits(reader)
   brotli_validate_window_bits(window_bits)
-  let is_last = reader.take_bits(1) == 1U
-  if is_last {
-    let is_last_empty = reader.take_bits(1) == 1U
-    if is_last_empty {
+  let output = BrotliOutputBuilder::new(opts)
+  while true {
+    let header = brotli_decode_metablock_header(reader)
+    if header.is_empty {
       reader.expect_final_padding_zero()
-      return brotli_empty_output(opts)
+      if output.len == 0 {
+        return brotli_empty_output(opts)
+      }
+      return output.finish()
+    }
+    if header.is_metadata {
+      brotli_skip_metadata(reader, header.length)
+    } else if header.is_uncompressed {
+      brotli_copy_uncompressed(reader, output, header.length)
+    } else if header.length == 0 {
+      ()
+    } else {
+      let bit_offset = reader.bits_consumed()
+      raise fzip_err(
+        BrotliInvalidMetablock,
+        msg="Brotli compressed meta-block decoder is not implemented yet at bit " +
+          bit_offset.to_string(),
+      )
+    }
+    if header.is_last {
+      reader.expect_final_padding_zero()
+      return output.finish()
     }
   }
-  raise fzip_err(
-    BrotliInvalidMetablock,
-    msg="Brotli compressed meta-block decoder is not implemented yet",
-  )
+  raise fzip_err(BrotliInvalidMetablock, msg="unreachable Brotli decoder state")
 }
 
 ///|
