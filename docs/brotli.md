@@ -91,8 +91,12 @@ Files that Brotli code will create, extend, or coexist with:
 - `src/stream.mbt` — add `UnbrotliStream` and (later) `BrotliStream`. Follow
   the existing `InflateStream` / `DeflateStream` pattern exactly: a public
   `mut ondata : FlateStreamHandler?`, private buffered chunks, and
-  `push(chunk, final_?)`. Do not introduce a separate `set_ondata` API unless
-  the existing stream APIs are changed in the same release.
+  `push(chunk, final_?)`. The shared callback wrapper `FlateStreamHandler`
+  and helper `call_handler` are already defined at the top of
+  `src/stream.mbt`; reuse them verbatim. `priv` is valid on individual
+  fields of a `pub(all) struct` in MoonBit (see existing
+  `DeflateStream`/`InflateStream` definitions in the same file); reuse the
+  pattern. Do not introduce a separate `set_ondata` API.
 - `src/types.mbt` — add `UnbrotliOptions` and (later) `BrotliOptions` with
   `::default()` constructors. Keep field naming consistent with existing option
   structs (snake_case).
@@ -100,7 +104,60 @@ Files that Brotli code will create, extend, or coexist with:
   Brotli entry points are independent top-level functions.
 - `src/pkg.generated.mbti` — regenerated via `moon info` after every phase.
 - `src/tests/brotli_fixtures/` — new directory for test corpora (see
-  "Testing").
+  "Testing"). The directory does not exist today; the first Brotli PR creates
+  it.
+- `tools/brotli/` — new top-level directory created by P1 to hold
+  generation and conformance helpers. Keep these outside the published
+  `src/` package tree unless they must be compiled by `moon`. Add
+  `tools/brotli/README.md` listing each helper and its exact invocation.
+  If a helper is written in MoonBit as a single-file utility, invoke it with
+  `moon run - < tools/brotli/<name>.mbt`; if it needs package imports or
+  command-line parsing, give it its own small module under `tools/brotli/<name>/`.
+- `tools/brotli/conformance/` — manual harness added by P1 to drive the full
+  upstream Brotli test corpus. Excluded from `moon test` by default; invoke
+  manually from its README instructions.
+
+### Target backends
+
+MoonBit targets **native (Linux/Windows/macOS)**, **JavaScript**, and
+**WebAssembly** (wasm-gc). fzip's `moon.mod.json` does not pin
+`preferred-target`, so Brotli code must compile and pass tests on all three.
+
+Backend-specific guidance:
+
+- **Integer widths**: `Int` is 64-bit on native and 32-bit on JavaScript and
+  wasm-gc. Use `Int` for array indices (safe on all backends), use `UInt` for
+  bit-field shifts (always 32-bit), and avoid relying on the upper 32 bits of
+  `Int` for portability.
+- **`UInt64`**: works on all three backends but is slower on JavaScript (no
+  native 64-bit integer; emulated as a pair of 32-bit). The 32-bit bit-reader
+  accumulator chosen for `brotli_bit_reader.mbt` avoids this entirely.
+- **`Double`**: IEEE 754 binary64 on all backends. Bit-exact entropy
+  calculations (P3 clustering) should match across backends; if they do not,
+  the divergence is almost certainly in `log2(0)` handling.
+- **Endianness**: all three backends are little-endian or backend-managed;
+  Brotli is byte-stream with LSB-first bit ordering — no concern.
+- **File I/O**: not used by Brotli core. Do not assume a package named `@fs`
+  exists in fzip; the first Brotli PR must either discover and use the
+  project-approved file API, or embed small fixtures as `FixedArray[Byte]`
+  literals so native, JS, and wasm-gc run the same tests. Large upstream
+  conformance files stay in the manual harness under `tools/brotli/`.
+
+Validation matrix per phase PR:
+
+```
+moon check --target all
+moon test --target native
+moon test --target wasm-gc
+moon test --target js
+moon fmt
+moon info
+```
+
+Note: `moon test --target all` runs all three targets sequentially; prefer
+that over invoking each target manually unless debugging a single backend.
+The performance budgets in "Cross-Phase Concerns" below are quoted for
+wasm-gc; native is typically faster, JavaScript typically slower.
 
 ## Brotli Format Background
 
@@ -251,6 +308,356 @@ descriptive `FzipError`.
 P1 totals roughly 6,500 LOC of MoonBit, with the static dictionary accounting
 for the bulk of `brotli_dict.mbt`.
 
+### Concrete Tables and Arena Sizes (`brotli_tables.mbt`, `brotli_constants.mbt`)
+
+The C reference hides several "magic" constants behind macros and `#include`
+files. New employees consistently mis-transcribe them. Pin the values here so
+they can be copy-pasted into `brotli_tables.mbt` without going back to the
+RFC.
+
+```mbt nocheck
+///|
+/// Order in which the 18 code-length code lengths are read at the start of
+/// every complex Huffman header. RFC 7932 §3.5.
+let CODE_LENGTH_CODE_ORDER : FixedArray[Int] = [
+  1, 2, 3, 4, 0, 5, 17, 6, 16, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+]
+
+///|
+/// Number of code-length codes that always have their length read. RFC §3.5
+/// requires the first four lengths in `CODE_LENGTH_CODE_ORDER` to be present;
+/// remaining lengths follow until the implied count is reached.
+const NUM_CODE_LENGTH_CODES : Int = 18
+
+///|
+/// Maximum code length in bits for any Brotli Huffman alphabet. RFC §3.4.
+const HUFFMAN_MAX_CODE_LENGTH : Int = 15
+
+///|
+/// Root table width (in bits) for the two-level Huffman lookup. RFC reference
+/// uses 8 for all alphabets; matches the C reference's `HUFFMAN_TABLE_BITS`.
+const HUFFMAN_TABLE_BITS : Int = 8
+
+///|
+/// Per-tree table capacity. C reference: `BROTLI_HUFFMAN_MAX_TABLE_SIZE = 1080`.
+/// Derived from a width-8 root table plus the worst-case sub-tables for a
+/// 704-symbol alphabet at max length 15.
+const HUFFMAN_MAX_TABLE_SIZE : Int = 1080
+
+///|
+/// Alphabet sizes per stream.
+const LITERAL_ALPHABET_SIZE : Int = 256
+const INSERT_AND_COPY_ALPHABET_SIZE : Int = 704
+const BLOCK_LENGTH_ALPHABET_SIZE : Int = 26
+const BLOCK_TYPE_ALPHABET_SIZE_MAX : Int = 258  // 256 types + 2 control codes
+// Distance alphabet size depends on NPOSTFIX/NDIRECT and window bits; computed
+// per meta-block via:
+//   16 + NDIRECT + (48 << NPOSTFIX)
+// Upper bound at NPOSTFIX=3, NDIRECT=120 is 16 + 120 + (48 << 3) = 520.
+const DISTANCE_ALPHABET_SIZE_MAX : Int = 520
+
+///|
+/// Maximum number of Huffman trees in each of the three tree groups. RFC §9.2
+/// caps tree counts at the encoded block-type count, which itself is bounded
+/// by 256. Use 256 as the worst case.
+const MAX_HUFFMAN_TREES_PER_GROUP : Int = 256
+```
+
+#### Huffman arena sizing
+
+Pre-allocate one flat `FixedArray[HuffmanCode]` per tree group; subdivide
+with `(offset, length)` triples (no `ArraySlice` abstraction in fzip). Use
+these formulas in `BrotliDecoderState::new`:
+
+```mbt nocheck
+///|
+fn huffman_arena_size(alphabet_size : Int, num_trees : Int) -> Int {
+  // Each tree consumes at most HUFFMAN_MAX_TABLE_SIZE entries. The C
+  // reference asserts this bound in `huffman.c::BrotliBuildHuffmanTable`.
+  // Use a tighter bound where alphabet_size < 704 to save memory:
+  let per_tree = if alphabet_size <= 256 {
+    632                  // empirical bound from C ref for 256-symbol alphabets
+  } else if alphabet_size <= 272 {
+    656
+  } else if alphabet_size <= 396 {
+    792
+  } else {
+    HUFFMAN_MAX_TABLE_SIZE
+  }
+  per_tree * num_trees
+}
+```
+
+Per-decoder-call peak sizes (when `window_bits=24` and `num_trees=256` on all
+three groups):
+
+- Literal arena: `1080 * 256 = 276,480` entries × 4 bytes (UInt16 bits +
+  UInt16 value) = ~1.1 MB.
+- Insert-and-copy arena: `792 * 256 = 202,752` entries × 4 bytes = ~0.8 MB.
+- Distance arena: `656 * 256 = 167,936` entries × 4 bytes = ~0.7 MB.
+- Block-switch trees (three): `≤ 632 * 3 * 4 ≈ 7.6 KB`.
+- Ring buffer: `1 << 24 = 16 MB`.
+- Context maps: up to `256 * 64 = 16,384` bytes each, two of them.
+- **Decoder per-call peak: ~19 MB** at the largest legal window. Document
+  this in the public API doc-comment of `unbrotli_sync`.
+
+Pessimistic decoders should NOT allocate at this peak unconditionally. Use
+`num_trees` actually present in the meta-block (from `NTREESL` / `NTREESD`
+/ `NBLTYPES*`) to size each arena. The worst case is rare; typical streams
+use 1–4 trees per group and `window_bits` of 22 (4 MB).
+
+#### Insert-and-copy length-code base/extra tables
+
+RFC §5 defines insert-and-copy length codes as a packed `(insert_lcode,
+copy_lcode)` pair, with `lcode` 0..23 each. Each `lcode` decodes to a
+`(base_length, extra_bits)` tuple. Port these tables verbatim from
+`c/common/constants.h`:
+
+```mbt nocheck
+let INSERT_LENGTH_BASES : FixedArray[Int] = [
+  0, 1, 2, 3, 4, 5, 6, 8, 10, 14, 18, 26, 34, 50, 66, 98,
+  130, 194, 322, 578, 1090, 2114, 6210, 22594,
+]
+
+let INSERT_LENGTH_EXTRA_BITS : FixedArray[Int] = [
+  0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5,
+  6, 7, 8, 9, 10, 12, 14, 24,
+]
+
+let COPY_LENGTH_BASES : FixedArray[Int] = [
+  2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 18, 22, 30, 38, 54,
+  70, 102, 134, 198, 326, 582, 1094, 2118,
+]
+
+let COPY_LENGTH_EXTRA_BITS : FixedArray[Int] = [
+  0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4,
+  5, 5, 6, 7, 8, 9, 10, 24,
+]
+```
+
+#### Block-length codes
+
+RFC §6 defines block-length codes as a 26-symbol alphabet, each symbol
+encoding a `(base_length, extra_bits)` tuple in the same style as the
+insert/copy tables:
+
+```mbt nocheck
+let BLOCK_LENGTH_BASES : FixedArray[Int] = [
+  1, 5, 9, 13, 17, 25, 33, 41, 49, 65, 81, 97, 113, 145, 177, 209,
+  241, 305, 369, 497, 753, 1265, 2289, 4337, 8433, 16625,
+]
+
+let BLOCK_LENGTH_EXTRA_BITS : FixedArray[Int] = [
+  2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5,
+  6, 6, 7, 8, 9, 10, 11, 12, 13, 24,
+]
+```
+
+#### Static-dictionary length tables
+
+Already shown in "Static Dictionary Embedding" below. They live in
+`brotli_dict.mbt` next to the dictionary itself because they are conceptually
+part of the dictionary, not free-standing tables.
+
+### Block-Length and Block-Switch Decoding (RFC §6)
+
+Every compressed meta-block carries three independent token streams: literals,
+insert-and-copy codes, and distances. Each stream is partitioned into "blocks"
+that share the same Huffman tree (its block type). At meta-block start, three
+counters — `block_len_l`, `block_len_i`, `block_len_d` — hold the number of
+tokens remaining before the next block-switch on each stream.
+
+When a counter reaches zero **before** reading the next token of that stream,
+the decoder:
+
+1. Reads a new `block_type_code` from the block-type Huffman tree for that
+   stream. Block-type codes use a 258-symbol alphabet: 0..255 for explicit
+   block types plus two control codes that select the previous-1 and
+   previous-2 block types (a tiny ring buffer of size 2 per stream).
+2. Resolves `block_type_code` to a concrete block type and updates the
+   stream's 2-entry block-type ring.
+3. Reads a new `block_length_code` from the block-length Huffman tree for
+   that stream using the 26-symbol alphabet. The decoded value plus the
+   appropriate extra bits (see `BLOCK_LENGTH_BASES` and
+   `BLOCK_LENGTH_EXTRA_BITS`) becomes the new counter value.
+4. Continues with the original token read using the now-current Huffman
+   tree from the new block type.
+
+The counter is decremented exactly once per token of that stream, regardless
+of how many bits the token consumes. Block-switches are completely
+independent across the three streams; a single command can trigger 0, 1, 2,
+or all 3 of them.
+
+Implementation skeleton:
+
+```mbt nocheck
+///|
+/// Per-stream block tracking. One instance for literals, one for
+/// insert-and-copy, one for distances.
+priv struct BlockTracker {
+  type_tree_offset : Int     // offset into block-type Huffman arena
+  length_tree_offset : Int   // offset into block-length Huffman arena
+  mut current_type : Int     // index into the stream's tree group
+  mut prev_type_1 : Int      // 1 step back
+  mut prev_type_2 : Int      // 2 steps back
+  mut remaining : Int        // tokens until next switch
+}
+
+///|
+fn BlockTracker::take_token(
+  self : BlockTracker,
+  reader : BitReader,
+  tables : FixedArray[HuffmanCode],
+) -> Unit raise FzipError {
+  if self.remaining == 0 {
+    let type_code = read_symbol(reader, tables, self.type_tree_offset)
+    let new_type = resolve_block_type_code(self, type_code)
+    self.prev_type_2 = self.prev_type_1
+    self.prev_type_1 = self.current_type
+    self.current_type = new_type
+    let len_code = read_symbol(reader, tables, self.length_tree_offset)
+    self.remaining = BLOCK_LENGTH_BASES[len_code] +
+      reader.take_bits(BLOCK_LENGTH_EXTRA_BITS[len_code]).reinterpret_as_int()
+    if self.remaining < 1 {
+      raise fzip_err(BrotliInvalidMetablock, msg="block length must be >= 1")
+    }
+  }
+  self.remaining -= 1
+}
+
+///|
+fn resolve_block_type_code(self : BlockTracker, code : Int) -> Int {
+  // RFC §6: code 0 -> prev_type_2, code 1 -> prev_type_1 + 1 mod num_types,
+  // code n >= 2 -> n - 2.
+  match code {
+    0 => self.prev_type_2
+    1 => (self.prev_type_1 + 1) % num_block_types_for(self)
+    n => n - 2
+  }
+}
+```
+
+For meta-blocks with `NBLTYPESL = 1` (or `NBLTYPESI = 1`, `NBLTYPESD = 1`),
+the corresponding block-switch tree is absent. Represent this explicitly
+with a `single_block_type : Bool` field on `BlockTracker`, or initialize
+`remaining` with the package-local `max_int_val()` helper. Do not write
+`Int::max_value()`; MoonBit does not expose that method in this project.
+Decode each token as before but skip the `if remaining == 0` branch when
+there is only one block type for that stream.
+
+Common pitfalls:
+
+- Decrementing **before** the switch check is wrong: the switch happens at
+  the boundary, after the previous token consumed the last unit of the old
+  block. The skeleton above is correct: check, then decrement.
+- Block-length sentinel of 0 is illegal per RFC §6; reject with
+  `BrotliInvalidMetablock`.
+- `prev_type_1` / `prev_type_2` must be initialized to 1 and 0 respectively
+  at the start of each meta-block, per the C reference. Do not carry them
+  across meta-blocks.
+
+Required tests:
+
+- A fixture with `NBLTYPESL >= 2` that toggles the literal block type at
+  least 3 times. `monkey.compressed` is a good candidate; verify the
+  fixture exercises this by checking it round-trips.
+- A hand-built malformed stream with a block-length code of 0 raises
+  `BrotliInvalidMetablock`.
+- A stream where two streams' counters reach zero simultaneously (literals
+  and distances both switching on the same command) — verify both
+  block-switches are processed before the next token of either stream.
+
+### Context Map Decoding (RFC §7.3)
+
+Brotli refines per-token Huffman tree selection through context maps:
+
+- **Literal context map**: 64 entries per block type, indexed by a
+  `context_id` derived from the previous two literal bytes via the block's
+  context mode (LSB6, MSB6, UTF-8, Signed, see RFC §7.1). Maps `(block_type
+<< 6) | context_id` to one of `NTREESL` literal Huffman trees.
+- **Distance context map**: 4 entries per block type, indexed by a 2-bit
+  `distance_context` derived from the current copy length. Maps `(block_type
+<< 2) | distance_context` to one of `NTREESD` distance Huffman trees.
+
+Both maps are stored on the wire as run-length-encoded sequences of
+8-bit indices, with an optional **Inverse Move-To-Front (IMTF)** transform
+applied to the decoded sequence.
+
+The wire format for a single context map (literal or distance):
+
+1. **NTREES** (variable bits, RFC §9.2): the number of distinct Huffman
+   trees for this stream. Encoded as: 1 bit; if 0, NTREES = 1. Otherwise
+   read 3 bits as the high three bits of `(NTREES - 1)`; if those are 0,
+   NTREES = 2; otherwise read further bits. Port verbatim from the C
+   reference's `DecodeVarLenUint8` helper.
+2. If NTREES == 1, the map is implicit (all entries 0) and steps 3-6
+   are skipped. Otherwise:
+3. **RLEMAX** (variable bits): the longest run-of-zeros run-length code
+   used in this map. Encoded as: 1 bit; if 0, RLEMAX = 0 (no run codes
+   used). Otherwise read 4 bits and `RLEMAX = decoded + 1`.
+4. **Map alphabet size** is `RLEMAX + NTREES`. Read a complex Huffman code
+   for this alphabet (same `read_complex_huffman_code` as the tree groups).
+5. **Map symbols**: emit symbols using the Huffman code just built. A
+   symbol `s` in `1..=RLEMAX` represents a run of `(1 << s) + extra` zeros,
+   where `extra` is `s` additional bits read after the symbol. A symbol `0`
+   emits a single zero. A symbol `s > RLEMAX` emits a single byte
+   `(s - RLEMAX)`. Continue until the map is filled to its expected
+   length: `64 * NBLTYPESL` for literal maps, `4 * NBLTYPESD` for
+   distance maps.
+6. **IMTF flag** (1 bit): if 1, apply Inverse Move-To-Front to the
+   decoded sequence. If 0, the sequence is already in final form.
+
+Inverse Move-To-Front:
+
+```mbt nocheck
+///|
+fn inverse_move_to_front(map : FixedArray[Byte]) -> Unit {
+  let mtf : FixedArray[Byte] = FixedArray::make(256, b'\x00')
+  for i in 0..<256 {
+    mtf[i] = i.to_byte()
+  }
+  for i in 0..<map.length() {
+    let index = map[i].to_int()
+    let value = mtf[index]
+    map[i] = value
+    // Shift mtf[0..index] one slot right and put `value` at the front.
+    let mut j = index
+    while j > 0 {
+      mtf[j] = mtf[j - 1]
+      j -= 1
+    }
+    mtf[0] = value
+  }
+}
+```
+
+This is a hot path: 64 × 256 = 16,384 IMTF operations for a maxed-out
+literal map. The naive shift is fine for P1; revisit only if profiling shows
+context-map decode as a bottleneck.
+
+Required tests:
+
+- NTREES = 1 path (implicit all-zero map). At least one fixture must
+  exercise this; the upstream `empty.compressed` does.
+- NTREES > 1 with no run codes (RLEMAX = 0): direct symbol output.
+- NTREES > 1 with run codes covering 75%+ of the map.
+- IMTF on and IMTF off. Verify a hand-built map decoded both ways.
+- Malformed: a run code that overflows the map raises
+  `BrotliInvalidContextMap`.
+- Malformed: a symbol value `>= RLEMAX + NTREES` raises
+  `BrotliInvalidContextMap`.
+
+Context-mode lookup tables for literals (LUT0/LUT1/LUT2 in the C reference)
+live in `brotli_tables.mbt` and are byte-for-byte ports of `common/context.c`.
+The literal `context_id` is computed at command-execution time as:
+
+```
+context_id = LUT0[prev_byte_1] | LUT1[prev_byte_2] | LUT2[context_mode]
+```
+
+with the previous-byte tables varying by context mode. See `c/common/context.c`
+for the exact 256×4-byte LUT contents; port verbatim, do not hand-recompute.
+
 ### Naming Crosswalk Between C and MoonBit
 
 The C decoder's identifiers are dense. Use this table as a glossary so the
@@ -329,7 +736,7 @@ Performance notes:
   except the very first 16 bits of a long meta-block size header, which the
   state machine reads in two parts anyway.
 - The hottest call site is `read_symbol` (Huffman decode); see Huffman section
-  for the peek-15-then-drop pattern.
+  for the two-level lookup pattern.
 
 White-box tests required:
 
@@ -388,9 +795,9 @@ Public helpers:
 - `read_simple_huffman_code(reader, max_alphabet_size, table, table_capacity)`
 - `read_complex_huffman_code(reader, alphabet_size, max_symbol, table, table_capacity)`
 - `read_symbol(reader, table) -> Int` — the fast-path decode. Peek
-  `HUFFMAN_TABLE_BITS` bits (15 for the literal alphabet), index into the
-  primary table, consume `bits` bits, follow a sub-table indirection if
-  needed.
+  `HUFFMAN_TABLE_BITS` bits (`8`, matching the C reference root table),
+  index into the primary table, consume `bits` bits, and follow a sub-table
+  indirection if needed.
 
 Edge cases that **must** be tested:
 
@@ -449,9 +856,9 @@ simple `if dict.val is None` guard suffices).
   `InvalidChecksum`, `InvalidLengthLiteral`, or `UnexpectedEOF`, which is much
   easier to diagnose than a silent wrong-byte at offset 79,000 in the
   dictionary.
-- Build pipeline regeneration is trivial: a small MoonBit script (see
-  `scripts/gen_brotli_dict.mbt`, described below) reads `dictionary.bin` and
-  emits a single `brotli_dict.mbt` file.
+- Build pipeline regeneration is trivial: a small helper (see
+  `tools/brotli/gen_brotli_dict.mbt`, described below) reads `dictionary.bin`
+  and emits a single `brotli_dict.mbt` file.
 
 Layout of `brotli_dict.mbt`:
 
@@ -502,21 +909,37 @@ fn brotli_static_dictionary() -> FixedArray[Byte] raise FzipError {
 ```
 
 The `122784` length check is the integrity guard mentioned above. The expected
-SHA-256 of the dictionary is documented in RFC 7932 §8 and must be verified by
-the generator. A runtime SHA check is not required because the length check plus
-the Zlib Adler-32 checksum is enough for production.
+SHA-256 of the dictionary must be verified by the generator. For the checked-in
+Google reference at `/Users/hustcer/iWork/refs/brotli/c/common/dictionary.bin`,
+the digest is:
 
-Generator script (`scripts/gen_brotli_dict.mbt`, run manually when the RFC
-ever changes, which has not happened since 2016):
+```
+20e42eb1b511c21806d4d227d07e5dd06877d8ce7b3a817f378f313653f35c70
+```
+
+Preserve this value as a comment near the top of `brotli_dict.mbt`:
+
+```mbt nocheck
+// Brotli static dictionary, RFC 7932 §8.
+// Source: c/common/dictionary.bin
+// SHA-256: 20e42eb1b511c21806d4d227d07e5dd06877d8ce7b3a817f378f313653f35c70
+// Length: 122,784 bytes
+```
+
+A runtime SHA check is not required because the length check plus the Zlib
+Adler-32 checksum is enough for production.
+
+Generator helper (`tools/brotli/gen_brotli_dict.mbt`, run manually when the
+dictionary source changes):
 
 1. Read `c/common/dictionary.bin`.
 2. Verify its length is 122,784.
-3. Verify the RFC SHA-256.
+3. Verify the expected SHA-256 listed above.
 4. Compress with `zlib_sync(dict, opts={ level: 9, mem: 0, dictionary: None })`.
 5. Emit `brotli_dict.mbt` with the constants above.
 6. Run `moon fmt`.
 
-Document the script's usage in `scripts/README.md` even though regeneration
+Document the helper's usage in `tools/brotli/README.md` even though regeneration
 should be rare.
 
 ### Transforms (`brotli_transform.mbt`)
@@ -910,6 +1333,12 @@ Additional black-box tests:
   window pattern raises `BrotliInvalidWindowBits`.
 - **Reject non-zero padding**: stream with garbage in the trailing byte
   raises `BrotliInvalidPadding`.
+- **Trailing data after ISLAST**: first verify the Google reference decoder's
+  behavior for a valid Brotli payload followed by non-zero bytes (for example,
+  `cat a.br b.br > c.br`). If the reference rejects it, fzip should raise a
+  `FzipError` with the offset of the unexpected bytes; if the reference accepts
+  it as unused trailing input, document that behavior and match it. Do not
+  hard-code `BrotliReserved` before this check.
 - **Reject truncation**: every prefix of every fixture, when decoded,
   raises `UnexpectedEOF` (loop over `1..data.length() - 1`).
 - **Reject bomb**: a hand-built stream that claims `MLEN = 1 << 28` but
@@ -946,9 +1375,9 @@ P1 is done when, in addition to the above:
 - All fixtures in `src/tests/brotli_fixtures/` decode to their expected
   outputs.
 - The full Brotli reference test suite (run separately, not embedded) at
-  `refs/brotli/tests/testdata/` decodes without error using a one-off
-  harness `cmd/brotli_conformance/`. (Add the harness; do not enable it in
-  CI yet — runs are expensive.)
+  `refs/brotli/tests/testdata/` decodes without error using the manual
+  harness under `tools/brotli/conformance/`. (Add the harness; do not enable
+  it in regular CI yet — runs are expensive.)
 - Cross-implementation validation passes:
   - Google `brotli --decompress` decodes every fixture that MoonBit embeds.
   - MoonBit `unbrotli_sync` decodes all `.compressed` files from
@@ -959,6 +1388,36 @@ P1 is done when, in addition to the above:
   round-trips through `unbrotli_sync` and matches the original SHA-256.
 - `moon test --filter "brotli*"` runs in under 5 seconds on the developer
   laptop.
+
+## Meta-block Size Limits (apply to all encoder phases)
+
+RFC §9.2 encodes meta-block size as `MNIBBLES = read(2) + 4` nibbles, where
+`MNIBBLES` is 4, 5, 6, or 7 (i.e., `MLEN` is 16, 20, 24, or 28 bits). The
+maximum payload per single meta-block is therefore `(1 << 28) - 1` ≈ 256 MB,
+but the C reference uses a tighter operational cap of `1 << 24 = 16 MB` per
+meta-block because its memory budgets assume that ceiling.
+
+fzip follows the C reference: the encoder emits at most **16 MB** of input
+per meta-block. Inputs larger than 16 MB are split across consecutive
+meta-blocks, with `ISLAST` set only on the final one. Add a constant:
+
+```mbt nocheck
+///|
+/// Operational cap on uncompressed bytes per Brotli meta-block. Matches the
+/// C reference `MAX_METABLOCK_SIZE`.
+const MAX_METABLOCK_BYTES : Int = 1 << 24
+```
+
+Encoder phases must:
+
+- For inputs ≤ `MAX_METABLOCK_BYTES`: emit exactly one meta-block (P2's
+  simple path).
+- For larger inputs: emit `ceil(len / MAX_METABLOCK_BYTES)` consecutive
+  meta-blocks. All but the last have `ISLAST = 0`; the last has
+  `ISLAST = 1`. Each meta-block carries its own block-type tables and
+  Huffman trees in the standard path; in the q=0 fast path it reuses the
+  static literal table per meta-block.
+- Reject inputs larger than `opts.max_input_size` before splitting.
 
 ## P2 — Encoder at q=0 and q=1 (Fast Path)
 
@@ -998,6 +1457,10 @@ pub(all) enum BrotliMode {
   Font
 } derive(Eq, Show)
 
+// `BrotliMode` only affects encoding (it selects context modes and tuning
+// heuristics; see RFC §9.1). Brotli streams do not carry this value on the
+// wire; the decoder ignores it. Document this explicitly in the doc-comment.
+
 ///|
 pub(all) struct BrotliOptions {
   /// 0..=11. P2 supports 0 and 1 only; higher values raise until P3/P4 land.
@@ -1012,9 +1475,14 @@ pub(all) struct BrotliOptions {
 
 ///|
 pub fn BrotliOptions::default() -> BrotliOptions {
-  // Keep the staged default at quality 1 while only P2 is implemented. When
-  // P4 lands, change this to Brotli's reference default quality 11 and record
-  // the behavior change in CHANGELOG.md.
+  // Brotli's reference default is q=11 (best compression). fzip stages the
+  // default to track what is actually implemented:
+  //   - After P2 lands: default stays at quality 1 (highest supported).
+  //   - After P3 lands: default moves to 9 (best non-Zopfli).
+  //   - After P4 lands: default moves to 11, matching the C reference.
+  // Each transition is a public behavior change; call it out in CHANGELOG.md
+  // and bump fzip's minor version. Callers who want stability should pin
+  // `quality` explicitly.
   {
     quality: 1,
     window_bits: 22,
@@ -1081,8 +1549,9 @@ table") to avoid building entropy models. The static table is defined in
 `compress_fragment.c`; port it verbatim into a `FixedArray[UInt16]`.
 
 Meta-block format: a single uncompressed-or-compressed meta-block per call
-(P2's q=0 emits exactly one meta-block per `brotli_sync` invocation).
-P2 `BrotliStream` buffers until the final push, matching `DeflateStream`.
+when `data.length() <= MAX_METABLOCK_BYTES`; otherwise multiple meta-blocks
+per the "Meta-block Size Limits" rule above. P2 `BrotliStream` buffers until
+the final push, matching `DeflateStream`.
 
 ### q=1 Encoder (`encode_fast_two_pass`)
 
@@ -1166,6 +1635,72 @@ selected per quality level. Port all four; gate by quality in dispatch.
   inspect `log2(0)` handling (the C code uses `FastLog2` from `fast_log.h`
   — port this lookup table for performance and exactness).
 
+### Encoder Static-Dictionary Hash Table
+
+The encoder needs a hash table mapping 5- to 24-byte prefixes of the static
+dictionary back to `(word_id, word_length, transform_id)` triples. The C
+reference materializes this as a pre-computed table in
+`enc/dictionary_hash.c` / `enc/static_dict_lut*.c`: roughly **6,000 lines of
+data** describing ~31,700 hash buckets.
+
+Two embedding options, mirroring the P1 dictionary discussion:
+
+**Option H1: Pre-compute at startup from the raw dictionary.** On the first
+`brotli_sync` call with `quality >= 5`, walk the materialized static
+dictionary (already cached from P1) and build the hash table in memory.
+Cost: ~30-50 ms one-time on commodity hardware. Memory: ~256 KB.
+
+**Option H2: Embed the C-generated tables as compressed data.** Run a
+generator script over `enc/dictionary_hash.c` to extract the bucket layout,
+DEFLATE-compress it (~80-100 KB compressed), embed as a `FixedArray[Byte]`
+literal, and decompress at first use. Cost: ~10 ms first-use. Memory: same
+~256 KB.
+
+**Decision for P3: Option H1.** Reasons:
+
+- Avoids embedding a second large generated data blob; the runtime cost is
+  amortized over the first `brotli_sync` call at q≥5.
+- The construction algorithm is small (~100 LOC) and matches the C
+  reference's `BuildHashTable` helper.
+- The table is per-process, not per-call, so the one-time cost happens once
+  per binary load.
+
+Layout:
+
+```mbt nocheck
+///|
+priv struct DictHashEntry {
+  word_id : UInt
+  word_length : Byte
+  transform_id : Byte
+}
+
+///|
+let dict_hash_cache : Ref[FixedArray[DictHashEntry]?] = { val: None }
+
+///|
+fn brotli_encoder_dict_hash() -> FixedArray[DictHashEntry] raise FzipError {
+  match dict_hash_cache.val {
+    Some(table) => table
+    None => {
+      let dict = brotli_static_dictionary()
+      let table = build_encoder_dict_hash(dict)
+      dict_hash_cache.val = Some(table)
+      table
+    }
+  }
+}
+```
+
+Place this in a new `brotli_encode_dict_hash.mbt` (~250 LOC) added in P3.
+
+Required tests:
+
+- The table is deterministic: two calls return identical buckets.
+- A handful of known prefixes (e.g., `" the "`, `" and "`) resolve to the
+  expected `word_id` per RFC §8. Verify against output from the C
+  reference's `BrotliCompressBufferQuality` with a dictionary-heavy input.
+
 ### Testing (P3)
 
 Extend the random-input round-trip test to all quality levels q=0..9. Add a
@@ -1214,8 +1749,13 @@ literal/copy commands.
 
 - The suffix tree uses left/right child pointers indexed into a single
   `FixedArray[Int]`. The C reference uses `uint32_t` for indices; MoonBit
-  `Int` is 64-bit on native and 32-bit on wasm-gc-but-acts-as-32. Use `Int`
-  and bound the tree size at `1 << 27` entries.
+  `Int` is 64-bit on native and effectively 32-bit on JS / wasm-gc. Use
+  `Int` for indices, but do not allocate a blanket `1 << 27`-entry tree on
+  32-bit-style backends. Derive the suffix-tree bound from the validated input
+  length and `opts.max_input_size`, then reject early if the required arrays
+  would exceed a backend-safe memory budget. A conservative first cap is
+  64 MiB of suffix-tree storage on JS / wasm-gc and 512 MiB on native; refine
+  with measurements before P4 lands.
 - The Zopfli loop is forward-backward: a forward pass builds a cost map,
   then a backward pass traces the optimal command sequence. The cost
   function is a sum of per-symbol bit costs based on the histogram
@@ -1266,8 +1806,11 @@ Hot-path conventions:
   raise on out-of-bounds, but we want a `FzipError` with context instead
   of an opaque crash — guard with explicit `if` checks at format
   boundaries (meta-block length, code-length count, etc.).
-- Reject streams that request unsupported features (compound dictionary,
-  large-window) early, before any allocation.
+- Reject unsupported feature paths early, before large allocation. This applies
+  directly to large-window streams. Shared / compound dictionaries are a
+  future public-API feature rather than something ordinary Brotli streams
+  self-describe; keep `BrotliDictionaryNotSupported` reserved for that future
+  API surface.
 
 ### Error Recovery
 
@@ -1276,6 +1819,43 @@ Hot-path conventions:
 - The encoder is one-shot per `brotli_sync` call; no partial output is
   exposed on failure. P2 `BrotliStream` buffers like `DeflateStream`, so its
   callback is only invoked after a successful final encode.
+
+### Fuzz Strategy
+
+A dedicated fuzz harness reduces the risk of correctness bugs that escape
+the curated test corpus.
+
+**Timing**: Establish the harness during P1, gate P3 entry on **24 hours of
+clean fuzzing**, and rerun after every encoder phase.
+
+**Harness layout**:
+
+- `tools/brotli/fuzz/main.mbt` — a MoonBit binary that consumes random byte
+  arrays from stdin (one per line, hex-encoded for portability) or from a
+  corpus directory. For each input, calls `unbrotli_sync` and asserts it
+  either returns or raises a `FzipError` — **never** panics out of MoonBit
+  bounds or arithmetic.
+- `tools/brotli/fuzz/corpus/` — seeded with the same fixtures used by tests
+  plus 1,000 random mutations generated by a small driver
+  (`tools/brotli/gen_brotli_fuzz_corpus.mbt`). Mutation strategies: bit flips,
+  byte deletes, byte inserts, header truncation.
+- `tools/brotli/fuzz/roundtrip.mbt` — for encoder phases (P2+): random input
+  bytes → `brotli_sync` → `unbrotli_sync` → assert equality. This catches
+  the most common encoder bug class.
+
+**Stop criteria**:
+
+- No new crashes for 24 hours of continuous fuzzing on a single laptop core.
+- No deviation between MoonBit `unbrotli_sync` output and Google C reference
+  decoder output on any fuzz input.
+
+**CI integration**: do **not** run the fuzz harness in regular CI; it is too
+expensive. Run on a nightly schedule, with seeded inputs from
+`tools/brotli/fuzz/corpus/` plus 60 minutes of fresh random mutations. Alert
+on any new crash signature.
+
+This section supersedes the offhand "fuzz harness in P1.5" reference in the
+Risk Register.
 
 ### Backwards Compatibility
 
@@ -1290,14 +1870,14 @@ Hot-path conventions:
 
 ## Risk Register
 
-| Risk                                              | Probability | Impact | Mitigation                                                                             |
-| ------------------------------------------------- | ----------- | ------ | -------------------------------------------------------------------------------------- |
-| Static dictionary embedding bloats source tree    | Low         | Low    | Choose Option C (DEFLATE-compressed embed).                                            |
-| Bit reader performance is the bottleneck          | High        | Medium | Maintain 32-bit accumulator; pre-refill in command loop; benchmark every phase.        |
-| Huffman table memory exceeds expectations         | Medium      | Medium | Pre-size arena at construction; arena exceeds the C reference's `HUFFMAN_TABLE_SIZE`.  |
-| State-machine bug surfaces only on rare RFC paths | High        | High   | Run the full reference test corpus; add fuzz harness in P1.5.                          |
-| Encoder ratios fall short of acceptance           | Medium      | Medium | Port C reference verbatim; resist "clever" rewrites in clustering and entropy modules. |
-| Zopfli memory use blows out on large inputs       | Medium      | Low    | Document the input-size cap in `BrotliOptions`; reject early.                          |
+| Risk                                              | Probability | Impact | Mitigation                                                                                           |
+| ------------------------------------------------- | ----------- | ------ | ---------------------------------------------------------------------------------------------------- |
+| Static dictionary embedding bloats source tree    | Low         | Low    | Choose Option C (Zlib-wrapped compressed embed).                                                      |
+| Bit reader performance is the bottleneck          | High        | Medium | Maintain 32-bit accumulator; pre-refill in command loop; benchmark every phase.                      |
+| Huffman table memory exceeds expectations         | Medium      | Medium | Pre-size arena at construction; arena exceeds the C reference's `HUFFMAN_TABLE_SIZE`.                |
+| State-machine bug surfaces only on rare RFC paths | High        | High   | Run the full reference test corpus; gate P3 entry on the dedicated fuzz harness (see Fuzz Strategy). |
+| Encoder ratios fall short of acceptance           | Medium      | Medium | Port C reference verbatim; resist "clever" rewrites in clustering and entropy modules.               |
+| Zopfli memory use blows out on large inputs       | Medium      | Low    | Document the input-size cap in `BrotliOptions`; reject early.                                        |
 
 ## Glossary
 
