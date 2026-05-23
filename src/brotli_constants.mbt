@@ -8,6 +8,11 @@ let brotli_min_window_bits : Int = 10
 let brotli_max_window_bits : Int = 24
 
 ///|
+/// Bytes reserved by RFC 7932 section 9.1 when deriving the maximum
+/// backward-reference distance from the advertised window size.
+let brotli_window_gap : Int = 16
+
+///|
 /// Operational cap on uncompressed bytes per Brotli meta-block. Matches the C
 /// reference `MAX_METABLOCK_SIZE`.
 let brotli_max_metablock_bytes : Int = 1 << 24

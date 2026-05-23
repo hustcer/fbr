@@ -10,6 +10,45 @@ fn assert_brotli_error(
 }
 
 ///|
+fn append_byte(data : FixedArray[Byte], byte : Byte) -> FixedArray[Byte] {
+  let out = FixedArray::make(data.length() + 1, b'\x00')
+  data.blit_to(out, len=data.length(), src_offset=0, dst_offset=0)
+  out[data.length()] = byte
+  out
+}
+
+///|
+fn assert_truncated_prefixes_raise_unexpected_eof(
+  data : FixedArray[Byte],
+) -> Unit raise {
+  for length in 1..<data.length() {
+    let prefix = slc(data, 0, e=length)
+    let result = try? unbrotli_sync(prefix)
+    assert_brotli_error(result, UnexpectedEOF)
+  }
+}
+
+///|
+fn make_uncompressed_bomb_header() -> FixedArray[Byte] {
+  let compressed = FixedArray::make(4, b'\x00')
+  let mut pos = 0
+  wbits(compressed, pos, 1) // WBITS: standard 10-bit window
+  pos += 1
+  wbits(compressed, pos, 0)
+  pos += 3
+  wbits(compressed, pos, 2)
+  pos += 3
+  wbits(compressed, pos, 0) // not final, so ISUNCOMPRESSED follows MLEN
+  pos += 1
+  wbits(compressed, pos, 0) // MNIBBLES = 0, 16-bit MLEN
+  pos += 2
+  wbits16(compressed, pos, 0xffff) // MLEN = 65536
+  pos += 16
+  wbits(compressed, pos, 1) // uncompressed meta-block
+  compressed
+}
+
+///|
 fn write_simple_one_symbol_huffman(
   encoded : FixedArray[Byte],
   start : Int,
@@ -698,7 +737,7 @@ test "compressed body switches literal blocks" {
     header,
     output,
     2,
-    BrotliDecoderState::new(),
+    BrotliDecoderState::new_with_window_bits(24),
   )
   inspect(str_from_u8(output.finish()), content="AB")
 }
@@ -766,14 +805,14 @@ test "compressed body selects literal tree by LSB context" {
     header,
     output,
     2,
-    BrotliDecoderState::new(),
+    BrotliDecoderState::new_with_window_bits(24),
   )
   inspect(str_from_u8(output.finish()), content="AB")
 }
 
 ///|
 test "compressed body preserves distance ring in decoder state" {
-  let state = BrotliDecoderState::new()
+  let state = BrotliDecoderState::new_with_window_bits(24)
   let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
   let first_reader = BrotliBitReader::new([0x01], 0, 1)
   brotli_decode_compressed_metablock_body(
@@ -799,7 +838,7 @@ test "compressed body preserves distance ring in decoder state" {
 ///|
 test "BrotliOutputBuilder copies identity dictionary word" {
   let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
-  output.copy_from_dictionary(1, 4)
+  output.copy_from_dictionary_after_max_distance(1, 4, 0)
   inspect(str_from_u8(output.finish()), content="time")
 }
 
@@ -807,13 +846,32 @@ test "BrotliOutputBuilder copies identity dictionary word" {
 test "BrotliOutputBuilder applies dictionary uppercase transform" {
   inspect(brotli_transform_count(), content="121")
   let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
-  output.copy_from_dictionary(4097, 4)
+  output.copy_from_dictionary_after_max_distance(4097, 4, 0)
   inspect(str_from_u8(output.finish()), content="Time ")
 }
 
 ///|
+test "BrotliDecoderState caps backward distance by window gap" {
+  let state = BrotliDecoderState::new_with_window_bits(10)
+  inspect(state.max_distance(20), content="20")
+  inspect(state.max_distance(2000), content="1008")
+}
+
+///|
+test "BrotliOutputBuilder dictionary address uses capped max distance" {
+  let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
+  output.ensure(1100)
+  output.len = 1100
+  output.copy_from_dictionary_after_max_distance(1009, 4, 1008)
+  assert_eq(output.buf[1100], b't')
+  assert_eq(output.buf[1101], b'i')
+  assert_eq(output.buf[1102], b'm')
+  assert_eq(output.buf[1103], b'e')
+}
+
+///|
 test "compressed body decodes identity dictionary reference" {
-  let state = BrotliDecoderState::new()
+  let state = BrotliDecoderState::new_with_window_bits(24)
   let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
   let reader = BrotliBitReader::new([0x00], 0, 1)
   brotli_decode_compressed_metablock_body(
@@ -931,6 +989,48 @@ test "unbrotli_sync rejects non-zero final padding" {
   let compressed : FixedArray[Byte] = [0xa1, 0x03]
   let result = try? unbrotli_sync(compressed)
   assert_brotli_error(result, BrotliInvalidPadding)
+}
+
+///|
+test "unbrotli_sync rejects large-window header path" {
+  let compressed : FixedArray[Byte] = [0x11]
+  let result = try? unbrotli_sync(compressed)
+  assert_brotli_error(result, BrotliLargeWindowNotSupported)
+}
+
+///|
+test "unbrotli_sync rejects trailing nonzero data after final meta-block" {
+  let compressed = append_byte(brotli_fixture_quickfox_compressed, b'\x01')
+  let result = try? unbrotli_sync(compressed)
+  assert_brotli_error(result, BrotliInvalidPadding)
+}
+
+///|
+test "unbrotli_sync rejects uncompressed output bomb before allocation" {
+  let compressed = make_uncompressed_bomb_header()
+  let result = try? unbrotli_sync(compressed, opts={
+    out: None,
+    max_output_size: (1 << 16) - 1,
+    max_input_size: default_max_input_size,
+  })
+  assert_brotli_error(result, InvalidZipData)
+}
+
+///|
+test "unbrotli_sync rejects truncated embedded fixture prefixes" {
+  assert_truncated_prefixes_raise_unexpected_eof(
+    brotli_fixture_empty_compressed,
+  )
+  assert_truncated_prefixes_raise_unexpected_eof(
+    brotli_fixture_10x10y_compressed,
+  )
+  assert_truncated_prefixes_raise_unexpected_eof(brotli_fixture_64x_compressed)
+  assert_truncated_prefixes_raise_unexpected_eof(
+    brotli_fixture_quickfox_compressed,
+  )
+  assert_truncated_prefixes_raise_unexpected_eof(
+    brotli_fixture_ukkonooa_compressed,
+  )
 }
 
 ///|

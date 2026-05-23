@@ -5,7 +5,7 @@ repository root.
 
 ## Fixture Generator
 
-```bash
+```nu
 nu tools/brotli/gen-fixtures.nu
 ```
 
@@ -14,7 +14,7 @@ fixtures into `src/tests/brotli_fixtures/`.
 
 ## Conformance Harness
 
-```bash
+```nu
 nu tools/brotli/conformance/run.nu
 nu tools/brotli/conformance/run.nu --fixture monkey
 ```
@@ -23,3 +23,18 @@ Runs the upstream corpus at `/Users/hustcer/iWork/refs/brotli/tests/testdata`
 through `unbrotli_sync`. The harness writes a temporary
 `src/brotli_conformance_wbtest.mbt`, runs one native MoonBit test per fixture,
 then removes the temporary file.
+
+## Decoder Fuzz Harness
+
+```nu
+nu tools/brotli/fuzz/gen-corpus.nu --count 1000
+nu tools/brotli/fuzz/run.nu
+nu tools/brotli/fuzz/run.nu --limit 25
+```
+
+`gen-corpus.nu` seeds `tools/brotli/fuzz/corpus/` from the embedded fixture set
+and adds random truncation, append, and delete-middle mutations. `run.nu`
+generates a temporary `src/brotli_fuzz_wbtest.mbt` per input and asserts
+`unbrotli_sync` either returns bytes or raises `FzipError`; native panics or
+unchecked bounds failures fail the run. The temporary file is removed after the
+run.

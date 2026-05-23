@@ -197,11 +197,17 @@ fn brotli_decode_compressed_metablock_body(
       )
     }
     let output_before_copy = output.len
-    if distance <= output.len {
+    let max_distance = state.max_distance(output.len)
+    if distance <= max_distance {
       output.copy_from_distance(distance, command.copy_length)
       state.distance_ring.record(distance)
     } else {
-      output.copy_from_dictionary(distance, command.copy_length)
+      state.distance_ring.compensate_dictionary_copy()
+      output.copy_from_dictionary_after_max_distance(
+        distance,
+        command.copy_length,
+        max_distance,
+      )
     }
     let copied = output.len - output_before_copy
     if copied > remaining {

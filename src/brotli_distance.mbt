@@ -2,11 +2,12 @@
 priv struct BrotliDistanceRing {
   distances : FixedArray[Int]
   mut index : Int
+  mut last_distance_context : Int
 }
 
 ///|
 fn BrotliDistanceRing::new() -> BrotliDistanceRing {
-  { distances: [16, 15, 11, 4], index: 0 }
+  { distances: [16, 15, 11, 4], index: 0, last_distance_context: 0 }
 }
 
 ///|
@@ -26,11 +27,13 @@ fn BrotliDistanceRing::take_short_code(
   if code < 0 || code >= brotli_num_distance_short_codes {
     raise fzip_err(BrotliInvalidDistance, msg="invalid Brotli short distance")
   }
+  self.last_distance_context = 0
   if code <= 3 {
     let offset = code - 3
     let distance_context = 1 >> code
     let distance = self.distances[brotli_distance_ring_slot(self.index - offset)]
     self.index -= distance_context
+    self.last_distance_context = distance_context
     return distance
   }
   let mut index_delta = 3
@@ -52,6 +55,14 @@ fn BrotliDistanceRing::take_short_code(
 }
 
 ///|
+fn BrotliDistanceRing::compensate_dictionary_copy(
+  self : BrotliDistanceRing,
+) -> Unit {
+  self.index += self.last_distance_context
+  self.last_distance_context = 0
+}
+
+///|
 fn BrotliDistanceRing::record(
   self : BrotliDistanceRing,
   distance : Int,
@@ -61,6 +72,7 @@ fn BrotliDistanceRing::record(
   }
   self.distances[brotli_distance_ring_slot(self.index)] = distance
   self.index += 1
+  self.last_distance_context = 0
 }
 
 ///|

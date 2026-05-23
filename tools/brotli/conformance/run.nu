@@ -2,6 +2,19 @@
 
 const corpus_dir = $"($nu.home-dir)/iWork/refs/brotli/tests/testdata"
 const temp_file = "src/brotli_conformance_wbtest.mbt"
+const harness_lock_dir = "tools/brotli/.harness-lock"
+
+def acquire-harness-lock []: nothing -> nothing {
+  let made = (^mkdir $harness_lock_dir | complete)
+  if $made.exit_code != 0 {
+    print --stderr "Another Brotli harness is running; retry after it finishes."
+    exit 1
+  }
+}
+
+def release-harness-lock []: nothing -> nothing {
+  rm --force --recursive $harness_lock_dir
+}
 
 def sanitize-name [name: string]: nothing -> string {
   $name | str replace --all --regex '[^A-Za-z0-9_]' '_'
@@ -103,6 +116,7 @@ def write-temp-test [fixture: record]: nothing -> string {
 def main [
   --fixture (-f): string # Run one corpus fixture by expected-file name.
 ]: nothing -> nothing {
+  acquire-harness-lock
   let all_fixtures = corpus-fixtures
   let fixtures = if $fixture == null {
     $all_fixtures
@@ -112,6 +126,7 @@ def main [
 
   if ($fixtures | length) == 0 {
     print --stderr "No matching Brotli conformance fixtures."
+    release-harness-lock
     exit 1
   }
 
@@ -134,6 +149,8 @@ def main [
   rm --force $temp_file
   print ($results | table)
   if ($results | any {|row| not $row.ok }) {
+    release-harness-lock
     exit 1
   }
+  release-harness-lock
 }

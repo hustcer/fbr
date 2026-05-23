@@ -18,10 +18,11 @@ let brotli_dictionary_offsets_by_length : FixedArray[Int] = [
 ]
 
 ///|
-fn BrotliOutputBuilder::copy_from_dictionary(
+fn BrotliOutputBuilder::copy_from_dictionary_after_max_distance(
   self : BrotliOutputBuilder,
   distance : Int,
   length : Int,
+  max_distance : Int,
 ) -> Unit raise FzipError {
   if length < brotli_dictionary_min_word_length ||
     length > brotli_dictionary_max_word_length {
@@ -37,7 +38,7 @@ fn BrotliOutputBuilder::copy_from_dictionary(
       msg="Brotli dictionary bucket is empty",
     )
   }
-  let address = distance - self.len - 1
+  let address = distance - max_distance - 1
   if address < 0 {
     raise fzip_err(
       BrotliInvalidDistance,
