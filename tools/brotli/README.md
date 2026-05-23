@@ -38,3 +38,16 @@ generates a temporary `src/brotli_fuzz_wbtest.mbt` per input and asserts
 `unbrotli_sync` either returns bytes or raises `FzipError`; native panics or
 unchecked bounds failures fail the run. The temporary file is removed after the
 run.
+
+## Silesia q=11 Verification
+
+```nu
+nu tools/brotli/silesia/verify.nu
+nu tools/brotli/silesia/verify.nu target/brotli-silesia/webster-mozilla64k.bin.br target/brotli-silesia/webster-mozilla64k.bin
+```
+
+Verifies a Google Brotli q=11 stream against an expected output file through
+the JavaScript backend. The default paths are the local 100 MiB Silesia
+acceptance artifact under `target/brotli-silesia/`. The script rebuilds the
+MoonBit JS test bundle, calls `unbrotli_sync`, and prints decoded and expected
+SHA-256 values.

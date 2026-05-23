@@ -748,6 +748,11 @@ test "brotli literal context modes match reference categories" {
   inspect(brotli_literal_context_id(1, 255, 0), content="63")
   inspect(brotli_literal_context_id(2, 65, 32), content="48")
   inspect(brotli_literal_context_id(2, 97, 65), content="58")
+  inspect(brotli_literal_context_id(2, 117, 221), content="56")
+  inspect(brotli_literal_context_id(2, 117, 224), content="58")
+  inspect(brotli_literal_context_id(2, 127, 0), content="0")
+  inspect(brotli_literal_context_id(2, 127, 65), content="2")
+  inspect(brotli_literal_context_id(2, 65, 127), content="48")
   inspect(brotli_literal_context_id(3, 255, 128), content="60")
 }
 

@@ -146,7 +146,7 @@ fn brotli_ascii_utf8_context1(byte : Int) -> Int {
     14
   } else if byte >= 97 && byte <= 122 {
     15
-  } else if byte < 32 {
+  } else if byte < 32 || byte == 127 {
     0
   } else {
     3
@@ -155,7 +155,7 @@ fn brotli_ascii_utf8_context1(byte : Int) -> Int {
 
 ///|
 fn brotli_ascii_utf8_context2(byte : Int) -> Int {
-  if byte <= 32 {
+  if byte <= 32 || byte == 127 {
     0
   } else if byte >= 48 && byte <= 57 {
     2
@@ -189,7 +189,7 @@ fn brotli_literal_context_id(
       }
       let second = if p2 < 128 {
         brotli_ascii_utf8_context2(p2)
-      } else if p2 < 208 {
+      } else if p2 < 224 {
         0
       } else {
         2

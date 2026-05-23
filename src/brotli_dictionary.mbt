@@ -48,6 +48,12 @@ fn BrotliOutputBuilder::copy_from_dictionary_after_max_distance(
   let word_mask = (1 << size_bits) - 1
   let word_index = address & word_mask
   let transform_index = address >> size_bits
+  if transform_index < 0 || transform_index >= brotli_transform_count() {
+    raise fzip_err(
+      BrotliInvalidTransform,
+      msg="Brotli transform index out of range index=\{transform_index} count=\{brotli_transform_count()} distance=\{distance} max_distance=\{max_distance} output_len=\{self.len} length=\{length} address=\{address}",
+    )
+  }
   let offset = brotli_dictionary_offsets_by_length[length] + word_index * length
   if offset < 0 || offset > brotli_dictionary_data.length() - length {
     raise fzip_err(
