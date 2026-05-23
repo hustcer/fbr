@@ -930,6 +930,68 @@ test "unbrotli_sync decodes q0 uncompressed Brotli stream from CLI" {
 }
 
 ///|
+test "brotli_sync q0 encodes empty stream" {
+  let input : FixedArray[Byte] = []
+  let compressed = brotli_sync(input, opts={ quality: 0, window_bits: 16 })
+  let decoded = unbrotli_sync(compressed)
+  assert_eq(decoded.length(), 0)
+}
+
+///|
+test "brotli_sync q0 round-trips uncompressed meta-block" {
+  let input : FixedArray[Byte] = [1, 2, 3, 4, 5, 0, 255]
+  let compressed = brotli_sync(input, opts={ quality: 0, window_bits: 16 })
+  let decoded = unbrotli_sync(compressed)
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<input.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
+test "brotli_sync supports all standard window bits" {
+  let input : FixedArray[Byte] = [42]
+  for window_bits in 10..<=24 {
+    let compressed = brotli_sync(input, opts={ quality: 0, window_bits })
+    let decoded = unbrotli_sync(compressed)
+    assert_eq(decoded.length(), 1)
+    assert_eq(decoded[0], input[0])
+  }
+}
+
+///|
+test "brotli_sync q1 round-trips large input across meta-blocks" {
+  let input = FixedArray::make(brotli_max_metablock_bytes + 17, b'\x00')
+  for i in 0..<input.length() {
+    input[i] = (i & 0xff).to_byte()
+  }
+  let compressed = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
+  let decoded = unbrotli_sync(compressed)
+  assert_eq(decoded.length(), input.length())
+  assert_eq(decoded[0], input[0])
+  assert_eq(
+    decoded[brotli_max_metablock_bytes],
+    input[brotli_max_metablock_bytes],
+  )
+  assert_eq(decoded[input.length() - 1], input[input.length() - 1])
+}
+
+///|
+test "brotli_sync rejects unsupported quality phases" {
+  let input : FixedArray[Byte] = [1]
+  let p3 : Result[FixedArray[Byte], FzipError] = try? brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+  })
+  assert_brotli_error(p3, InvalidZipData)
+  let p4 : Result[FixedArray[Byte], FzipError] = try? brotli_sync(input, opts={
+    quality: 10,
+    window_bits: 22,
+  })
+  assert_brotli_error(p4, InvalidZipData)
+}
+
+///|
 test "unbrotli_sync enforces max_input_size" {
   let compressed : FixedArray[Byte] = [0xa1, 0x01]
   let result = try? unbrotli_sync(compressed, opts={

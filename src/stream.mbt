@@ -156,6 +156,45 @@ pub fn UnbrotliStream::push(
 }
 
 ///|
+/// Chunk-oriented Brotli compressor.
+///
+/// Input chunks are buffered until the final push, then encoded with
+/// `brotli_sync` and emitted through `ondata`.
+pub(all) struct BrotliStream {
+  /// Called with compressed data when a final chunk is pushed.
+  mut ondata : FlateStreamHandler?
+  priv opts : BrotliOptions
+  priv mut chunks : Array[FixedArray[Byte]]
+}
+
+///|
+/// Create a Brotli compression stream.
+pub fn BrotliStream::new(
+  opts? : BrotliOptions = BrotliOptions::default(),
+) -> BrotliStream {
+  { ondata: None, opts, chunks: [] }
+}
+
+///|
+/// Push one input chunk into the Brotli compression stream.
+pub fn BrotliStream::push(
+  self : BrotliStream,
+  chunk : FixedArray[Byte],
+  final_? : Bool = false,
+) -> Unit raise FzipError {
+  self.chunks.push(chunk)
+  if final_ {
+    let data = concat_chunks(self.chunks)
+    let result = brotli_sync(data, opts=self.opts)
+    match self.ondata {
+      Some(h) => call_handler(h, result, true)
+      None => ()
+    }
+    self.chunks = []
+  }
+}
+
+///|
 /// Chunk-oriented GZIP compressor.
 ///
 /// Input chunks are buffered until the final push, then encoded with

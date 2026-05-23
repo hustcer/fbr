@@ -8,6 +8,8 @@ import {
 // Values
 pub fn adler32(FixedArray[Byte]) -> UInt
 
+pub fn brotli_sync(FixedArray[Byte], opts? : BrotliOptions) -> FixedArray[Byte] raise FzipError
+
 pub fn compress_sync(FixedArray[Byte], opts? : GzipOptions) -> FixedArray[Byte]
 
 pub fn crc32(FixedArray[Byte]) -> UInt
@@ -79,6 +81,19 @@ pub(all) suberror FzipError {
 }
 
 // Types and methods
+pub(all) struct BrotliOptions {
+  quality : Int
+  window_bits : Int
+} derive(@debug.Debug)
+pub fn BrotliOptions::default() -> Self
+
+pub(all) struct BrotliStream {
+  mut ondata : FlateStreamHandler?
+  // private fields
+}
+pub fn BrotliStream::new(opts? : BrotliOptions) -> Self
+pub fn BrotliStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise FzipError
+
 pub(all) struct DecompressStream {
   mut ondata : FlateStreamHandler?
   // private fields

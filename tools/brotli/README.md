@@ -51,3 +51,14 @@ the JavaScript backend. The default paths are the local 100 MiB Silesia
 acceptance artifact under `target/brotli-silesia/`. The script rebuilds the
 MoonBit JS test bundle, calls `unbrotli_sync`, and prints decoded and expected
 SHA-256 values.
+
+## Encoder Verification
+
+```nu
+nu tools/brotli/encode/verify.nu target/brotli-silesia/silesia-100m.bin --quality 0
+nu tools/brotli/encode/verify.nu target/brotli-silesia/silesia-100m.bin --quality 1
+```
+
+Encodes a file with MoonBit `brotli_sync`, decodes the generated stream with
+the external `brotli` CLI, and compares the decoded bytes with the original
+input. This keeps encoder acceptance independent from fzip's own decoder.
