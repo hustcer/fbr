@@ -11,3 +11,15 @@ let brotli_max_window_bits : Int = 24
 /// Operational cap on uncompressed bytes per Brotli meta-block. Matches the C
 /// reference `MAX_METABLOCK_SIZE`.
 let brotli_max_metablock_bytes : Int = 1 << 24
+
+///|
+/// Maximum code length in bits for any Brotli Huffman alphabet.
+let brotli_huffman_max_code_length : Int = 15
+
+///|
+/// Root table width for Brotli Huffman lookup tables.
+let brotli_huffman_table_bits : Int = 8
+
+///|
+/// Maximum per-tree table size from the reference implementation.
+let brotli_huffman_max_table_size : Int = 1080

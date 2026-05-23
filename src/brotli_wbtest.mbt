@@ -21,6 +21,9 @@ test "brotli constants expose reference limits" {
   inspect(brotli_min_window_bits, content="10")
   inspect(brotli_max_window_bits, content="24")
   inspect(brotli_max_metablock_bytes, content="16777216")
+  inspect(brotli_huffman_max_code_length, content="15")
+  inspect(brotli_huffman_table_bits, content="8")
+  inspect(brotli_huffman_max_table_size, content="1080")
 }
 
 ///|
@@ -54,6 +57,56 @@ test "BrotliBitReader copies aligned bytes after padding" {
   reader.take_bytes(out, 0, 2)
   inspect(out[0].to_int(), content="64")
   inspect(out[1].to_int(), content="65")
+}
+
+///|
+test "brotli_build_huffman_table decodes canonical root table" {
+  let lengths : FixedArray[Byte] = [1, 2, 3, 3]
+  let table = brotli_build_huffman_table(lengths, 4, 3)
+  let reader = BrotliBitReader::new([0xda, 0x01], 0, 2)
+  inspect(brotli_read_symbol(reader, table, 3), content="0")
+  inspect(brotli_read_symbol(reader, table, 3), content="1")
+  inspect(brotli_read_symbol(reader, table, 3), content="2")
+  inspect(brotli_read_symbol(reader, table, 3), content="3")
+}
+
+///|
+test "brotli_build_huffman_table supports single-symbol tree" {
+  let lengths : FixedArray[Byte] = [0, 0, 1, 0]
+  let table = brotli_build_huffman_table(lengths, 4, 3)
+  let reader = BrotliBitReader::new([0xff], 0, 1)
+  inspect(brotli_read_symbol(reader, table, 3), content="2")
+  inspect(reader.bits_consumed(), content="0")
+}
+
+///|
+test "brotli_build_huffman_table rejects malformed length sets" {
+  let empty : FixedArray[Byte] = [0, 0, 0, 0]
+  let empty_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_build_huffman_table(
+    empty, 4, 3,
+  )
+  guard empty_result is Err(FzipError(code=empty_code, ..)) else {
+    fail("expected empty Huffman error")
+  }
+  assert_eq(empty_code, BrotliInvalidHuffman)
+
+  let over : FixedArray[Byte] = [1, 1, 1]
+  let over_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_build_huffman_table(
+    over, 3, 3,
+  )
+  guard over_result is Err(FzipError(code=over_code, ..)) else {
+    fail("expected over-subscribed Huffman error")
+  }
+  assert_eq(over_code, BrotliInvalidHuffman)
+
+  let under : FixedArray[Byte] = [2, 2, 0, 0]
+  let under_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_build_huffman_table(
+    under, 4, 3,
+  )
+  guard under_result is Err(FzipError(code=under_code, ..)) else {
+    fail("expected under-subscribed Huffman error")
+  }
+  assert_eq(under_code, BrotliInvalidHuffman)
 }
 
 ///|
