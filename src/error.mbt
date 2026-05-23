@@ -42,11 +42,31 @@ pub(all) enum FzipErrorCode {
   /// sync APIs. The archive may be structurally valid; the sync API just
   /// cannot process it.
   Zip64ValueTooLarge
+  /// Brotli window-bits field is out of range or reserved.
+  BrotliInvalidWindowBits
+  /// Brotli meta-block header is malformed.
+  BrotliInvalidMetablock
+  /// Brotli Huffman code tree could not be built from declared lengths.
+  BrotliInvalidHuffman
+  /// Brotli context map encoding is invalid.
+  BrotliInvalidContextMap
+  /// Brotli distance code references a position outside the window.
+  BrotliInvalidDistance
+  /// Brotli transform index is out of range.
+  BrotliInvalidTransform
+  /// Brotli shared-dictionary APIs are not supported by fzip.
+  BrotliDictionaryNotSupported
+  /// Brotli stream uses the large-window extension fzip does not support.
+  BrotliLargeWindowNotSupported
+  /// Brotli stream contains a reserved bit or pattern.
+  BrotliReserved
+  /// Brotli padding bits at end of stream are non-zero.
+  BrotliInvalidPadding
 } derive(Eq, Debug)
 
 ///|
 /// Write the symbolic error-code name, such as `"InvalidHeader"`.
-pub impl Show for FzipErrorCode with output(self, logger) {
+pub impl Show for FzipErrorCode with fn output(self, logger) {
   match self {
     UnexpectedEOF => logger.write_string("UnexpectedEOF")
     InvalidBlockType => logger.write_string("InvalidBlockType")
@@ -65,6 +85,18 @@ pub impl Show for FzipErrorCode with output(self, logger) {
     UnknownCompressionMethod => logger.write_string("UnknownCompressionMethod")
     InvalidChecksum => logger.write_string("InvalidChecksum")
     Zip64ValueTooLarge => logger.write_string("Zip64ValueTooLarge")
+    BrotliInvalidWindowBits => logger.write_string("BrotliInvalidWindowBits")
+    BrotliInvalidMetablock => logger.write_string("BrotliInvalidMetablock")
+    BrotliInvalidHuffman => logger.write_string("BrotliInvalidHuffman")
+    BrotliInvalidContextMap => logger.write_string("BrotliInvalidContextMap")
+    BrotliInvalidDistance => logger.write_string("BrotliInvalidDistance")
+    BrotliInvalidTransform => logger.write_string("BrotliInvalidTransform")
+    BrotliDictionaryNotSupported =>
+      logger.write_string("BrotliDictionaryNotSupported")
+    BrotliLargeWindowNotSupported =>
+      logger.write_string("BrotliLargeWindowNotSupported")
+    BrotliReserved => logger.write_string("BrotliReserved")
+    BrotliInvalidPadding => logger.write_string("BrotliInvalidPadding")
   }
 }
 
@@ -74,6 +106,10 @@ let error_messages : Array[String] = [
   "stream finished", "no stream handler", "invalid header", "no callback", "invalid UTF-8 data",
   "extra field too long", "date not in range 1980-2099", "filename too long", "stream finishing",
   "invalid zip data", "unknown compression method", "invalid checksum", "zip64 value too large for sync API",
+  "invalid Brotli window bits", "invalid Brotli meta-block", "invalid Brotli Huffman tree",
+  "invalid Brotli context map", "invalid Brotli distance", "invalid Brotli transform",
+  "Brotli shared dictionary not supported", "Brotli large window not supported",
+  "reserved Brotli bit pattern", "invalid Brotli padding",
 ]
 
 ///|
@@ -105,6 +141,16 @@ fn fzip_error_code_to_int(code : FzipErrorCode) -> Int {
     UnknownCompressionMethod => 14
     InvalidChecksum => 15
     Zip64ValueTooLarge => 16
+    BrotliInvalidWindowBits => 17
+    BrotliInvalidMetablock => 18
+    BrotliInvalidHuffman => 19
+    BrotliInvalidContextMap => 20
+    BrotliInvalidDistance => 21
+    BrotliInvalidTransform => 22
+    BrotliDictionaryNotSupported => 23
+    BrotliLargeWindowNotSupported => 24
+    BrotliReserved => 25
+    BrotliInvalidPadding => 26
   }
 }
 
