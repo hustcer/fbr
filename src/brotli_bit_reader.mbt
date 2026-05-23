@@ -156,8 +156,3 @@ fn BrotliBitReader::expect_final_padding_zero(
     self.byte_pos += 1
   }
 }
-
-///|
-fn BrotliBitReader::bits_consumed(self : BrotliBitReader) -> Int {
-  self.consumed
-}

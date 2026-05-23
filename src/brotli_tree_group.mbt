@@ -1,14 +1,6 @@
 ///|
 priv struct BrotliHuffmanTreeGroup {
-  alphabet_size_max : Int
-  alphabet_size_limit : Int
-  root_bits : Int
   trees : Array[FixedArray[BrotliHuffmanCode]]
-}
-
-///|
-fn BrotliHuffmanTreeGroup::num_trees(self : BrotliHuffmanTreeGroup) -> Int {
-  self.trees.length()
 }
 
 ///|
@@ -50,5 +42,5 @@ fn brotli_read_huffman_tree_group(
       ),
     )
   }
-  { alphabet_size_max, alphabet_size_limit, root_bits, trees }
+  { trees, }
 }

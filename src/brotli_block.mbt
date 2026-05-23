@@ -46,13 +46,6 @@ priv struct BrotliBlockTracker {
 }
 
 ///|
-fn BrotliBlockTracker::new(
-  num_types : Int,
-) -> BrotliBlockTracker raise FzipError {
-  BrotliBlockTracker::new_with_length(num_types, brotli_block_size_cap)
-}
-
-///|
 fn BrotliBlockTracker::new_with_length(
   num_types : Int,
   initial_length : Int,

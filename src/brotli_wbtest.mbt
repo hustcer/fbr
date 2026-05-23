@@ -129,12 +129,8 @@ fn make_tree_group(
   alphabet_size : Int,
   trees : Array[FixedArray[BrotliHuffmanCode]],
 ) -> BrotliHuffmanTreeGroup {
-  {
-    alphabet_size_max: alphabet_size,
-    alphabet_size_limit: alphabet_size,
-    root_bits: brotli_huffman_table_bits,
-    trees,
-  }
+  ignore(alphabet_size)
+  { trees, }
 }
 
 ///|
@@ -220,7 +216,7 @@ test "BrotliBitReader reads and aligns LSB-first bits" {
   inspect(reader.take_bits(1), content="1")
   inspect(reader.take_bits(3), content="0")
   inspect(reader.take_bits(3), content="2")
-  inspect(reader.bits_consumed(), content="7")
+  inspect(reader.consumed, content="7")
   inspect(reader.take_bits(1), content="1")
   inspect(reader.take_bits(1), content="1")
   reader.expect_final_padding_zero()
@@ -264,7 +260,7 @@ test "brotli_build_huffman_table supports single-symbol tree" {
   let table = brotli_build_huffman_table(lengths, 4, 3)
   let reader = BrotliBitReader::new([0xff], 0, 1)
   inspect(brotli_read_symbol(reader, table, 3), content="2")
-  inspect(reader.bits_consumed(), content="0")
+  inspect(reader.consumed, content="0")
 }
 
 ///|
@@ -445,7 +441,7 @@ test "brotli_read_block_length decodes base plus extra bits" {
 
 ///|
 test "BrotliBlockTracker resolves block type ring codes" {
-  let tracker = BrotliBlockTracker::new(3)
+  let tracker = BrotliBlockTracker::new_with_length(3, brotli_block_size_cap)
   inspect(tracker.resolve_type_code(0), content="1")
   inspect(tracker.resolve_type_code(1), content="2")
   inspect(tracker.resolve_type_code(4), content="2")
@@ -561,10 +557,7 @@ test "brotli_read_huffman_tree_group reads consecutive trees" {
   wbits(encoded, pos, 1) // payload for tree 1 symbol 1
   let reader = BrotliBitReader::new(encoded, 0, encoded.length())
   let group = brotli_read_huffman_tree_group(reader, 4, 4, 2, 3)
-  inspect(group.num_trees(), content="2")
-  inspect(group.alphabet_size_max, content="4")
-  inspect(group.alphabet_size_limit, content="4")
-  inspect(group.root_bits, content="3")
+  inspect(group.trees.length(), content="2")
   inspect(brotli_read_symbol(reader, group.tree(0), 3), content="2")
   inspect(brotli_read_symbol(reader, group.tree(1), 3), content="0")
   inspect(brotli_read_symbol(reader, group.tree(1), 3), content="1")
@@ -604,9 +597,9 @@ test "brotli_read_compressed_metablock_header reads trivial header" {
   inspect(header.context_modes[0].to_int(), content="0")
   inspect(header.literal_context_map.num_trees, content="1")
   inspect(header.distance_context_map.num_trees, content="1")
-  inspect(header.literal_trees.num_trees(), content="1")
-  inspect(header.command_trees.num_trees(), content="1")
-  inspect(header.distance_trees.num_trees(), content="1")
+  inspect(header.literal_trees.trees.length(), content="1")
+  inspect(header.command_trees.trees.length(), content="1")
+  inspect(header.distance_trees.trees.length(), content="1")
   inspect(
     brotli_read_symbol(reader, header.literal_trees.tree(0), 8),
     content="65",
