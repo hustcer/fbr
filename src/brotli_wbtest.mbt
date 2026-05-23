@@ -267,6 +267,91 @@ test "BrotliBlockTracker resolves block type ring codes" {
 }
 
 ///|
+test "brotli_read_context_map returns implicit zero map" {
+  let reader = BrotliBitReader::new([0x00], 0, 1)
+  let context_map = brotli_read_context_map(reader, 4)
+  inspect(context_map.num_trees, content="1")
+  inspect(context_map.map[0].to_int(), content="0")
+  inspect(context_map.map[3].to_int(), content="0")
+}
+
+///|
+test "brotli_read_context_map decodes direct map values" {
+  let encoded = FixedArray::make(8, b'\x00')
+  let mut pos = 0
+  wbits(encoded, pos, 1) // num_trees - 1 = 2
+  pos += 1
+  wbits(encoded, pos, 1)
+  pos += 3
+  wbits(encoded, pos, 0)
+  pos += 1
+  wbits(encoded, pos, 0) // no RLE prefix
+  pos += 1
+  wbits(encoded, pos, 1) // simple Huffman marker
+  pos += 2
+  wbits(encoded, pos, 2) // read 3 symbols: 0, 1, 2
+  pos += 2
+  wbits(encoded, pos, 0)
+  pos += 2
+  wbits(encoded, pos, 1)
+  pos += 2
+  wbits(encoded, pos, 2)
+  pos += 2
+  wbits(encoded, pos, 0)
+  pos += 1
+  wbits(encoded, pos, 1)
+  pos += 2
+  wbits(encoded, pos, 3)
+  pos += 2
+  wbits(encoded, pos, 0) // no IMTF
+  let reader = BrotliBitReader::new(encoded, 0, encoded.length())
+  let context_map = brotli_read_context_map(reader, 3)
+  inspect(context_map.num_trees, content="3")
+  inspect(context_map.map[0].to_int(), content="0")
+  inspect(context_map.map[1].to_int(), content="1")
+  inspect(context_map.map[2].to_int(), content="2")
+}
+
+///|
+test "brotli_inverse_move_to_front transforms map in place" {
+  let context_map : FixedArray[Byte] = [1, 0, 1]
+  brotli_inverse_move_to_front(context_map)
+  inspect(context_map[0].to_int(), content="1")
+  inspect(context_map[1].to_int(), content="1")
+  inspect(context_map[2].to_int(), content="0")
+}
+
+///|
+test "brotli_read_context_map rejects RLE overflow" {
+  let encoded = FixedArray::make(6, b'\x00')
+  let mut pos = 0
+  wbits(encoded, pos, 1) // num_trees - 1 = 1
+  pos += 1
+  wbits(encoded, pos, 0)
+  pos += 3
+  wbits(encoded, pos, 1) // use RLE prefix
+  pos += 1
+  wbits(encoded, pos, 0) // max_run_length_prefix = 1
+  pos += 4
+  wbits(encoded, pos, 1) // simple Huffman marker
+  pos += 2
+  wbits(encoded, pos, 0) // one symbol
+  pos += 2
+  wbits(encoded, pos, 1) // symbol 1, the run code
+  pos += 2
+  wbits(encoded, pos, 1) // reps = 3 for a 2-entry map
+  let reader = BrotliBitReader::new(encoded, 0, encoded.length())
+  let result : Result[BrotliContextMap, FzipError] = try? brotli_read_context_map(
+    reader,
+    2,
+  )
+  guard result is Err(FzipError(code~, ..)) else {
+    fail("expected context map repeat overflow")
+  }
+  assert_eq(code, BrotliInvalidContextMap)
+}
+
+///|
 test "brotli_build_huffman_table rejects malformed length sets" {
   let empty : FixedArray[Byte] = [0, 0, 0, 0]
   let empty_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_build_huffman_table(
