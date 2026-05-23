@@ -32,7 +32,10 @@ fn BrotliBitReader::refill_to(
 ) -> Unit raise FzipError {
   while self.bits_avail < n {
     if self.byte_pos >= self.byte_end {
-      raise fzip_err(UnexpectedEOF, msg="brotli input ended while reading bits")
+      raise fzip_err(
+        UnexpectedEOF,
+        msg="brotli input ended while reading bits need=\{n} available=\{self.bits_avail} consumed=\{self.consumed}",
+      )
     }
     self.bit_buf = self.bit_buf |
       (self.buf[self.byte_pos].to_uint() << self.bits_avail)

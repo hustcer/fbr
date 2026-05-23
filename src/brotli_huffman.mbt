@@ -325,6 +325,9 @@ fn brotli_read_code_length_code_lengths(
           msg="over-subscribed code-length-code lengths",
         )
       }
+      if space == 0 {
+        break
+      }
     }
   }
   if !(num_codes == 1 || space == 0) {
@@ -466,7 +469,16 @@ fn brotli_read_symbol(
   table : FixedArray[BrotliHuffmanCode],
   root_bits : Int,
 ) -> Int raise FzipError {
-  let index = reader.peek_bits(root_bits).reinterpret_as_int()
+  if table.length() > 0 && table[0].bits == 0 {
+    return table[0].value
+  }
+  let index = if reader.bits_avail < root_bits &&
+    reader.byte_pos >= reader.byte_end &&
+    reader.bits_avail > 0 {
+    (reader.bit_buf & brotli_low_mask(root_bits)).reinterpret_as_int()
+  } else {
+    reader.peek_bits(root_bits).reinterpret_as_int()
+  }
   if index < 0 || index >= table.length() {
     raise fzip_err(BrotliInvalidHuffman, msg="Huffman lookup out of range")
   }
@@ -478,6 +490,12 @@ fn brotli_read_symbol(
     )
   }
   if entry.bits <= root_bits {
+    if entry.bits > reader.bits_avail && reader.byte_pos >= reader.byte_end {
+      raise fzip_err(
+        UnexpectedEOF,
+        msg="brotli input ended during Huffman code",
+      )
+    }
     reader.drop_bits(entry.bits)
     return entry.value
   }

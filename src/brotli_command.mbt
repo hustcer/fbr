@@ -176,12 +176,6 @@ fn brotli_decode_compressed_metablock_body(
     if remaining == 0 {
       return
     }
-    if command.copy_length > remaining {
-      raise fzip_err(
-        BrotliInvalidMetablock,
-        msg="Brotli copy length exceeds meta-block",
-      )
-    }
     let distance = if command.distance_code >= 0 {
       state.distance_ring.take_short_code(command.distance_code)
     } else {
@@ -202,12 +196,20 @@ fn brotli_decode_compressed_metablock_body(
         header.num_direct_distance_codes,
       )
     }
+    let output_before_copy = output.len
     if distance <= output.len {
       output.copy_from_distance(distance, command.copy_length)
+      state.distance_ring.record(distance)
     } else {
       output.copy_from_dictionary(distance, command.copy_length)
     }
-    state.distance_ring.record(distance)
-    remaining -= command.copy_length
+    let copied = output.len - output_before_copy
+    if copied > remaining {
+      raise fzip_err(
+        BrotliInvalidMetablock,
+        msg="Brotli copy length exceeds meta-block",
+      )
+    }
+    remaining -= copied
   }
 }
