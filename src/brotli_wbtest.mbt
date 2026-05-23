@@ -10,6 +10,48 @@ fn assert_brotli_error(
 }
 
 ///|
+fn write_simple_one_symbol_huffman(
+  encoded : FixedArray[Byte],
+  start : Int,
+  symbol : Int,
+  symbol_bits : Int,
+) -> Int {
+  let mut pos = start
+  wbits(encoded, pos, 1)
+  pos += 2
+  wbits(encoded, pos, 0)
+  pos += 2
+  wbits16(encoded, pos, symbol)
+  pos += symbol_bits
+  pos
+}
+
+///|
+fn write_trivial_compressed_header(
+  encoded : FixedArray[Byte],
+  start : Int,
+) -> Int {
+  let mut pos = start
+  wbits(encoded, pos, 0) // one literal block type
+  pos += 1
+  wbits(encoded, pos, 0) // one command block type
+  pos += 1
+  wbits(encoded, pos, 0) // one distance block type
+  pos += 1
+  wbits(encoded, pos, 0) // NPOSTFIX = 0, NDIRECT = 0
+  pos += 6
+  wbits(encoded, pos, 0) // context mode for the only literal block type
+  pos += 2
+  wbits(encoded, pos, 0) // literal context map has one tree
+  pos += 1
+  wbits(encoded, pos, 0) // distance context map has one tree
+  pos += 1
+  pos = write_simple_one_symbol_huffman(encoded, pos, 65, 8)
+  pos = write_simple_one_symbol_huffman(encoded, pos, 0, 10)
+  write_simple_one_symbol_huffman(encoded, pos, 0, 6)
+}
+
+///|
 test "brotli error codes show stable names" {
   inspect(BrotliInvalidWindowBits, content="BrotliInvalidWindowBits")
   inspect(BrotliInvalidMetablock, content="BrotliInvalidMetablock")
@@ -406,6 +448,37 @@ test "brotli_read_huffman_tree_group validates parameters" {
 }
 
 ///|
+test "brotli_read_compressed_metablock_header reads trivial header" {
+  let encoded = FixedArray::make(16, b'\x00')
+  ignore(write_trivial_compressed_header(encoded, 0))
+  let reader = BrotliBitReader::new(encoded, 0, encoded.length())
+  let header = brotli_read_compressed_metablock_header(reader)
+  inspect(header.literal_block.num_types, content="1")
+  inspect(header.command_block.num_types, content="1")
+  inspect(header.distance_block.num_types, content="1")
+  inspect(header.distance_postfix_bits, content="0")
+  inspect(header.num_direct_distance_codes, content="0")
+  inspect(header.context_modes[0].to_int(), content="0")
+  inspect(header.literal_context_map.num_trees, content="1")
+  inspect(header.distance_context_map.num_trees, content="1")
+  inspect(header.literal_trees.num_trees(), content="1")
+  inspect(header.command_trees.num_trees(), content="1")
+  inspect(header.distance_trees.num_trees(), content="1")
+  inspect(
+    brotli_read_symbol(reader, header.literal_trees.tree(0), 8),
+    content="65",
+  )
+  inspect(
+    brotli_read_symbol(reader, header.command_trees.tree(0), 8),
+    content="0",
+  )
+  inspect(
+    brotli_read_symbol(reader, header.distance_trees.tree(0), 8),
+    content="0",
+  )
+}
+
+///|
 test "brotli_build_huffman_table rejects malformed length sets" {
   let empty : FixedArray[Byte] = [0, 0, 0, 0]
   let empty_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_build_huffman_table(
@@ -465,7 +538,23 @@ test "unbrotli_sync enforces max_input_size" {
 
 ///|
 test "unbrotli_sync rejects unsupported meta-block path with Brotli error" {
-  let compressed : FixedArray[Byte] = [0xa1, 0x00, 0x00, 0x00]
+  let compressed = FixedArray::make(12, b'\x00')
+  let mut pos = 0
+  wbits(compressed, pos, 1) // WBITS: standard 10-bit window
+  pos += 1
+  wbits(compressed, pos, 0)
+  pos += 3
+  wbits(compressed, pos, 2)
+  pos += 3
+  wbits(compressed, pos, 1) // final meta-block, not empty
+  pos += 1
+  wbits(compressed, pos, 0)
+  pos += 1
+  wbits(compressed, pos, 0) // MNIBBLES = 0, length = 1
+  pos += 2
+  wbits16(compressed, pos, 0)
+  pos += 16
+  ignore(write_trivial_compressed_header(compressed, pos))
   let result = try? unbrotli_sync(compressed)
   assert_brotli_error(result, BrotliInvalidMetablock)
 }
