@@ -24,6 +24,9 @@ test "brotli constants expose reference limits" {
   inspect(brotli_huffman_max_code_length, content="15")
   inspect(brotli_huffman_table_bits, content="8")
   inspect(brotli_huffman_max_table_size, content="1080")
+  inspect(brotli_num_literal_symbols, content="256")
+  inspect(brotli_num_command_symbols, content="704")
+  inspect(brotli_distance_alphabet_size(0, 0, 24), content="64")
 }
 
 ///|
@@ -342,13 +345,64 @@ test "brotli_read_context_map rejects RLE overflow" {
   wbits(encoded, pos, 1) // reps = 3 for a 2-entry map
   let reader = BrotliBitReader::new(encoded, 0, encoded.length())
   let result : Result[BrotliContextMap, FzipError] = try? brotli_read_context_map(
-    reader,
-    2,
+    reader, 2,
   )
   guard result is Err(FzipError(code~, ..)) else {
     fail("expected context map repeat overflow")
   }
   assert_eq(code, BrotliInvalidContextMap)
+}
+
+///|
+test "brotli_read_huffman_tree_group reads consecutive trees" {
+  let encoded = FixedArray::make(8, b'\x00')
+  let mut pos = 0
+  wbits(encoded, pos, 1) // tree 0: simple one-symbol tree
+  pos += 2
+  wbits(encoded, pos, 0)
+  pos += 2
+  wbits(encoded, pos, 2)
+  pos += 2
+  wbits(encoded, pos, 1) // tree 1: simple two-symbol tree
+  pos += 2
+  wbits(encoded, pos, 1)
+  pos += 2
+  wbits(encoded, pos, 0)
+  pos += 2
+  wbits(encoded, pos, 1)
+  pos += 2
+  wbits(encoded, pos, 0) // payload for tree 1 symbol 0
+  pos += 1
+  wbits(encoded, pos, 1) // payload for tree 1 symbol 1
+  let reader = BrotliBitReader::new(encoded, 0, encoded.length())
+  let group = brotli_read_huffman_tree_group(reader, 4, 4, 2, 3)
+  inspect(group.num_trees(), content="2")
+  inspect(group.alphabet_size_max, content="4")
+  inspect(group.alphabet_size_limit, content="4")
+  inspect(group.root_bits, content="3")
+  inspect(brotli_read_symbol(reader, group.tree(0), 3), content="2")
+  inspect(brotli_read_symbol(reader, group.tree(1), 3), content="0")
+  inspect(brotli_read_symbol(reader, group.tree(1), 3), content="1")
+}
+
+///|
+test "brotli_read_huffman_tree_group validates parameters" {
+  let reader = BrotliBitReader::new([0x00], 0, 1)
+  let empty : Result[BrotliHuffmanTreeGroup, FzipError] = try? brotli_read_huffman_tree_group(
+    reader, 4, 4, 0, 3,
+  )
+  guard empty is Err(FzipError(code=empty_code, ..)) else {
+    fail("expected empty tree group error")
+  }
+  assert_eq(empty_code, BrotliInvalidHuffman)
+
+  let invalid_alphabet : Result[BrotliHuffmanTreeGroup, FzipError] = try? brotli_read_huffman_tree_group(
+    reader, 2, 4, 1, 3,
+  )
+  guard invalid_alphabet is Err(FzipError(code=alphabet_code, ..)) else {
+    fail("expected invalid alphabet error")
+  }
+  assert_eq(alphabet_code, BrotliInvalidHuffman)
 }
 
 ///|

@@ -45,9 +45,44 @@ let brotli_huffman_max_code_length_code_length : Int = 5
 let brotli_initial_repeated_code_length : Int = 8
 
 ///|
+/// Number of literal symbols in Brotli literal Huffman trees.
+let brotli_num_literal_symbols : Int = 256
+
+///|
+/// Number of insert-and-copy command symbols.
+let brotli_num_command_symbols : Int = 704
+
+///|
 /// Number of block-length prefix-code symbols.
 let brotli_num_block_length_symbols : Int = 26
 
 ///|
 /// Sentinel block length used when a stream has a single block type.
 let brotli_block_size_cap : Int = 1 << 24
+
+///|
+/// Number of distance short codes backed by the recent-distance ring.
+let brotli_num_distance_short_codes : Int = 16
+
+///|
+/// Maximum standard distance extra-bit count.
+let brotli_max_distance_bits : Int = 24
+
+///|
+/// Literal context ID bit count per literal block type.
+let brotli_literal_context_bits : Int = 6
+
+///|
+/// Distance context ID bit count per distance block type.
+let brotli_distance_context_bits : Int = 2
+
+///|
+fn brotli_distance_alphabet_size(
+  npostfix : Int,
+  ndirect : Int,
+  max_distance_bits : Int,
+) -> Int {
+  brotli_num_distance_short_codes +
+  ndirect +
+  (max_distance_bits << (npostfix + 1))
+}

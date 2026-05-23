@@ -43,10 +43,7 @@ fn brotli_read_context_map(
   }
   let alphabet_size = num_trees + max_run_length_prefix
   let table = brotli_read_huffman_code(
-    reader,
-    alphabet_size,
-    alphabet_size,
-    brotli_huffman_table_bits,
+    reader, alphabet_size, alphabet_size, brotli_huffman_table_bits,
   )
   let mut index = 0
   while index < context_map_size {
@@ -67,7 +64,10 @@ fn brotli_read_context_map(
     } else {
       let reps = (1 << code) + reader.take_bits(code).reinterpret_as_int()
       if index > context_map_size - reps {
-        raise fzip_err(BrotliInvalidContextMap, msg="context map repeat overflows")
+        raise fzip_err(
+          BrotliInvalidContextMap,
+          msg="context map repeat overflows",
+        )
       }
       for _ in 0..<reps {
         context_map[index] = b'\x00'
