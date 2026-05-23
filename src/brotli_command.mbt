@@ -144,9 +144,12 @@ fn brotli_decode_compressed_metablock_body(
     let distance = if command.distance_code >= 0 {
       distance_ring.take_short_code(command.distance_code)
     } else {
-      raise fzip_err(
-        BrotliInvalidMetablock,
-        msg="Brotli explicit distance decoder is not implemented yet",
+      brotli_read_distance(
+        reader,
+        header.distance_trees.tree(0),
+        distance_ring,
+        header.distance_postfix_bits,
+        header.num_direct_distance_codes,
       )
     }
     output.copy_from_distance(distance, command.copy_length)

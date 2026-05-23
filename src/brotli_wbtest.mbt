@@ -31,6 +31,7 @@ fn write_trivial_compressed_header(
   encoded : FixedArray[Byte],
   start : Int,
   command_symbol : Int,
+  distance_symbol? : Int = 0,
 ) -> Int {
   let mut pos = start
   wbits(encoded, pos, 0) // one literal block type
@@ -49,7 +50,7 @@ fn write_trivial_compressed_header(
   pos += 1
   pos = write_simple_one_symbol_huffman(encoded, pos, 65, 8)
   pos = write_simple_one_symbol_huffman(encoded, pos, command_symbol, 10)
-  write_simple_one_symbol_huffman(encoded, pos, 0, 6)
+  write_simple_one_symbol_huffman(encoded, pos, distance_symbol, 6)
 }
 
 ///|
@@ -551,6 +552,15 @@ test "BrotliDistanceRing resolves initial implicit distance" {
 }
 
 ///|
+test "brotli distance formula decodes direct and postfix distances" {
+  inspect(brotli_distance_extra_bits(16, 0, 0), content="1")
+  inspect(brotli_distance_offset(16, 0, 0), content="1")
+  inspect(brotli_distance_offset(17, 0, 0), content="3")
+  inspect(brotli_distance_extra_bits(20, 1, 4), content="1")
+  inspect(brotli_distance_offset(20, 1, 4), content="5")
+}
+
+///|
 test "brotli_build_huffman_table rejects malformed length sets" {
   let empty : FixedArray[Byte] = [0, 0, 0, 0]
   let empty_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_build_huffman_table(
@@ -631,6 +641,21 @@ test "unbrotli_sync decodes compressed implicit-distance copy" {
   let compressed = FixedArray::make(12, b'\x00')
   let pos = write_window10_final_metablock_header(compressed, 6)
   ignore(write_trivial_compressed_header(compressed, pos, 32))
+  let decoded = unbrotli_sync(compressed)
+  inspect(str_from_u8(decoded), content="AAAAAA")
+}
+
+///|
+test "unbrotli_sync decodes compressed explicit-distance copy" {
+  let compressed = FixedArray::make(12, b'\x00')
+  let pos = write_window10_final_metablock_header(compressed, 6)
+  let pos = write_trivial_compressed_header(
+    compressed,
+    pos,
+    160,
+    distance_symbol=17,
+  )
+  wbits(compressed, pos, 1) // distance code 17, extra bit 1 => distance 4
   let decoded = unbrotli_sync(compressed)
   inspect(str_from_u8(decoded), content="AAAAAA")
 }

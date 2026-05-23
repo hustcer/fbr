@@ -62,3 +62,59 @@ fn BrotliDistanceRing::record(
   self.distances[brotli_distance_ring_slot(self.index)] = distance
   self.index += 1
 }
+
+///|
+fn brotli_distance_extra_bits(
+  code : Int,
+  npostfix : Int,
+  ndirect : Int,
+) -> Int raise FzipError {
+  if code < 0 {
+    raise fzip_err(BrotliInvalidDistance, msg="negative Brotli distance code")
+  }
+  if code < brotli_num_distance_short_codes + ndirect {
+    0
+  } else {
+    let xcode = code - ndirect - brotli_num_distance_short_codes
+    1 + (xcode >> (npostfix + 1))
+  }
+}
+
+///|
+fn brotli_distance_offset(
+  code : Int,
+  npostfix : Int,
+  ndirect : Int,
+) -> Int raise FzipError {
+  if code < brotli_num_distance_short_codes {
+    raise fzip_err(BrotliInvalidDistance, msg="short code has no direct offset")
+  }
+  if code < brotli_num_distance_short_codes + ndirect {
+    code - brotli_num_distance_short_codes + 1
+  } else {
+    let xcode = code - ndirect - brotli_num_distance_short_codes
+    let bits = 1 + (xcode >> (npostfix + 1))
+    let half = (xcode >> npostfix) & 1
+    let postfix = xcode & ((1 << npostfix) - 1)
+    ndirect + ((((2 + half) << bits) - 4) << npostfix) + postfix + 1
+  }
+}
+
+///|
+fn brotli_read_distance(
+  reader : BrotliBitReader,
+  distance_tree : FixedArray[BrotliHuffmanCode],
+  distance_ring : BrotliDistanceRing,
+  npostfix : Int,
+  ndirect : Int,
+) -> Int raise FzipError {
+  let code = brotli_read_symbol(
+    reader, distance_tree, brotli_huffman_table_bits,
+  )
+  if code < brotli_num_distance_short_codes {
+    return distance_ring.take_short_code(code)
+  }
+  let extra_bits = brotli_distance_extra_bits(code, npostfix, ndirect)
+  let offset = brotli_distance_offset(code, npostfix, ndirect)
+  offset + (reader.take_bits(extra_bits).reinterpret_as_int() << npostfix)
+}
