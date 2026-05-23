@@ -804,6 +804,14 @@ test "BrotliOutputBuilder copies identity dictionary word" {
 }
 
 ///|
+test "BrotliOutputBuilder applies dictionary uppercase transform" {
+  inspect(brotli_transform_count(), content="121")
+  let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
+  output.copy_from_dictionary(4097, 4)
+  inspect(str_from_u8(output.finish()), content="Time ")
+}
+
+///|
 test "compressed body decodes identity dictionary reference" {
   let state = BrotliDecoderState::new()
   let output = BrotliOutputBuilder::new(UnbrotliOptions::default())

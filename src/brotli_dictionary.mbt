@@ -47,12 +47,6 @@ fn BrotliOutputBuilder::copy_from_dictionary(
   let word_mask = (1 << size_bits) - 1
   let word_index = address & word_mask
   let transform_index = address >> size_bits
-  if transform_index != 0 {
-    raise fzip_err(
-      BrotliInvalidTransform,
-      msg="Brotli dictionary transform is not implemented yet",
-    )
-  }
   let offset = brotli_dictionary_offsets_by_length[length] + word_index * length
   if offset < 0 || offset > brotli_dictionary_data.length() - length {
     raise fzip_err(
@@ -60,12 +54,5 @@ fn BrotliOutputBuilder::copy_from_dictionary(
       msg="Brotli dictionary address out of range",
     )
   }
-  self.ensure(length)
-  brotli_dictionary_data.blit_to(
-    self.buf,
-    len=length,
-    src_offset=offset,
-    dst_offset=self.len,
-  )
-  self.len += length
+  self.copy_transformed_dictionary_word(offset, length, transform_index)
 }
