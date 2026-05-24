@@ -60,6 +60,18 @@ fn BrotliBitWriter::write_bits(
   count : Int,
   value : Int,
 ) -> Unit {
+  let bit_pos = self.bit_pos
+  let bit_index = bit_pos & 7
+  let space_in_byte = 8 - bit_index
+  // Fast path: fits in the current byte.
+  if count <= space_in_byte {
+    let byte_index = bit_pos >> 3
+    self.buf[byte_index] = (self.buf[byte_index].to_int() |
+    ((value & ((1 << count) - 1)) << bit_index)).to_byte()
+    self.bit_pos = bit_pos + count
+    return
+  }
+  // Slow path: bits span multiple bytes.
   let mut remaining = count
   let mut value = value
   while remaining > 0 {
