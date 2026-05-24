@@ -1111,153 +1111,6 @@ fn brotli_command_literal_utf8_context_tree16(
 }
 
 ///|
-fn brotli_collect_command_literals_by_utf8_context(
-  data : FixedArray[Byte],
-  commands : Array[BrotliEncodeCommand],
-  tree : Int,
-) -> BrotliLiteralSet? raise FzipError {
-  let symbols = FixedArray::make(brotli_num_literal_symbols, 0)
-  let seen = FixedArray::make(brotli_num_literal_symbols, false)
-  let mut count = 0
-  for i in 0..<commands.length() {
-    let command = commands[i]
-    for j in 0..<command.insert_length {
-      let position = command.insert_start + j
-      if brotli_command_literal_utf8_context_tree(data, position) == tree {
-        let literal = data[position].to_int()
-        if !seen[literal] {
-          seen[literal] = true
-          symbols[count] = literal
-          count += 1
-        }
-      }
-    }
-  }
-  if count == 0 {
-    None
-  } else {
-    Some({ symbols, count })
-  }
-}
-
-///|
-fn brotli_collect_command_literals_by_utf8_context4(
-  data : FixedArray[Byte],
-  commands : Array[BrotliEncodeCommand],
-  tree : Int,
-) -> BrotliLiteralSet? raise FzipError {
-  let symbols = FixedArray::make(brotli_num_literal_symbols, 0)
-  let seen = FixedArray::make(brotli_num_literal_symbols, false)
-  let mut count = 0
-  for i in 0..<commands.length() {
-    let command = commands[i]
-    for j in 0..<command.insert_length {
-      let position = command.insert_start + j
-      if brotli_command_literal_utf8_context_tree4(data, position) == tree {
-        let literal = data[position].to_int()
-        if !seen[literal] {
-          seen[literal] = true
-          symbols[count] = literal
-          count += 1
-        }
-      }
-    }
-  }
-  if count == 0 {
-    None
-  } else {
-    Some({ symbols, count })
-  }
-}
-
-///|
-fn brotli_collect_command_literals_by_utf8_context8(
-  data : FixedArray[Byte],
-  commands : Array[BrotliEncodeCommand],
-  tree : Int,
-) -> BrotliLiteralSet? raise FzipError {
-  let symbols = FixedArray::make(brotli_num_literal_symbols, 0)
-  let seen = FixedArray::make(brotli_num_literal_symbols, false)
-  let mut count = 0
-  for i in 0..<commands.length() {
-    let command = commands[i]
-    for j in 0..<command.insert_length {
-      let position = command.insert_start + j
-      if brotli_command_literal_utf8_context_tree8(data, position) == tree {
-        let literal = data[position].to_int()
-        if !seen[literal] {
-          seen[literal] = true
-          symbols[count] = literal
-          count += 1
-        }
-      }
-    }
-  }
-  if count == 0 {
-    None
-  } else {
-    Some({ symbols, count })
-  }
-}
-
-///|
-fn brotli_command_literal_frequencies_by_utf8_context(
-  data : FixedArray[Byte],
-  commands : Array[BrotliEncodeCommand],
-  tree : Int,
-) -> FixedArray[Int] raise FzipError {
-  let frequencies = FixedArray::make(brotli_num_literal_symbols, 0)
-  for i in 0..<commands.length() {
-    let command = commands[i]
-    for j in 0..<command.insert_length {
-      let position = command.insert_start + j
-      if brotli_command_literal_utf8_context_tree(data, position) == tree {
-        frequencies[data[position].to_int()] += 1
-      }
-    }
-  }
-  frequencies
-}
-
-///|
-fn brotli_command_literal_frequencies_by_utf8_context4(
-  data : FixedArray[Byte],
-  commands : Array[BrotliEncodeCommand],
-  tree : Int,
-) -> FixedArray[Int] raise FzipError {
-  let frequencies = FixedArray::make(brotli_num_literal_symbols, 0)
-  for i in 0..<commands.length() {
-    let command = commands[i]
-    for j in 0..<command.insert_length {
-      let position = command.insert_start + j
-      if brotli_command_literal_utf8_context_tree4(data, position) == tree {
-        frequencies[data[position].to_int()] += 1
-      }
-    }
-  }
-  frequencies
-}
-
-///|
-fn brotli_command_literal_frequencies_by_utf8_context8(
-  data : FixedArray[Byte],
-  commands : Array[BrotliEncodeCommand],
-  tree : Int,
-) -> FixedArray[Int] raise FzipError {
-  let frequencies = FixedArray::make(brotli_num_literal_symbols, 0)
-  for i in 0..<commands.length() {
-    let command = commands[i]
-    for j in 0..<command.insert_length {
-      let position = command.insert_start + j
-      if brotli_command_literal_utf8_context_tree8(data, position) == tree {
-        frequencies[data[position].to_int()] += 1
-      }
-    }
-  }
-  frequencies
-}
-
-///|
 fn brotli_collect_command_literals_and_frequencies_by_utf8_context16(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
@@ -1287,6 +1140,120 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context16(
   }
   let literal_sets : Array[BrotliLiteralSet] = []
   for tree in 0..<16 {
+    if counts[tree] == 0 {
+      return None
+    }
+    literal_sets.push({ symbols: symbols[tree], count: counts[tree] })
+  }
+  Some((literal_sets, frequencies))
+}
+
+///|
+fn brotli_collect_command_literals_and_frequencies_by_utf8_context8(
+  data : FixedArray[Byte],
+  commands : Array[BrotliEncodeCommand],
+) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise FzipError {
+  let symbols : Array[FixedArray[Int]] = []
+  let seen : Array[FixedArray[Bool]] = []
+  let counts = FixedArray::make(8, 0)
+  let frequencies : Array[FixedArray[Int]] = []
+  for _ in 0..<8 {
+    symbols.push(FixedArray::make(brotli_num_literal_symbols, 0))
+    seen.push(FixedArray::make(brotli_num_literal_symbols, false))
+    frequencies.push(FixedArray::make(brotli_num_literal_symbols, 0))
+  }
+  for i in 0..<commands.length() {
+    let command = commands[i]
+    for j in 0..<command.insert_length {
+      let position = command.insert_start + j
+      let tree = brotli_command_literal_utf8_context_tree8(data, position)
+      let literal = data[position].to_int()
+      if !seen[tree][literal] {
+        seen[tree][literal] = true
+        symbols[tree][counts[tree]] = literal
+        counts[tree] += 1
+      }
+      frequencies[tree][literal] += 1
+    }
+  }
+  let literal_sets : Array[BrotliLiteralSet] = []
+  for tree in 0..<8 {
+    if counts[tree] == 0 {
+      return None
+    }
+    literal_sets.push({ symbols: symbols[tree], count: counts[tree] })
+  }
+  Some((literal_sets, frequencies))
+}
+
+///|
+fn brotli_collect_command_literals_and_frequencies_by_utf8_context4(
+  data : FixedArray[Byte],
+  commands : Array[BrotliEncodeCommand],
+) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise FzipError {
+  let symbols : Array[FixedArray[Int]] = []
+  let seen : Array[FixedArray[Bool]] = []
+  let counts = FixedArray::make(4, 0)
+  let frequencies : Array[FixedArray[Int]] = []
+  for _ in 0..<4 {
+    symbols.push(FixedArray::make(brotli_num_literal_symbols, 0))
+    seen.push(FixedArray::make(brotli_num_literal_symbols, false))
+    frequencies.push(FixedArray::make(brotli_num_literal_symbols, 0))
+  }
+  for i in 0..<commands.length() {
+    let command = commands[i]
+    for j in 0..<command.insert_length {
+      let position = command.insert_start + j
+      let tree = brotli_command_literal_utf8_context_tree4(data, position)
+      let literal = data[position].to_int()
+      if !seen[tree][literal] {
+        seen[tree][literal] = true
+        symbols[tree][counts[tree]] = literal
+        counts[tree] += 1
+      }
+      frequencies[tree][literal] += 1
+    }
+  }
+  let literal_sets : Array[BrotliLiteralSet] = []
+  for tree in 0..<4 {
+    if counts[tree] == 0 {
+      return None
+    }
+    literal_sets.push({ symbols: symbols[tree], count: counts[tree] })
+  }
+  Some((literal_sets, frequencies))
+}
+
+///|
+fn brotli_collect_command_literals_and_frequencies_by_utf8_context(
+  data : FixedArray[Byte],
+  commands : Array[BrotliEncodeCommand],
+) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise FzipError {
+  let symbols : Array[FixedArray[Int]] = []
+  let seen : Array[FixedArray[Bool]] = []
+  let counts = FixedArray::make(2, 0)
+  let frequencies : Array[FixedArray[Int]] = []
+  for _ in 0..<2 {
+    symbols.push(FixedArray::make(brotli_num_literal_symbols, 0))
+    seen.push(FixedArray::make(brotli_num_literal_symbols, false))
+    frequencies.push(FixedArray::make(brotli_num_literal_symbols, 0))
+  }
+  for i in 0..<commands.length() {
+    let command = commands[i]
+    for j in 0..<command.insert_length {
+      let position = command.insert_start + j
+      let tree = brotli_command_literal_utf8_context_tree(data, position)
+      let literal = data[position].to_int()
+      if !seen[tree][literal] {
+        seen[tree][literal] = true
+        symbols[tree][counts[tree]] = literal
+        counts[tree] += 1
+      }
+      frequencies[tree][literal] += 1
+    }
+  }
+  let literal_sets : Array[BrotliLiteralSet] = []
+  for tree in 0..<2 {
     if counts[tree] == 0 {
       return None
     }
@@ -2676,27 +2643,22 @@ fn brotli_write_context_lz77_metablock(
   commands : Array[BrotliEncodeCommand],
   is_last : Bool,
 ) -> BrotliBitWriter? raise FzipError {
-  let first_literals = match
-    brotli_collect_command_literals_by_utf8_context(data, commands, 0) {
-    Some(literals) => literals
+  let (literal_sets, literal_frequencies_array) = match
+    brotli_collect_command_literals_and_frequencies_by_utf8_context(
+      data, commands,
+    ) {
+    Some(result) => result
     None => return None
   }
-  let second_literals = match
-    brotli_collect_command_literals_by_utf8_context(data, commands, 1) {
-    Some(literals) => literals
-    None => return None
-  }
+  let first_literals = literal_sets[0]
+  let second_literals = literal_sets[1]
   let command_symbols = FixedArray::make(brotli_num_command_symbols, 0)
   let distance_symbols = FixedArray::make(
     brotli_distance_alphabet_size(0, 0, 24),
     0,
   )
-  let first_frequencies = brotli_command_literal_frequencies_by_utf8_context(
-    data, commands, 0,
-  )
-  let second_frequencies = brotli_command_literal_frequencies_by_utf8_context(
-    data, commands, 1,
-  )
+  let first_frequencies = literal_frequencies_array[0]
+  let second_frequencies = literal_frequencies_array[1]
   let command_frequencies = FixedArray::make(brotli_num_command_symbols, 0)
   let distance_frequencies = FixedArray::make(
     brotli_distance_alphabet_size(0, 0, 24),
@@ -2819,43 +2781,26 @@ fn brotli_write_context4_lz77_metablock(
   commands : Array[BrotliEncodeCommand],
   is_last : Bool,
 ) -> BrotliBitWriter? raise FzipError {
-  let first_literals = match
-    brotli_collect_command_literals_by_utf8_context4(data, commands, 0) {
-    Some(literals) => literals
+  let (literal_sets, literal_frequencies_array) = match
+    brotli_collect_command_literals_and_frequencies_by_utf8_context4(
+      data, commands,
+    ) {
+    Some(result) => result
     None => return None
   }
-  let second_literals = match
-    brotli_collect_command_literals_by_utf8_context4(data, commands, 1) {
-    Some(literals) => literals
-    None => return None
-  }
-  let third_literals = match
-    brotli_collect_command_literals_by_utf8_context4(data, commands, 2) {
-    Some(literals) => literals
-    None => return None
-  }
-  let fourth_literals = match
-    brotli_collect_command_literals_by_utf8_context4(data, commands, 3) {
-    Some(literals) => literals
-    None => return None
-  }
+  let first_literals = literal_sets[0]
+  let second_literals = literal_sets[1]
+  let third_literals = literal_sets[2]
+  let fourth_literals = literal_sets[3]
   let command_symbols = FixedArray::make(brotli_num_command_symbols, 0)
   let distance_symbols = FixedArray::make(
     brotli_distance_alphabet_size(0, 0, 24),
     0,
   )
-  let first_frequencies = brotli_command_literal_frequencies_by_utf8_context4(
-    data, commands, 0,
-  )
-  let second_frequencies = brotli_command_literal_frequencies_by_utf8_context4(
-    data, commands, 1,
-  )
-  let third_frequencies = brotli_command_literal_frequencies_by_utf8_context4(
-    data, commands, 2,
-  )
-  let fourth_frequencies = brotli_command_literal_frequencies_by_utf8_context4(
-    data, commands, 3,
-  )
+  let first_frequencies = literal_frequencies_array[0]
+  let second_frequencies = literal_frequencies_array[1]
+  let third_frequencies = literal_frequencies_array[2]
+  let fourth_frequencies = literal_frequencies_array[3]
   let command_frequencies = FixedArray::make(brotli_num_command_symbols, 0)
   let distance_frequencies = FixedArray::make(
     brotli_distance_alphabet_size(0, 0, 24),
@@ -3000,17 +2945,12 @@ fn brotli_write_context8_lz77_metablock(
   commands : Array[BrotliEncodeCommand],
   is_last : Bool,
 ) -> BrotliBitWriter? raise FzipError {
-  let literal_sets : Array[BrotliLiteralSet] = []
-  let literal_frequencies : Array[FixedArray[Int]] = []
-  for tree in 0..<8 {
-    match
-      brotli_collect_command_literals_by_utf8_context8(data, commands, tree) {
-      Some(literals) => literal_sets.push(literals)
-      None => return None
-    }
-    literal_frequencies.push(
-      brotli_command_literal_frequencies_by_utf8_context8(data, commands, tree),
-    )
+  let (literal_sets, literal_frequencies) = match
+    brotli_collect_command_literals_and_frequencies_by_utf8_context8(
+      data, commands,
+    ) {
+    Some(result) => result
+    None => return None
   }
   let command_symbols = FixedArray::make(brotli_num_command_symbols, 0)
   let distance_symbols = FixedArray::make(
