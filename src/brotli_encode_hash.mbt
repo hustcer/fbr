@@ -2,6 +2,7 @@
 priv struct BrotliHashConfig {
   table_size : Int
   table_mask : Int
+  hash_bytes : Int
   max_match_checks : Int
   max_match_length : Int
   min_match_length : Int
@@ -19,6 +20,7 @@ fn brotli_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
   {
     table_size: 4096,
     table_mask: 4095,
+    hash_bytes: 3,
     max_match_checks: 4,
     max_match_length: 4096,
     min_match_length: 4,
@@ -37,6 +39,7 @@ fn brotli_natural_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
   {
     table_size: 4096,
     table_mask: 4095,
+    hash_bytes: 3,
     max_match_checks: 4,
     max_match_length: 16384,
     min_match_length: 16,
@@ -57,6 +60,7 @@ fn brotli_high_quality_hash_config_for_quality(
   {
     table_size: 4096,
     table_mask: 4095,
+    hash_bytes: 3,
     max_match_checks: 4,
     max_match_length: 16384,
     min_match_length: 12,
@@ -67,6 +71,25 @@ fn brotli_high_quality_hash_config_for_quality(
     density_sample_step: 256,
     density_required_numerator: 9,
     density_required_denominator: 10,
+  }
+}
+
+///|
+fn brotli_four_byte_hash_config(config : BrotliHashConfig) -> BrotliHashConfig {
+  {
+    table_size: config.table_size,
+    table_mask: config.table_mask,
+    hash_bytes: 4,
+    max_match_checks: config.max_match_checks,
+    max_match_length: config.max_match_length,
+    min_match_length: config.min_match_length,
+    scan_step: config.scan_step,
+    max_commands: config.max_commands,
+    min_copy_ratio_percent: config.min_copy_ratio_percent,
+    require_dense_match_density: config.require_dense_match_density,
+    density_sample_step: config.density_sample_step,
+    density_required_numerator: config.density_required_numerator,
+    density_required_denominator: config.density_required_denominator,
   }
 }
 
@@ -136,8 +159,17 @@ fn brotli_match_hash(
   position : Int,
   config : BrotliHashConfig,
 ) -> Int {
-  if position + 2 >= data.length() {
+  if position + 2 >= data.length() ||
+    (config.hash_bytes >= 4 && position + 3 >= data.length()) {
     0
+  } else if config.hash_bytes >= 4 {
+    (
+      (data[position].to_int() * 257) ^
+      (data[position + 1].to_int() * 131) ^
+      (data[position + 2].to_int() * 17) ^
+      data[position + 3].to_int()
+    ) &
+    config.table_mask
   } else {
     (
       (data[position].to_int() * 257) ^
@@ -155,10 +187,11 @@ fn brotli_previous_match_positions(
 ) -> FixedArray[Int] {
   let previous = FixedArray::make(data.length(), -1)
   let table = FixedArray::make(config.table_size, -1)
-  if data.length() < 3 {
+  let hash_bytes = if config.hash_bytes >= 4 { 4 } else { 3 }
+  if data.length() < hash_bytes {
     return previous
   }
-  for position in 0..<(data.length() - 2) {
+  for position in 0..<(data.length() - hash_bytes + 1) {
     let hash = brotli_match_hash(data, position, config)
     previous[position] = table[hash]
     table[hash] = position

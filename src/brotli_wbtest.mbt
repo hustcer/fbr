@@ -1326,6 +1326,45 @@ test "brotli_sync q9 admits shorter high-quality matches" {
 }
 
 ///|
+test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
+  let input = FixedArray::make(1400, b'\x00')
+  let alphabet : FixedArray[Byte] = [b'A', b'B', b'C', b'D']
+  let mut state = 17
+  for chunk in 0..<200 {
+    let offset = chunk * 7
+    input[offset] = b'A'
+    input[offset + 1] = b'B'
+    input[offset + 2] = b'C'
+    input[offset + 3] = b'A'
+    input[offset + 4] = b'B'
+    input[offset + 5] = b'C'
+    input[offset + 6] = alphabet[state % 4]
+    state = (state * 73 + 41) % 257
+  }
+  let natural = brotli_natural_hash_config_for_quality(2)
+  let four_byte = brotli_four_byte_hash_config(natural)
+  inspect(natural.hash_bytes, content="3")
+  inspect(four_byte.hash_bytes, content="4")
+  let best3 = match brotli_build_simple_lz77_commands(input, natural) {
+    Some(commands) => brotli_write_best_lz77_metablock(input, commands, true)
+    None => fail("expected three-byte hash candidate")
+  }
+  let best4 = match brotli_build_simple_lz77_commands(input, four_byte) {
+    Some(commands) => brotli_write_best_lz77_metablock(input, commands, true)
+    None => fail("expected four-byte hash candidate")
+  }
+  assert_true(best3.bit_pos > 0)
+  assert_true(best4.bit_pos > 0)
+  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  assert_true(q2.length() <= 195)
+  let decoded = unbrotli_sync(q2)
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q2 uses identity static dictionary words" {
   let input = str_to_u8(
     "time area unit home work water world house about other these first right after where",

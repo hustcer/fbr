@@ -1106,3 +1106,41 @@ Results:
 The Silesia 1 MiB overhead is now 32.49% at q2 and 50.49% at q9. P3 still
 needs better match parsing, block splitting, and histogram clustering to reach
 the documented 5% target.
+
+## 2026-05-24 — Four-Byte Natural Hash Candidate
+
+Natural and high-quality LZ77 matching now keep the existing three-byte hash
+chain and also try a four-byte hash-chain candidate. The candidate is
+exact-costed against the current LZ77 writers, so small fixtures that are
+better with the older chain keep their previous output. This matches the P3
+plan's 4-byte hash requirement while preserving regression fixtures.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 424,532        | 419,583   | 320,418      | Four-byte hash win       |
+| silesia-1m              | 9       | 396,969        | 390,314   | 263,791      | Four-byte hash win       |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| split-literals-8k       | 9       | 3,434          | 3,434     | 3,418        | Unchanged                |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Exact-cost kept old path |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Exact-cost kept old path |
+| periodic-allbytes-200k  | 2       | 350            | 350       | n/a          | External decode verified |
+| periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified |
+
+The Silesia 1 MiB overhead is now 30.95% at q2 and 47.96% at q9. The
+additional hash-chain candidate roughly doubles the 1 MiB benchmark runtime,
+so later P3 work needs cheaper admission/cost heuristics rather than trying
+all candidates unconditionally.

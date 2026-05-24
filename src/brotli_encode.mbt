@@ -2718,21 +2718,35 @@ fn brotli_try_compressed_chunk(
   )
   if quality >= 2 && data.length() >= 8192 {
     if quality >= 9 {
+      let hq_config = brotli_high_quality_hash_config_for_quality(quality)
+      let best = brotli_try_compressed_commands(
+        data,
+        brotli_build_simple_lz77_commands(data, hq_config),
+        false,
+        best,
+      )
       brotli_try_compressed_commands(
         data,
         brotli_build_simple_lz77_commands(
           data,
-          brotli_high_quality_hash_config_for_quality(quality),
+          brotli_four_byte_hash_config(hq_config),
         ),
         false,
         best,
       )
     } else {
+      let natural_config = brotli_natural_hash_config_for_quality(quality)
+      let best = brotli_try_compressed_commands(
+        data,
+        brotli_build_simple_lz77_commands(data, natural_config),
+        false,
+        best,
+      )
       brotli_try_compressed_commands(
         data,
         brotli_build_simple_lz77_commands(
           data,
-          brotli_natural_hash_config_for_quality(quality),
+          brotli_four_byte_hash_config(natural_config),
         ),
         false,
         best,
@@ -2821,21 +2835,39 @@ fn brotli_encode_standard(
     )
     if data.length() >= 8192 {
       if opts.quality >= 9 {
+        let hq_config = brotli_high_quality_hash_config_for_quality(
+          opts.quality,
+        )
+        best = brotli_try_compressed_commands(
+          data,
+          brotli_build_simple_lz77_commands(data, hq_config),
+          true,
+          best,
+        )
         best = brotli_try_compressed_commands(
           data,
           brotli_build_simple_lz77_commands(
             data,
-            brotli_high_quality_hash_config_for_quality(opts.quality),
+            brotli_four_byte_hash_config(hq_config),
           ),
           true,
           best,
         )
       } else {
+        let natural_config = brotli_natural_hash_config_for_quality(
+          opts.quality,
+        )
+        best = brotli_try_compressed_commands(
+          data,
+          brotli_build_simple_lz77_commands(data, natural_config),
+          true,
+          best,
+        )
         best = brotli_try_compressed_commands(
           data,
           brotli_build_simple_lz77_commands(
             data,
-            brotli_natural_hash_config_for_quality(opts.quality),
+            brotli_four_byte_hash_config(natural_config),
           ),
           true,
           best,
