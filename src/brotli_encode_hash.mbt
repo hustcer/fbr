@@ -18,8 +18,8 @@ priv struct BrotliHashConfig {
 ///|
 fn brotli_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
   {
-    table_size: 4096,
-    table_mask: 4095,
+    table_size: 32768,
+    table_mask: 32767,
     hash_bytes: 3,
     max_match_checks: 4,
     max_match_length: 4096,
@@ -37,8 +37,8 @@ fn brotli_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
 ///|
 fn brotli_natural_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
   {
-    table_size: 4096,
-    table_mask: 4095,
+    table_size: 32768,
+    table_mask: 32767,
     hash_bytes: 3,
     max_match_checks: 4,
     max_match_length: 16384,
@@ -58,8 +58,8 @@ fn brotli_high_quality_hash_config_for_quality(
   _quality : Int,
 ) -> BrotliHashConfig {
   {
-    table_size: 4096,
-    table_mask: 4095,
+    table_size: 32768,
+    table_mask: 32767,
     hash_bytes: 3,
     max_match_checks: 4,
     max_match_length: 16384,

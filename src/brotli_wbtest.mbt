@@ -1444,7 +1444,13 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   let natural = brotli_natural_hash_config_for_quality(2)
   let four_byte = brotli_four_byte_hash_config(natural)
   inspect(natural.hash_bytes, content="3")
+  inspect(natural.table_size, content="32768")
   inspect(four_byte.hash_bytes, content="4")
+  inspect(four_byte.table_size, content="32768")
+  inspect(
+    brotli_high_quality_hash_config_for_quality(9).table_size,
+    content="32768",
+  )
   let best3 = match brotli_build_simple_lz77_commands(input, natural) {
     Some(commands) => brotli_write_best_lz77_metablock(input, commands, true)
     None => fail("expected three-byte hash candidate")
