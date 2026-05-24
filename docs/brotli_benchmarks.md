@@ -201,3 +201,36 @@ chunk estimate. The q2 compressed path is deliberately gated to very
 low-alphabet chunks until frequency-weighted Huffman coding and general block
 splitting land. The 100 MiB Silesia result is therefore still a stored-block
 baseline, about 195% larger than Google q2.
+
+## 2026-05-24 — Weighted q2 Huffman Lengths
+
+Corpora:
+
+- `target/brotli-encode/small-alpha-multi-1400.bin`
+- `target/brotli-encode/periodic-abcde-200k.bin`
+- `target/brotli-silesia/silesia-100m.bin`
+
+Validation commands:
+
+```nu
+nu tools/brotli/encode/verify.nu target/brotli-encode/small-alpha-multi-1400.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-abcde-200k.bin --quality 2
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2
+nu tools/brotli/bench/ratio.nu target/brotli-silesia/silesia-100m.bin --qualities 2
+```
+
+Results:
+
+| Corpus                  | Quality | MoonBit bytes | Google bytes | MoonBit SHA-256                                                   | External decode SHA-256                                           |
+| ----------------------- | ------- | ------------- | ------------ | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| small-alpha-multi-1400  | 2       | 256           | 169          | `ed71a5d35f6f0a6554c558765e986a652afc3688ac2661daf3a69d7f2134854e` | `0a8c1bc877ff95d68eaea55b7112864aab6b4f048bafc7502419b2d9f7e14406` |
+| periodic-abcde-200k     | 2       | 2,853         | n/a          | `3cb189a64fce9604af88fc3a1b1b4054b1c076bd9f0621584844e05eb6339870` | `24a7979ddb84c3eefb28a14793d9a66bfbc1e8c8ce61b326c699458dc9e951c5` |
+| silesia-100m            | 2       | 104,862,404   | 35,495,150   | `75561d5802aec1cfcfb8eec0a66c1a9883f93806e58b8209b1bf52855aab1458` | `89ed4fcaea193564aa75b37f596ccee2687985b4584ea29b8b8e72f36ef27579` |
+
+The complex Huffman writer can now describe arbitrary code lengths using a
+generated code-length-code tree, and q2 low-alphabet chunks use frequency
+weighted literal, command, and distance lengths. This improves the irregular
+small-alphabet fixture from 306 to 256 bytes. The highly regular 200 KiB fixture
+is slightly larger than the fixed-length version because weighted tree metadata
+costs more than it saves there. Silesia remains unchanged because the
+conservative natural-data gate still falls back to stored chunks.

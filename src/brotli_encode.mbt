@@ -312,6 +312,89 @@ fn brotli_make_huffman_spec(
 }
 
 ///|
+fn brotli_make_weighted_huffman_spec(
+  symbols : FixedArray[Int],
+  count : Int,
+  frequencies : FixedArray[Int],
+  alphabet_size_max : Int,
+  alphabet_size_limit : Int,
+) -> BrotliHuffmanSpec raise FzipError {
+  if count <= 4 || count > 16 {
+    return brotli_make_huffman_spec(
+      symbols, count, alphabet_size_max, alphabet_size_limit,
+    )
+  }
+  let node_count = count * 2 - 1
+  let weights = FixedArray::make(node_count, 0)
+  let parents = FixedArray::make(node_count, -1)
+  let min_symbols = FixedArray::make(node_count, 0)
+  for i in 0..<count {
+    let symbol = symbols[i]
+    let frequency = frequencies[symbol]
+    weights[i] = if frequency <= 0 { 1 } else { frequency }
+    min_symbols[i] = symbol
+  }
+  for node in count..<node_count {
+    let mut first = -1
+    let mut second = -1
+    for candidate in 0..<node {
+      if parents[candidate] == -1 {
+        if first == -1 ||
+          weights[candidate] < weights[first] ||
+          (
+            weights[candidate] == weights[first] &&
+            min_symbols[candidate] < min_symbols[first]
+          ) {
+          second = first
+          first = candidate
+        } else if second == -1 ||
+          weights[candidate] < weights[second] ||
+          (
+            weights[candidate] == weights[second] &&
+            min_symbols[candidate] < min_symbols[second]
+          ) {
+          second = candidate
+        }
+      }
+    }
+    if first < 0 || second < 0 {
+      raise fzip_err(BrotliInvalidHuffman, msg="invalid weighted tree")
+    }
+    parents[first] = node
+    parents[second] = node
+    weights[node] = weights[first] + weights[second]
+    min_symbols[node] = if min_symbols[first] < min_symbols[second] {
+      min_symbols[first]
+    } else {
+      min_symbols[second]
+    }
+  }
+  let code_lengths = FixedArray::make(alphabet_size_limit, b'\x00')
+  for i in 0..<count {
+    let mut depth = 0
+    let mut node = i
+    while parents[node] >= 0 {
+      depth += 1
+      node = parents[node]
+    }
+    if depth <= 0 || depth > brotli_huffman_max_code_length {
+      return brotli_make_huffman_spec(
+        symbols, count, alphabet_size_max, alphabet_size_limit,
+      )
+    }
+    code_lengths[symbols[i]] = depth.to_byte()
+  }
+  {
+    symbols,
+    count,
+    code_lengths,
+    alphabet_size_max,
+    alphabet_size_limit,
+    simple: false,
+  }
+}
+
+///|
 fn brotli_find_fixed_prefix_payload(value : Int) -> (Int, Int) raise FzipError {
   for i in 0..<brotli_code_length_prefix_value.length() {
     if brotli_code_length_prefix_value[i] == value {
@@ -369,22 +452,50 @@ fn brotli_write_complex_huffman(
   spec : BrotliHuffmanSpec,
 ) -> Unit raise FzipError {
   writer.write_bits(2, 0) // complex Huffman marker, skip 0
-  let bits = brotli_log2_floor_plus_one(spec.count) - 1
-  let mut emitted_zero = false
-  let mut emitted_bits = false
+  let code_length_symbols = FixedArray::make(brotli_num_code_length_codes, 0)
+  let mut code_length_count = brotli_add_unique_symbol(
+    code_length_symbols, 0, 0,
+  )
+  for i in 0..<spec.alphabet_size_limit {
+    let length = spec.code_lengths[i].to_int()
+    if length != 0 {
+      code_length_count = brotli_add_unique_symbol(
+        code_length_symbols, code_length_count, length,
+      )
+    }
+  }
+  let padded_count = brotli_next_power_of_two(code_length_count)
+  if padded_count > brotli_num_code_length_codes {
+    raise fzip_err(BrotliInvalidHuffman, msg="code-length alphabet too large")
+  }
+  let bits = brotli_log2_floor_plus_one(padded_count) - 1
+  let code_length_code_lengths = FixedArray::make(
+    brotli_num_code_length_codes, b'\x00',
+  )
+  for i in 0..<code_length_count {
+    code_length_code_lengths[code_length_symbols[i]] = bits.to_byte()
+  }
+  let mut written = code_length_count
+  let mut candidate = 0
+  while written < padded_count {
+    if !brotli_contains_symbol(
+        code_length_symbols, code_length_count, candidate,
+      ) {
+      code_length_symbols[written] = candidate
+      code_length_code_lengths[candidate] = bits.to_byte()
+      written += 1
+    }
+    candidate += 1
+  }
+  let mut space = 32
   for i in 0..<brotli_code_length_code_order.length() {
     let symbol = brotli_code_length_code_order[i]
-    let value = if symbol == 0 || symbol == bits { 1 } else { 0 }
+    let value = code_length_code_lengths[symbol].to_int()
     let (payload_bits, payload) = brotli_find_fixed_prefix_payload(value)
     writer.write_bits(payload_bits, payload)
-    if symbol == 0 || symbol == bits {
-      if symbol == 0 {
-        emitted_zero = true
-      }
-      if symbol == bits {
-        emitted_bits = true
-      }
-      if emitted_zero && emitted_bits {
+    if value != 0 {
+      space -= 32 >> value
+      if space == 0 {
         break
       }
     }
@@ -396,14 +507,12 @@ fn brotli_write_complex_huffman(
     }
   }
   for symbol in 0..<=last_nonzero {
-    writer.write_bits(
-      1,
-      if spec.code_lengths[symbol] == b'\x00' {
-        0
-      } else {
-        1
-      },
+    let payload = brotli_huffman_payload_from_lengths(
+      code_length_code_lengths,
+      brotli_num_code_length_codes,
+      spec.code_lengths[symbol].to_int(),
     )
+    writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
   }
 }
 
@@ -863,15 +972,26 @@ fn brotli_write_simple_lz77_metablock(
     brotli_distance_alphabet_size(0, 0, 24),
     0,
   )
+  let literal_frequencies = FixedArray::make(brotli_num_literal_symbols, 0)
+  let command_frequencies = FixedArray::make(brotli_num_command_symbols, 0)
+  let distance_frequencies = FixedArray::make(
+    brotli_distance_alphabet_size(0, 0, 24),
+    0,
+  )
+  for i in 0..<data.length() {
+    literal_frequencies[data[i].to_int()] += 1
+  }
   let mut command_count = 0
   let mut distance_count = 0
   for i in 0..<commands.length() {
+    command_frequencies[commands[i].command.symbol] += 1
     command_count = brotli_add_unique_symbol(
       command_symbols,
       command_count,
       commands[i].command.symbol,
     )
     if commands[i].has_copy {
+      distance_frequencies[commands[i].distance_prefix.symbol] += 1
       distance_count = brotli_add_unique_symbol(
         distance_symbols,
         distance_count,
@@ -879,18 +999,21 @@ fn brotli_write_simple_lz77_metablock(
       )
     }
   }
-  let literal_spec = brotli_make_huffman_spec(
+  let literal_spec = brotli_make_weighted_huffman_spec(
     literals.symbols,
     literals.count,
+    literal_frequencies,
     brotli_num_literal_symbols,
     brotli_num_literal_symbols,
   )
-  let command_spec = brotli_make_huffman_spec(
-    command_symbols, command_count, brotli_num_command_symbols, brotli_num_command_symbols,
+  let command_spec = brotli_make_weighted_huffman_spec(
+    command_symbols, command_count, command_frequencies, brotli_num_command_symbols,
+    brotli_num_command_symbols,
   )
-  let distance_spec = brotli_make_huffman_spec(
+  let distance_spec = brotli_make_weighted_huffman_spec(
     distance_symbols,
     distance_count,
+    distance_frequencies,
     brotli_distance_alphabet_size(0, 0, 24),
     brotli_distance_alphabet_size(0, 0, 24),
   )
