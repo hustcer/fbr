@@ -2113,6 +2113,30 @@ fn brotli_build_simple_lz77_commands(
           position += 1
           continue
         }
+        if position + 2 < data.length() {
+          let (second_match_length, _) = brotli_longest_previous_hash_match(
+            data,
+            previous,
+            position + 2,
+            hash_config,
+          )
+          if second_match_length > match_length {
+            position += 2
+            continue
+          }
+        }
+        if position + 3 < data.length() {
+          let (third_match_length, _) = brotli_longest_previous_hash_match(
+            data,
+            previous,
+            position + 3,
+            hash_config,
+          )
+          if third_match_length > match_length {
+            position += 3
+            continue
+          }
+        }
       }
       let insert_length = position - literal_start
       let distance_code = brotli_compute_distance_code(
