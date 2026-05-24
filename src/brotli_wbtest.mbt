@@ -1469,8 +1469,8 @@ test "brotli_sync q9 admits shorter high-quality matches" {
       input,
       brotli_natural_hash_config_for_quality(2),
     ) {
-    Some(_) => fail("q2 natural candidate should reject 12-byte matches")
-    None => ()
+    Some(commands) => assert_true(brotli_commands_copy_bytes(commands) > 2000)
+    None => fail("expected q2 natural candidate")
   }
   match
     brotli_build_simple_lz77_commands(
@@ -1503,6 +1503,8 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   inspect(natural.hash_bytes, content="3")
   inspect(natural.table_size, content="32768")
   inspect(natural.max_match_checks, content="8")
+  inspect(natural.min_match_length, content="10")
+  inspect(natural.max_commands, content="52000")
   inspect(four_byte.hash_bytes, content="4")
   inspect(four_byte.table_size, content="32768")
   inspect(

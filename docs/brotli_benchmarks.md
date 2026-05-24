@@ -1278,3 +1278,40 @@ Results:
 | periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified  |
 
 The Silesia 1 MiB overhead is now 14.83% at q2 and 33.53% at q9.
+
+## 2026-05-24 — Shorter q2 Natural Match Threshold
+
+The q2 natural parser now admits 10-byte matches and raises its command cap to
+52,000 commands. Diagnostics showed that the previous 16-byte threshold copied
+about 41% of the 1 MiB Silesia slice, while shorter natural matches could copy
+substantially more input. The exact-costed writer now keeps the shorter-match
+stream only when the extra command entropy is worth it.
+
+Validation commands:
+
+```nu
+moon fmt
+moon test --target native --filter '*alternate hash candidates exact-costed*'
+moon test --target native
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 367,920        | 320,899   | 320,418      | Shorter q2 match win     |
+| silesia-1m              | 9       | 352,245        | 352,245   | 263,791      | Unchanged                |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| split-literals-8k       | 9       | 3,434          | 3,434     | 3,418        | Unchanged                |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+| periodic-allbytes-200k  | 2       | 350            | 350       | n/a          | External decode verified |
+| periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified |
+
+The Silesia 1 MiB overhead is now 0.15% at q2 and remains 33.53% at q9.
