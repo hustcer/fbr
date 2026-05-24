@@ -3229,7 +3229,16 @@ fn brotli_write_best_lz77_metablock(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
   is_last : Bool,
+  quality : Int,
 ) -> BrotliBitWriter raise FzipError {
+  if quality <= 2 && data.length() >= 524288 {
+    if commands.length() != 1 || commands[0].has_copy {
+      match brotli_write_context16_lz77_metablock(data, commands, is_last) {
+        Some(candidate) => return candidate
+        None => ()
+      }
+    }
+  }
   let weighted = BrotliBitWriter::new(
     128 + data.length() * 4 + commands.length() * 8,
   )
@@ -3237,6 +3246,9 @@ fn brotli_write_best_lz77_metablock(
   if commands.length() == 1 &&
     !commands[0].has_copy &&
     brotli_count_unique_literals_up_to(data, 16) > 16 {
+    return weighted
+  }
+  if quality <= 2 && data.length() >= 8192 {
     return weighted
   }
   let fixed = BrotliBitWriter::new(
@@ -3279,10 +3291,13 @@ fn brotli_try_compressed_commands(
   commands : Array[BrotliEncodeCommand]?,
   is_last : Bool,
   best : BrotliBitWriter?,
+  quality : Int,
 ) -> BrotliBitWriter? raise FzipError {
   match commands {
     Some(commands) => {
-      let candidate = brotli_write_best_lz77_metablock(data, commands, is_last)
+      let candidate = brotli_write_best_lz77_metablock(
+        data, commands, is_last, quality,
+      )
       match best {
         Some(best) =>
           if candidate.bit_pos < best.bit_pos {
@@ -3327,13 +3342,30 @@ fn brotli_try_compressed_chunk(
   window_bits : Int,
   quality : Int,
 ) -> BrotliBitWriter? raise FzipError {
+  if quality <= 2 && data.length() >= 8192 {
+    let natural_config = brotli_natural_hash_config_for_quality(quality)
+    return brotli_try_compressed_commands(
+      data,
+      brotli_build_simple_lz77_commands(data, natural_config),
+      false,
+      None,
+      quality,
+    )
+  }
   let match_commands = brotli_build_simple_lz77_commands(data, hash_config)
-  let best = brotli_try_compressed_commands(data, match_commands, false, None)
+  let best = brotli_try_compressed_commands(
+    data,
+    match_commands,
+    false,
+    None,
+    quality,
+  )
   let best = brotli_try_compressed_commands(
     data,
     brotli_build_literal_only_command(data),
     false,
     best,
+    quality,
   )
   let best = brotli_try_split_literal_only_metablock(data, false, best)
   let best = brotli_try_compressed_commands(
@@ -3343,6 +3375,7 @@ fn brotli_try_compressed_chunk(
     ),
     false,
     best,
+    quality,
   )
   if quality >= 2 && data.length() >= 8192 {
     if quality >= 9 {
@@ -3352,6 +3385,7 @@ fn brotli_try_compressed_chunk(
         brotli_build_simple_lz77_commands(data, hq_config),
         false,
         best,
+        quality,
       )
       brotli_try_compressed_commands(
         data,
@@ -3361,6 +3395,7 @@ fn brotli_try_compressed_chunk(
         ),
         false,
         best,
+        quality,
       )
     } else {
       let natural_config = brotli_natural_hash_config_for_quality(quality)
@@ -3369,6 +3404,7 @@ fn brotli_try_compressed_chunk(
         brotli_build_simple_lz77_commands(data, natural_config),
         false,
         best,
+        quality,
       )
       brotli_try_compressed_commands(
         data,
@@ -3378,6 +3414,7 @@ fn brotli_try_compressed_chunk(
         ),
         false,
         best,
+        quality,
       )
     }
   } else {
@@ -3442,12 +3479,14 @@ fn brotli_encode_standard(
       brotli_build_simple_lz77_commands(data, hash_config),
       true,
       best,
+      opts.quality,
     )
     best = brotli_try_compressed_commands(
       data,
       brotli_build_literal_only_command(data),
       true,
       best,
+      opts.quality,
     )
     best = brotli_try_split_literal_only_metablock(data, true, best)
     best = brotli_try_compressed_commands(
@@ -3460,6 +3499,7 @@ fn brotli_encode_standard(
       ),
       true,
       best,
+      opts.quality,
     )
     if data.length() >= 8192 {
       if opts.quality >= 9 {
@@ -3471,6 +3511,7 @@ fn brotli_encode_standard(
           brotli_build_simple_lz77_commands(data, hq_config),
           true,
           best,
+          opts.quality,
         )
         best = brotli_try_compressed_commands(
           data,
@@ -3480,6 +3521,7 @@ fn brotli_encode_standard(
           ),
           true,
           best,
+          opts.quality,
         )
       } else {
         let natural_config = brotli_natural_hash_config_for_quality(
@@ -3490,6 +3532,7 @@ fn brotli_encode_standard(
           brotli_build_simple_lz77_commands(data, natural_config),
           true,
           best,
+          opts.quality,
         )
         best = brotli_try_compressed_commands(
           data,
@@ -3499,6 +3542,7 @@ fn brotli_encode_standard(
           ),
           true,
           best,
+          opts.quality,
         )
       }
     }

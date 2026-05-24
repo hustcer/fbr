@@ -1732,3 +1732,48 @@ Results:
 The Silesia 1 MiB q11 gap drops from 20.76% to 18.31%. P4 still needs a real
 shortest-path parser and stronger entropy modeling before it can meet the
 final q11 target.
+
+## 2026-05-25 — q2 Fast Large-Chunk Profile
+
+Quality 2 now uses a speed-first large-chunk profile instead of exact-costing
+the same broad candidate set as high-quality modes. For q2 chunks at least 8
+KiB, the selector tries the natural LZ77 parser directly and skips the
+literal-only, split-literal, dictionary, baseline hash, and four-byte hash
+candidates. For q2 LZ77 meta-blocks at least 512 KiB, the writer directly uses
+the 16-tree UTF-8 literal-context candidate. Smaller q2 LZ77 blocks still keep
+the weighted fallback to preserve repetitive-fixture output.
+
+Rejected nearby trial:
+
+- Reducing q2 natural hash-chain checks from 8 to 4 produced a 338,135-byte
+  Silesia q2 stream, but Google Brotli rejected it as corrupt input.
+
+Validation commands:
+
+```nu
+moon fmt
+moon test --target native --filter '*alternate hash candidates exact-costed*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                       | Quality | Previous bytes | New bytes | Google bytes | Previous ms | New ms    | Notes                    |
+| ---------------------------- | ------- | -------------- | --------- | ------------ | ----------- | --------- | ------------------------ |
+| silesia-1m                   | 2       | 313,585        | 325,896   | 320,418      | 82,818      | 42,558    | q2 speed profile         |
+| silesia-1m                   | 9       | 296,784        | 296,784   | 263,791      | n/a         | 91,707    | q9 unchanged             |
+| split-literals-8k            | 2       | 3,434          | 3,434     | 3,455        | n/a         | 5,215     | Unchanged                |
+| split-literals-8k            | 9       | 3,434          | 3,434     | 3,418        | n/a         | 5,547     | Unchanged                |
+| small-alpha-multi-1400       | 2       | 179            | 179       | 169          | n/a         | 7,589     | Unchanged                |
+| small-alpha-multi-1400       | 9       | 179            | 179       | 69           | n/a         | 7,427     | Unchanged                |
+| periodic-allbytes-200k       | 2       | 350            | 350       | n/a          | n/a         | n/a       | External decode verified |
+| periodic-allbytes-200k       | 9       | 350            | 350       | n/a          | n/a         | n/a       | External decode verified |
+
+The Silesia 1 MiB q2 result moves from 2.13% smaller than Google to 1.71%
+larger than Google, while benchmark time drops by about 49%. This makes q2 a
+fast mode again; deeper exact-costed alternatives remain reserved for q9+.

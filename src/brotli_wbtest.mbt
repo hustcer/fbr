@@ -1278,6 +1278,7 @@ test "brotli_sync q2 splits literal-only blocks" {
     input,
     brotli_build_literal_only_command(input).unwrap(),
     true,
+    2,
   )
   let split = match brotli_try_split_literal_only_metablock(input, true, None) {
     Some(candidate) => candidate
@@ -1580,11 +1581,11 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
     content="300000",
   )
   let best3 = match brotli_build_simple_lz77_commands(input, natural) {
-    Some(commands) => brotli_write_best_lz77_metablock(input, commands, true)
+    Some(commands) => brotli_write_best_lz77_metablock(input, commands, true, 2)
     None => fail("expected three-byte hash candidate")
   }
   let best4 = match brotli_build_simple_lz77_commands(input, four_byte) {
-    Some(commands) => brotli_write_best_lz77_metablock(input, commands, true)
+    Some(commands) => brotli_write_best_lz77_metablock(input, commands, true, 2)
     None => fail("expected four-byte hash candidate")
   }
   assert_true(best3.bit_pos > 0)
