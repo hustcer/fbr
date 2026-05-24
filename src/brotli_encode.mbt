@@ -488,8 +488,18 @@ fn brotli_add_complex_code_length_symbols(
       }
       symbol += run
     } else {
+      let mut run = 1
+      while symbol + run <= last_nonzero &&
+            spec.code_lengths[symbol + run].to_int() == length {
+        run += 1
+      }
       count = brotli_add_unique_symbol(code_length_symbols, count, length)
-      symbol += 1
+      if run >= 4 {
+        count = brotli_add_unique_symbol(
+          code_length_symbols, count, brotli_repeat_previous_code_length,
+        )
+      }
+      symbol += run
     }
   }
   count
@@ -545,11 +555,46 @@ fn brotli_write_complex_code_lengths(
       }
       symbol += run_length
     } else {
+      let mut run = 1
+      while symbol + run <= last_nonzero &&
+            spec.code_lengths[symbol + run].to_int() == length {
+        run += 1
+      }
+      let run_length = run
       let payload = brotli_huffman_payload_from_lengths(
         code_length_code_lengths, brotli_num_code_length_codes, length,
       )
       writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
-      symbol += 1
+      run -= 1
+      while run > 6 {
+        let repeat_payload = brotli_huffman_payload_from_lengths(
+          code_length_code_lengths, brotli_num_code_length_codes, brotli_repeat_previous_code_length,
+        )
+        writer.write_bits(
+          repeat_payload.insert_extra_bits,
+          repeat_payload.insert_extra,
+        )
+        writer.write_bits(2, 3)
+        run -= 6
+        writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
+        run -= 1
+      }
+      if run >= 3 {
+        let repeat_payload = brotli_huffman_payload_from_lengths(
+          code_length_code_lengths, brotli_num_code_length_codes, brotli_repeat_previous_code_length,
+        )
+        writer.write_bits(
+          repeat_payload.insert_extra_bits,
+          repeat_payload.insert_extra,
+        )
+        writer.write_bits(2, run - 3)
+        run = 0
+      }
+      while run > 0 {
+        writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
+        run -= 1
+      }
+      symbol += run_length
     }
   }
 }

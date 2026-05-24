@@ -420,3 +420,37 @@ Results:
 This narrows the synthetic q2 gap for sparse alphabets without relaxing the
 natural-data gate. Silesia remains unchanged because ordinary chunks still
 fall back to uncompressed meta-blocks.
+
+## 2026-05-24 — Complex Huffman Repeat-Previous RLE
+
+Complex Huffman tree encoding now also uses Brotli code-length symbol 16 to
+repeat the previous nonzero code length. As with repeat-zero, consecutive
+repeat-previous symbols accumulate repeat state, so long nonzero runs are split
+with a literal code length between repeat codes.
+
+Validation commands:
+
+```nu
+moon test --target native --filter '*complex command Huffman*'
+moon test --target native --filter '*high alphabet repetitive*'
+moon test --target native --filter '*chunked large input*'
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-abcde-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9 --json
+```
+
+Results:
+
+| Corpus                  | Quality | Previous MoonBit bytes | New MoonBit bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | ---------------------- | ----------------- | ------------ | ------------------------ |
+| small-alpha-multi-1400  | 2       | 195                    | 195               | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195                    | 195               | 69           | Unchanged                |
+| periodic-abcde-200k     | 2       | 240                    | 240               | n/a          | Unchanged                |
+| periodic-allbytes-200k  | 2       | 1,399                  | 1,382             | n/a          | External decode verified |
+| silesia-1m              | 2       | 1,048,628              | 1,048,628         | 320,418      | Still stored fallback    |
+| silesia-1m              | 9       | 1,048,628              | 1,048,628         | 263,791      | Still stored fallback    |
+
+The gain appears on high-alphabet periodic chunks where generated complex
+trees contain repeated nonzero code lengths. Natural-data ratio remains gated
+on block splitting and candidate admission.
