@@ -2156,7 +2156,7 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
       data, previous, position, hash_config, distance_cache,
     )
     if match_length >= hash_config.min_match_length {
-      if hash_config.min_match_length >= 6 && position + 1 < data.length() {
+      if hash_config.min_match_length >= 5 && position + 1 < data.length() {
         let (next_match_length, _) = brotli_longest_previous_hash_match_with_cache(
           data,
           previous,

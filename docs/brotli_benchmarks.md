@@ -1848,3 +1848,41 @@ Results:
 This is a correctness foundation for future multi-meta-block compressed
 streams. It does not change current q2 ratio because the retained chunk size
 still produces one compressed chunk on the 1 MiB Silesia slice.
+
+## 2026-05-25 — Five-Byte Lazy Lookahead
+
+The high-quality parser now applies its three-position lazy lookahead to
+5-byte-minimum match configurations. Previously, q9+ accepted 5-byte matches
+but only ran the lazy lookahead for configurations with a 6-byte minimum, so
+the parser could take a short match immediately before a longer one.
+
+Validation commands:
+
+```nu
+moon fmt
+moon test --target native --filter '*q9 admits shorter high-quality matches*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 10,11 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 9,10,11 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 9,10,11 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                       | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ---------------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m                   | 9       | 283,133        | 273,641   | 263,791      | Five-byte lazy win       |
+| silesia-1m                   | 10      | 283,133        | 273,641   | 242,485      | Five-byte lazy win       |
+| silesia-1m                   | 11      | 283,133        | 273,641   | 239,314      | Five-byte lazy win       |
+| split-literals-8k            | 9       | 3,434          | 3,434     | 3,418        | Unchanged                |
+| split-literals-8k            | 10      | 3,434          | 3,434     | 3,420        | Unchanged                |
+| split-literals-8k            | 11      | 3,434          | 3,434     | 3,420        | Unchanged                |
+| small-alpha-multi-1400       | 9       | 179            | 179       | 69           | Unchanged                |
+| small-alpha-multi-1400       | 10      | 179            | 179       | 63           | Unchanged                |
+| small-alpha-multi-1400       | 11      | 179            | 179       | 55           | Unchanged                |
+| periodic-allbytes-200k       | 9       | 350            | 350       | n/a          | External decode verified |
+
+The Silesia 1 MiB q9 gap drops from 7.33% to 3.73%, bringing q9 inside the P3
+5% target window for this validation slice. q10 and q11 still need stronger P4
+search and entropy modeling.
