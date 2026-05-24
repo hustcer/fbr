@@ -928,31 +928,6 @@ fn brotli_best_split_literal_point(data : FixedArray[Byte]) -> Int {
 }
 
 ///|
-fn brotli_collect_command_literals(
-  data : FixedArray[Byte],
-  commands : Array[BrotliEncodeCommand],
-) -> BrotliLiteralSet? {
-  let symbols = FixedArray::make(brotli_num_literal_symbols, 0)
-  let seen = FixedArray::make(brotli_num_literal_symbols, false)
-  let mut count = 0
-  for i in 0..<commands.length() {
-    let command = commands[i]
-    for j in 0..<command.insert_length {
-      let literal = data[command.insert_start + j].to_int()
-      if !seen[literal] {
-        seen[literal] = true
-        symbols[count] = literal
-        count += 1
-      }
-    }
-  }
-  if count == 0 {
-    symbols[0] = 0
-    Some({ symbols, count: 1 })
-  } else {
-    Some({ symbols, count })
-  }
-}
 
 ///|
 fn brotli_command_literal_count(commands : Array[BrotliEncodeCommand]) -> Int {
@@ -2334,17 +2309,16 @@ fn brotli_write_simple_lz77_metablock(
   is_last : Bool,
   weighted : Bool,
 ) -> Unit raise FzipError {
-  let literals = match brotli_collect_command_literals(data, commands) {
-    Some(literals) => literals
-    None =>
-      raise fzip_err(BrotliInvalidMetablock, msg="too many literal symbols")
-  }
+  // Single-pass literal collection + frequency tally.
+  let literal_symbols = FixedArray::make(brotli_num_literal_symbols, 0)
+  let literal_seen = FixedArray::make(brotli_num_literal_symbols, false)
+  let literal_frequencies = FixedArray::make(brotli_num_literal_symbols, 0)
+  let mut literal_count = 0
   let command_symbols = FixedArray::make(brotli_num_command_symbols, 0)
   let distance_symbols = FixedArray::make(
     brotli_distance_alphabet_size(0, 0, 24),
     0,
   )
-  let literal_frequencies = FixedArray::make(brotli_num_literal_symbols, 0)
   let command_frequencies = FixedArray::make(brotli_num_command_symbols, 0)
   let distance_frequencies = FixedArray::make(
     brotli_distance_alphabet_size(0, 0, 24),
@@ -2352,25 +2326,36 @@ fn brotli_write_simple_lz77_metablock(
   )
   let mut command_count = 0
   let mut distance_count = 0
-  for i in 0..<commands.length() {
+  let commands_len = commands.length()
+  for i in 0..<commands_len {
     let command = commands[i]
-    for j in 0..<command.insert_length {
-      literal_frequencies[data[command.insert_start + j].to_int()] += 1
+    let insert_start = command.insert_start
+    let insert_length = command.insert_length
+    for j in 0..<insert_length {
+      let literal = data[insert_start + j].to_int()
+      literal_frequencies[literal] += 1
+      if !literal_seen[literal] {
+        literal_seen[literal] = true
+        literal_symbols[literal_count] = literal
+        literal_count += 1
+      }
     }
-    command_frequencies[commands[i].command.symbol] += 1
+    let cmd_symbol = command.command.symbol
+    command_frequencies[cmd_symbol] += 1
     command_count = brotli_add_unique_symbol(
-      command_symbols,
-      command_count,
-      commands[i].command.symbol,
+      command_symbols, command_count, cmd_symbol,
     )
-    if brotli_command_uses_distance_symbol(commands[i]) {
-      distance_frequencies[commands[i].distance_prefix.symbol] += 1
+    if brotli_command_uses_distance_symbol(command) {
+      let dist_symbol = command.distance_prefix.symbol
+      distance_frequencies[dist_symbol] += 1
       distance_count = brotli_add_unique_symbol(
-        distance_symbols,
-        distance_count,
-        commands[i].distance_prefix.symbol,
+        distance_symbols, distance_count, dist_symbol,
       )
     }
+  }
+  if literal_count == 0 {
+    literal_symbols[0] = 0
+    literal_count = 1
   }
   if distance_count == 0 {
     distance_symbols[0] = 0
@@ -2378,18 +2363,12 @@ fn brotli_write_simple_lz77_metablock(
   }
   let literal_spec = if weighted {
     brotli_make_weighted_huffman_spec(
-      literals.symbols,
-      literals.count,
-      literal_frequencies,
-      brotli_num_literal_symbols,
+      literal_symbols, literal_count, literal_frequencies, brotli_num_literal_symbols,
       brotli_num_literal_symbols,
     )
   } else {
     brotli_make_huffman_spec(
-      literals.symbols,
-      literals.count,
-      brotli_num_literal_symbols,
-      brotli_num_literal_symbols,
+      literal_symbols, literal_count, brotli_num_literal_symbols, brotli_num_literal_symbols,
     )
   }
   let command_spec = if weighted {
