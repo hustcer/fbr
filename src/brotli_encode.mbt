@@ -619,6 +619,38 @@ fn brotli_count_unique_literals_up_to(
 }
 
 ///|
+fn brotli_has_compressible_match_density(data : FixedArray[Byte]) -> Bool {
+  if data.length() < 64 {
+    return true
+  }
+  if brotli_count_unique_literals_up_to(data, 16) <= 16 {
+    return true
+  }
+  let table = FixedArray::make(4096, -1)
+  let mut matched_positions = 0
+  let step = 256
+  let threshold = data.length() * 9 / (step * 10)
+  let mut position = 0
+  while position < data.length() - 3 {
+    let hash = brotli_match_hash(data, position)
+    let candidate = table[hash]
+    table[hash] = position
+    if candidate >= 0 &&
+      data[position] == data[candidate] &&
+      data[position + 1] == data[candidate + 1] &&
+      data[position + 2] == data[candidate + 2] &&
+      data[position + 3] == data[candidate + 3] {
+      matched_positions += 1
+      if matched_positions >= threshold {
+        return true
+      }
+    }
+    position += step
+  }
+  false
+}
+
+///|
 fn brotli_suffix_is_copy(
   data : FixedArray[Byte],
   insert_length : Int,
@@ -833,7 +865,7 @@ fn brotli_build_simple_lz77_commands(
   if data.length() < 8 || data.length() > 65536 {
     return None
   }
-  if brotli_count_unique_literals_up_to(data, 16) > 16 {
+  if !brotli_has_compressible_match_density(data) {
     return None
   }
   match brotli_collect_unique_literals(data, data.length()) {
@@ -856,6 +888,9 @@ fn brotli_build_simple_lz77_commands(
       match command_result {
         Ok(command) => commands.push(command)
         Err(_) => return None
+      }
+      if commands.length() > 1200 {
+        return None
       }
       position += match_length
       literal_start = position

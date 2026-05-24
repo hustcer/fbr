@@ -1106,6 +1106,23 @@ test "brotli_sync q2 compresses chunked large input" {
 }
 
 ///|
+test "brotli_sync q2 compresses high alphabet repetitive chunks" {
+  let input = FixedArray::make(80_000, b'\x00')
+  for i in 0..<input.length() {
+    input[i] = (i & 0xff).to_byte()
+  }
+  assert_true(brotli_count_unique_literals_up_to(input, 16) > 16)
+  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
+  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  assert_true(q2.length() < q1.length())
+  let decoded = unbrotli_sync(q2)
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q0 through q11 round-trip" {
   let input : FixedArray[Byte] = [0, 1, 1, 2, 3, 5, 8, 13]
   for quality in 0..<=11 {

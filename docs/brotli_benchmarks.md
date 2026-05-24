@@ -234,3 +234,35 @@ fixed-length alternative. This improves the irregular small-alphabet fixture
 from 306 to 231 bytes while preserving the 2,820-byte fixed-tree result for the
 highly regular 200 KiB fixture. Silesia remains unchanged because the
 conservative natural-data gate still falls back to stored chunks.
+
+## 2026-05-24 — Sampled q2 Match-Density Gate
+
+Corpora:
+
+- `target/brotli-encode/periodic-allbytes-200k.bin`
+- `target/brotli-bench/silesia-1m.bin`
+- `target/brotli-silesia/silesia-100m.bin`
+
+Validation commands:
+
+```nu
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2
+nu tools/brotli/bench/ratio.nu target/brotli-silesia/silesia-100m.bin --qualities 2
+```
+
+Results:
+
+| Corpus                 | Quality | MoonBit bytes | Google bytes | MoonBit SHA-256                                                   | External decode SHA-256                                           |
+| ---------------------- | ------- | ------------- | ------------ | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| periodic-allbytes-200k | 2       | 5,878         | n/a          | `e4f96c81a833bc5e8052c8af716c3095120504681924ea9470821d622121b5a7` | `c7a7d73b68d21102bf7d6d9be27b4106497efc8119224bebfbd26b375541bde7` |
+| silesia-1m             | 2       | 1,048,628     | 320,418      | n/a                                                               | verified by ratio harness                                         |
+| silesia-100m           | 2       | 104,862,404   | 35,495,150   | `75561d5802aec1cfcfb8eec0a66c1a9883f93806e58b8209b1bf52855aab1458` | `89ed4fcaea193564aa75b37f596ccee2687985b4584ea29b8b8e72f36ef27579` |
+
+The q2 compressed-chunk gate now admits high-alphabet chunks when sampled
+positions show very dense repeated 4-byte sequences, with a command-count cap
+to keep JavaScript verification bounded. This removes the strict 16-literal
+ceiling for highly repetitive data, proven by the all-256-byte periodic corpus.
+It still rejects ordinary Silesia chunks and therefore does not change the
+full-corpus ratio; general natural-data block splitting remains the next P3
+requirement.
