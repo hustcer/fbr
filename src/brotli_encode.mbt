@@ -2102,7 +2102,7 @@ fn brotli_build_simple_lz77_commands(
       data, previous, position, hash_config,
     )
     if match_length >= hash_config.min_match_length {
-      if hash_config.min_match_length >= 16 && position + 1 < data.length() {
+      if hash_config.min_match_length >= 6 && position + 1 < data.length() {
         let (next_match_length, _) = brotli_longest_previous_hash_match(
           data,
           previous,
