@@ -1424,6 +1424,18 @@ fn brotli_build_simple_lz77_commands(
       data, previous, position, hash_config,
     )
     if match_length >= hash_config.min_match_length {
+      if hash_config.min_match_length >= 16 && position + 1 < data.length() {
+        let (next_match_length, _) = brotli_longest_previous_hash_match(
+          data,
+          previous,
+          position + 1,
+          hash_config,
+        )
+        if next_match_length > match_length + 4 {
+          position += 1
+          continue
+        }
+      }
       let insert_length = position - literal_start
       let command_result : Result[BrotliEncodeCommand, FzipError] = try? brotli_make_encode_command(
         literal_start, insert_length, match_length, distance, true,

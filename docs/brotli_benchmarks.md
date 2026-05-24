@@ -837,3 +837,36 @@ Results:
 | small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
 
 The Silesia 1 MiB q2 overhead is now 42.87% versus Google q2.
+
+## 2026-05-24 — Natural Lazy Matching
+
+The natural long-match path now performs a one-byte lazy-match check: when the
+next position has a match more than four bytes longer than the current match,
+the encoder delays the copy by one literal. This is gated to long-match
+candidates (`min_match_length >= 16`) so dense small-input behavior is
+unchanged.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native --filter '*splits literal*'
+moon test --target native --filter '*chunked large input*'
+moon test --target native --filter '*literal chunks*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 457,776        | 455,386   | 320,418      | Harness time 23,909 ms   |
+| periodic-allbytes-200k  | 2       | 494            | 494       | n/a          | External decode verified |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+
+The Silesia 1 MiB q2 overhead is now 42.12% versus Google q2.
