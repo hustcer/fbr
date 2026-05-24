@@ -3230,11 +3230,23 @@ fn brotli_write_best_lz77_metablock(
   if quality <= 2 && data.length() >= 8192 {
     return weighted
   }
-  let fixed = BrotliBitWriter::new(
-    128 + data.length() * 4 + commands.length() * 8,
-  )
-  brotli_write_simple_lz77_metablock(fixed, data, commands, is_last, false)
-  let mut best = if weighted.bit_pos < fixed.bit_pos { weighted } else { fixed }
+  let mut best = weighted
+  // Fixed (un-weighted) Huffman and 2-tree context candidates almost never
+  // beat the weighted single-tree or richer context candidates on inputs
+  // large enough to reach this path: weighted has the same structure with
+  // better code-length costs, and the 2-tree context map's metadata
+  // overhead outweighs the literal savings versus context4/8/16. Skip
+  // them at quality >= 3 to remove two full per-command writer passes
+  // (verified zero size change on silesia-128k q9/q11).
+  if quality < 3 {
+    let fixed = BrotliBitWriter::new(
+      128 + data.length() * 4 + commands.length() * 8,
+    )
+    brotli_write_simple_lz77_metablock(fixed, data, commands, is_last, false)
+    if fixed.bit_pos < best.bit_pos {
+      best = fixed
+    }
+  }
   let split = brotli_best_command_literal_split_point(data, commands)
   if split > 0 {
     match brotli_write_split_lz77_metablock(data, commands, split, is_last) {
@@ -3245,9 +3257,14 @@ fn brotli_write_best_lz77_metablock(
       None => ()
     }
   }
-  match brotli_write_context_lz77_metablock(data, commands, is_last) {
-    Some(candidate) => if candidate.bit_pos < best.bit_pos { best = candidate }
-    None => ()
+  if quality < 3 {
+    match brotli_write_context_lz77_metablock(data, commands, is_last) {
+      Some(candidate) =>
+        if candidate.bit_pos < best.bit_pos {
+          best = candidate
+        }
+      None => ()
+    }
   }
   match brotli_write_context4_lz77_metablock(data, commands, is_last) {
     Some(candidate) => if candidate.bit_pos < best.bit_pos { best = candidate }
