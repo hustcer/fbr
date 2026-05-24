@@ -1011,6 +1011,33 @@ test "brotli_sync q2 compresses short periodic input with LZ77 copy" {
 }
 
 ///|
+test "brotli_sync q2 writes implicit last-distance commands" {
+  let input = FixedArray::make(20, b'\x00')
+  let pattern : FixedArray[Byte] = [b'A', b'B', b'C', b'D']
+  for i in 0..<input.length() {
+    input[i] = pattern[i & 3]
+  }
+  let command = brotli_make_encode_command_with_distance_mode(
+    0, 4, 16, 4, true, false,
+  )
+  assert_false(brotli_command_uses_distance_symbol(command))
+  let commands : Array[BrotliEncodeCommand] = []
+  commands.push(command)
+  let body = BrotliBitWriter::new(
+    128 + input.length() * 4 + commands.length() * 8,
+  )
+  brotli_write_simple_lz77_metablock(body, input, commands, true, true)
+  let encoded = BrotliBitWriter::new(16 + body.buf.length())
+  brotli_encode_window_bits(encoded, 22)
+  encoded.write_from_bits(body.buf, body.bit_pos)
+  let decoded = unbrotli_sync(encoded.finish())
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q2 emits complex literal Huffman tree" {
   let input = FixedArray::make(1025, b'\x00')
   let pattern : FixedArray[Byte] = [b'A', b'B', b'C', b'D', b'E']
@@ -1184,6 +1211,44 @@ test "brotli_sync q2 splits literal-only blocks" {
 
   let flat = FixedArray::make(4096, b'a')
   assert_eq(brotli_best_split_literal_point(flat), 0)
+}
+
+///|
+test "brotli_sync q2 splits LZ77 command literal blocks" {
+  let input = FixedArray::make(8320, b'\x00')
+  for i in 0..<4096 {
+    input[i] = (97 + i % 4).to_byte()
+  }
+  for i in 4096..<4224 {
+    input[i] = input[i - 4096]
+  }
+  let mut state = 12345
+  for i in 4224..<input.length() {
+    state = (state * 73 + 41) % 9973
+    input[i] = (32 + state % 95).to_byte()
+  }
+  let commands : Array[BrotliEncodeCommand] = []
+  commands.push(brotli_make_encode_command(0, 4096, 128, 4096, true))
+  commands.push(brotli_make_encode_command(4224, 4096, 0, 1, false))
+  assert_eq(brotli_best_command_literal_split_point(input, commands), 4096)
+  let weighted = BrotliBitWriter::new(
+    128 + input.length() * 4 + commands.length() * 8,
+  )
+  brotli_write_simple_lz77_metablock(weighted, input, commands, true, true)
+  let split = match
+    brotli_write_split_lz77_metablock(input, commands, 4096, true) {
+    Some(candidate) => candidate
+    None => fail("expected split LZ77 candidate")
+  }
+  assert_true(split.bit_pos < weighted.bit_pos)
+  let encoded = BrotliBitWriter::new(16 + split.buf.length())
+  brotli_encode_window_bits(encoded, 22)
+  encoded.write_from_bits(split.buf, split.bit_pos)
+  let decoded = unbrotli_sync(encoded.finish())
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
 }
 
 ///|

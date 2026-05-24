@@ -960,3 +960,75 @@ Results:
 | silesia-1m              | 9       | 422,673        | 422,673   | 45,860 ms     | 23,732 ms | Same bytes, faster       |
 | split-literals-8k       | 9       | 3,434          | 3,434     | n/a           | 4,619 ms  | Unchanged                |
 | periodic-allbytes-200k  | 9       | 350            | 350       | n/a           | n/a       | External decode verified |
+
+## 2026-05-24 — LZ77 Literal Block Split Candidate
+
+LZ77 command streams now try an exact-costed two-literal-tree candidate when
+the inserted literal stream has a profitable split. The split point is measured
+in inserted literals, not output bytes, so copies do not consume the literal
+block length. This is separate from the literal-only splitter and competes
+against the existing weighted and fixed LZ77 writers.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 455,386        | 455,319   | 320,418      | Small split-LZ77 win     |
+| silesia-1m              | 9       | 422,673        | 422,567   | 263,791      | Small split-LZ77 win     |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| split-literals-8k       | 9       | 3,434          | 3,434     | 3,418        | Unchanged                |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+| periodic-allbytes-200k  | 2       | 350            | 350       | n/a          | External decode verified |
+| periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified |
+
+The Silesia 1 MiB overhead is now 42.10% at q2 and 60.19% at q9. The ratio
+target is still open; this change only adds a valid block-splitting candidate
+inside the existing single-meta-block LZ77 model.
+
+## 2026-05-24 — Implicit Last-Distance Commands
+
+The LZ77 encoder now prefers Brotli command symbols with implicit distance 0
+when a copy exactly repeats the last distance. The meta-block writers skip the
+distance alphabet symbol for those commands, matching the decoder contract.
+This keeps explicit distance symbols for non-repeated distances and for
+dictionary commands.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 455,319        | 455,267   | 320,418      | Small distance-code win  |
+| silesia-1m              | 9       | 422,567        | 422,497   | 263,791      | Small distance-code win  |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| split-literals-8k       | 9       | 3,434          | 3,434     | 3,418        | Unchanged                |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+| periodic-allbytes-200k  | 2       | 350            | 350       | n/a          | External decode verified |
+| periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified |
+
+The Silesia 1 MiB overhead is now 42.09% at q2 and 60.16% at q9.
