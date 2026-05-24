@@ -3367,6 +3367,7 @@ fn brotli_encode_uncompressed(
 fn brotli_try_compressed_chunk(
   data : FixedArray[Byte],
   hash_config : BrotliHashConfig,
+  is_last : Bool,
   base_offset : Int,
   window_bits : Int,
   quality : Int,
@@ -3381,7 +3382,7 @@ fn brotli_try_compressed_chunk(
     let candidate = brotli_try_compressed_commands(
       data,
       commands,
-      false,
+      is_last,
       None,
       quality,
     )
@@ -3395,24 +3396,24 @@ fn brotli_try_compressed_chunk(
   let best = brotli_try_compressed_commands(
     data,
     match_commands,
-    false,
+    is_last,
     None,
     quality,
   )
   let best = brotli_try_compressed_commands(
     data,
     brotli_build_literal_only_command(data),
-    false,
+    is_last,
     best,
     quality,
   )
-  let best = brotli_try_split_literal_only_metablock(data, false, best)
+  let best = brotli_try_split_literal_only_metablock(data, is_last, best)
   let best = brotli_try_compressed_commands(
     data,
     brotli_build_identity_dictionary_commands(
       data, hash_config, base_offset, window_bits,
     ),
-    false,
+    is_last,
     best,
     quality,
   )
@@ -3422,7 +3423,7 @@ fn brotli_try_compressed_chunk(
       let best = brotli_try_compressed_commands(
         data,
         brotli_build_simple_lz77_commands(data, hq_config),
-        false,
+        is_last,
         best,
         quality,
       )
@@ -3432,7 +3433,7 @@ fn brotli_try_compressed_chunk(
           data,
           brotli_four_byte_hash_config(hq_config),
         ),
-        false,
+        is_last,
         best,
         quality,
       )
@@ -3441,7 +3442,7 @@ fn brotli_try_compressed_chunk(
       let best = brotli_try_compressed_commands(
         data,
         brotli_build_simple_lz77_commands(data, natural_config),
-        false,
+        is_last,
         best,
         quality,
       )
@@ -3451,7 +3452,7 @@ fn brotli_try_compressed_chunk(
           data,
           brotli_four_byte_hash_config(natural_config),
         ),
-        false,
+        is_last,
         best,
         quality,
       )
@@ -3466,22 +3467,25 @@ fn brotli_encode_chunked_standard(
   data : FixedArray[Byte],
   opts : BrotliOptions,
 ) -> FixedArray[Byte] raise FzipError {
-  let chunk_size = 1048575
+  let chunk_size = 1048576
   let chunk_count = (data.length() + chunk_size - 1) / chunk_size
   let writer = BrotliBitWriter::new(data.length() + 8 + chunk_count * 16)
   brotli_encode_window_bits(writer, opts.window_bits)
   let hash_config = brotli_hash_config_for_quality(opts.quality)
   let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
   let mut offset = 0
+  let mut wrote_last = false
   while offset < data.length() {
     let remaining = data.length() - offset
     let length = if remaining > chunk_size { chunk_size } else { remaining }
     let chunk = slc(data, offset, e=offset + length)
+    let is_last = offset + length == data.length()
     let previous_distance_cache = brotli_copy_distance_cache(distance_cache)
     match
       brotli_try_compressed_chunk(
         chunk,
         hash_config,
+        is_last,
         offset,
         opts.window_bits,
         opts.quality,
@@ -3490,6 +3494,9 @@ fn brotli_encode_chunked_standard(
       Some(compressed) =>
         if shft(compressed.bit_pos) + 1 < length + 16 {
           writer.write_from_bits(compressed.buf, compressed.bit_pos)
+          if is_last {
+            wrote_last = true
+          }
         } else {
           brotli_commit_distance_cache(distance_cache, previous_distance_cache)
           brotli_write_uncompressed_metablock(writer, data, offset, length)
@@ -3501,7 +3508,9 @@ fn brotli_encode_chunked_standard(
     }
     offset += length
   }
-  brotli_write_final_empty_metablock(writer)
+  if !wrote_last {
+    brotli_write_final_empty_metablock(writer)
+  }
   writer.finish()
 }
 

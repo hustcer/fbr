@@ -1886,3 +1886,50 @@ Results:
 The Silesia 1 MiB q9 gap drops from 7.33% to 3.73%, bringing q9 inside the P3
 5% target window for this validation slice. q10 and q11 still need stronger P4
 search and entropy modeling.
+
+## 2026-05-25 — Chunked Final Meta-Block Boundary
+
+Chunked standard encoding now lets the final compressed chunk set
+`ISLAST=1` directly instead of always writing compressed chunks as non-final
+meta-blocks and appending an empty final terminator. The standard chunk size
+also moves from 1,048,575 to 1,048,576 bytes, so a 1 MiB input can be encoded
+as one compressed meta-block instead of a 1-byte tail chunk.
+
+Two P4 parser trials were measured and rejected before this boundary fix:
+lowering q10's minimum match length to 4 bytes regressed Silesia q10 to
+285,760 bytes, and deeper q10/q11 lazy lookahead regressed q10 to 291,763
+bytes and q11 to 320,823 bytes while increasing runtime.
+
+Validation commands:
+
+```nu
+moon test --target native --filter '*q0 through q11 round-trip*'
+moon test --target native --filter '*chunk*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9,10,11 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9,10,11 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9,10,11 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/periodic-allbytes-200k.bin --qualities 2,9 --json
+```
+
+Results:
+
+| Corpus                       | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ---------------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m                   | 2       | 325,896        | 325,887   | 320,418      | Final chunk boundary win |
+| silesia-1m                   | 9       | 273,641        | 273,633   | 263,791      | Final chunk boundary win |
+| silesia-1m                   | 10      | 273,641        | 273,633   | 242,485      | Final chunk boundary win |
+| silesia-1m                   | 11      | 273,641        | 273,633   | 239,314      | Final chunk boundary win |
+| split-literals-8k            | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| split-literals-8k            | 9       | 3,434          | 3,434     | 3,418        | Unchanged                |
+| split-literals-8k            | 10      | 3,434          | 3,434     | 3,420        | Unchanged                |
+| split-literals-8k            | 11      | 3,434          | 3,434     | 3,420        | Unchanged                |
+| small-alpha-multi-1400       | 2       | 179            | 179       | 169          | Unchanged                |
+| small-alpha-multi-1400       | 9       | 179            | 179       | 69           | Unchanged                |
+| small-alpha-multi-1400       | 10      | 179            | 179       | 63           | Unchanged                |
+| small-alpha-multi-1400       | 11      | 179            | 179       | 55           | Unchanged                |
+| periodic-allbytes-200k       | 2       | 350            | 350       | 293          | External decode verified |
+| periodic-allbytes-200k       | 9       | 350            | 350       | 259          | External decode verified |
+
+This is intentionally a small boundary-correctness increment. P4 still needs
+a real Zopfli-style parser and stronger entropy modeling for the q10/q11 ratio
+target.
