@@ -54,3 +54,25 @@ Result:
 This increment adds a real compressed meta-block path for single-byte runs:
 one inserted literal followed by a distance-1 copy. It is a command/Huffman
 foundation for P3, not the full Silesia-ratio encoder.
+
+## 2026-05-24 — Short Periodic q2 Path
+
+Corpus: `target/brotli-encode/periodic-abcd-1k.bin`
+
+Input: 1024 bytes of repeated `ABCD`
+
+Validation command:
+
+```nu
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-abcd-1k.bin --quality 2
+```
+
+Result:
+
+| Quality | Encoded bytes | Encoded SHA-256                                                   | External decode SHA-256                                           |
+| ------- | ------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 2       | 15            | `b93fc934c730cff0147930ef7572a745f2c8fd28153e836d3f103d6026ab2aeb` | `c2bc376eb7cee7a17331cb38d1637fe08c710b3d8167764f7ec92fd865814d8e` |
+
+This extends the compressed path to period lengths 1 through 4 when the period
+symbols are unique. It proves literal payload emission for simple Huffman trees,
+explicit distances 1 through 4, and larger insert/copy command prefixes.

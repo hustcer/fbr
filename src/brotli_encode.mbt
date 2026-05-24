@@ -173,17 +173,114 @@ fn brotli_write_simple_one_symbol_huffman(
 }
 
 ///|
-fn brotli_is_single_repeated_byte(data : FixedArray[Byte]) -> Bool {
-  if data.length() < 3 {
-    return false
+fn brotli_write_simple_huffman(
+  writer : BrotliBitWriter,
+  symbols : FixedArray[Int],
+  count : Int,
+  symbol_bits : Int,
+) -> Unit {
+  writer.write_bits(2, 1) // simple Huffman marker
+  writer.write_bits(2, count - 1)
+  for i in 0..<count {
+    writer.write_bits(symbol_bits, symbols[i])
   }
-  let first = data[0]
-  for i in 1..<data.length() {
-    if data[i] != first {
-      return false
+  if count == 4 {
+    writer.write_bits(1, 0)
+  }
+}
+
+///|
+fn brotli_simple_huffman_payload(
+  symbols : FixedArray[Int],
+  count : Int,
+  target : Int,
+) -> BrotliCommandPrefix raise FzipError {
+  let table = brotli_build_simple_huffman_table(
+    symbols,
+    count - 1,
+    brotli_huffman_table_bits,
+  )
+  for index in 0..<(1 << brotli_huffman_table_bits) {
+    let entry = table[index]
+    if entry.value == target {
+      let mask = if entry.bits == 0 { 0 } else { (1 << entry.bits) - 1 }
+      return {
+        symbol: target,
+        insert_extra: index & mask,
+        copy_extra: 0,
+        insert_extra_bits: entry.bits,
+        copy_extra_bits: 0,
+      }
     }
   }
-  true
+  raise fzip_err(BrotliInvalidHuffman, msg="symbol missing from simple tree")
+}
+
+///|
+fn brotli_find_periodic_prefix_length(data : FixedArray[Byte]) -> Int {
+  if data.length() < 3 {
+    return 0
+  }
+  let max_period = if data.length() < 4 { data.length() - 1 } else { 4 }
+  for period in 1..<=max_period {
+    let mut ok = true
+    for i in period..<data.length() {
+      if data[i] != data[i - period] {
+        ok = false
+        break
+      }
+    }
+    if ok {
+      let mut unique = true
+      for i in 0..<period {
+        for k in (i + 1)..<period {
+          if data[i] == data[k] {
+            unique = false
+          }
+        }
+      }
+      if unique {
+        return period
+      }
+    }
+  }
+  0
+}
+
+///|
+fn brotli_period_symbols(
+  data : FixedArray[Byte],
+  period : Int,
+) -> FixedArray[Int] {
+  let symbols = FixedArray::make(4, 0)
+  for i in 0..<period {
+    symbols[i] = data[i].to_int()
+  }
+  symbols
+}
+
+///|
+fn brotli_distance_prefix_for_distance(
+  distance : Int,
+) -> BrotliCommandPrefix raise FzipError {
+  for
+    code in brotli_num_distance_short_codes..<brotli_distance_alphabet_size(
+      0, 0, 24,
+    ) {
+    let extra_bits = brotli_distance_extra_bits(code, 0, 0)
+    let offset = brotli_distance_offset(code, 0, 0)
+    let extra = distance - offset
+    if extra >= 0 && extra < 1 << extra_bits {
+      return {
+        symbol: code,
+        insert_extra: extra,
+        copy_extra: 0,
+        insert_extra_bits: extra_bits,
+        copy_extra_bits: 0,
+      }
+    }
+  }
+  raise fzip_err(BrotliInvalidDistance, msg="no Brotli distance prefix")
 }
 
 ///|
@@ -220,12 +317,15 @@ fn brotli_find_command_prefix(
 }
 
 ///|
-fn brotli_encode_repeated_byte(
+fn brotli_encode_periodic_prefix(
   data : FixedArray[Byte],
   opts : BrotliOptions,
+  period : Int,
 ) -> FixedArray[Byte] raise FzipError {
-  let copy_length = data.length() - 1
-  let command = brotli_find_command_prefix(1, copy_length, true)
+  let copy_length = data.length() - period
+  let command = brotli_find_command_prefix(period, copy_length, true)
+  let distance = brotli_distance_prefix_for_distance(period)
+  let literal_symbols = brotli_period_symbols(data, period)
   let writer = BrotliBitWriter::new(128)
   brotli_encode_window_bits(writer, opts.window_bits)
   brotli_write_metablock_header(writer, data.length(), true, false)
@@ -236,12 +336,20 @@ fn brotli_encode_repeated_byte(
   writer.write_bits(2, 0) // LSB6 literal context mode
   writer.write_bits(1, 0) // literal context map has one tree
   writer.write_bits(1, 0) // distance context map has one tree
-  brotli_write_simple_one_symbol_huffman(writer, data[0].to_int(), 8)
+  brotli_write_simple_huffman(writer, literal_symbols, period, 8)
   brotli_write_simple_one_symbol_huffman(writer, command.symbol, 10)
-  brotli_write_simple_one_symbol_huffman(writer, 16, 6) // distance 1 prefix
+  brotli_write_simple_one_symbol_huffman(writer, distance.symbol, 6)
   writer.write_bits(command.insert_extra_bits, command.insert_extra)
   writer.write_bits(command.copy_extra_bits, command.copy_extra)
-  writer.write_bits(1, 0) // distance code 16 extra bit: distance 1
+  for i in 0..<period {
+    let payload = brotli_simple_huffman_payload(
+      literal_symbols,
+      period,
+      data[i].to_int(),
+    )
+    writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
+  }
+  writer.write_bits(distance.insert_extra_bits, distance.insert_extra)
   writer.finish()
 }
 
@@ -272,9 +380,11 @@ fn brotli_encode_standard(
   data : FixedArray[Byte],
   opts : BrotliOptions,
 ) -> FixedArray[Byte] raise FzipError {
-  if data.length() <= brotli_max_metablock_bytes &&
-    brotli_is_single_repeated_byte(data) {
-    return brotli_encode_repeated_byte(data, opts)
+  if data.length() <= brotli_max_metablock_bytes {
+    let period = brotli_find_periodic_prefix_length(data)
+    if period > 0 {
+      return brotli_encode_periodic_prefix(data, opts, period)
+    }
   }
   brotli_encode_uncompressed(data, opts)
 }
