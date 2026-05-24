@@ -115,9 +115,36 @@ fn BrotliBitWriter::write_from_bits(
   data : FixedArray[Byte],
   bit_count : Int,
 ) -> Unit {
-  for pos in 0..<bit_count {
+  let mut pos = 0
+  // Fast path: when the destination is byte-aligned, blit whole bytes
+  // directly into the output buffer; only the trailing < 8 bits fall
+  // back to per-bit writes.
+  if (self.bit_pos & 7) == 0 && bit_count >= 8 {
+    let full_bytes = bit_count >> 3
+    let byte_offset = self.bit_pos >> 3
+    data.blit_to(self.buf, len=full_bytes, src_offset=0, dst_offset=byte_offset)
+    self.bit_pos += full_bytes * 8
+    pos = full_bytes * 8
+  }
+  // Push remaining whole bytes at unaligned destinations through the
+  // bit-spanning write_bits slow path eight bits at a time to skip the
+  // per-bit dispatch.
+  while pos + 8 <= bit_count {
+    let bit_offset = pos & 7
+    let byte_index = pos >> 3
+    let low = data[byte_index].to_int() >> bit_offset
+    let high = if bit_offset != 0 {
+      data[byte_index + 1].to_int() << (8 - bit_offset)
+    } else {
+      0
+    }
+    self.write_bits(8, (low | high) & 0xff)
+    pos += 8
+  }
+  while pos < bit_count {
     let bit = (data[pos / 8].to_int() >> (pos & 7)) & 1
     self.write_bits(1, bit)
+    pos += 1
   }
 }
 
