@@ -1348,3 +1348,36 @@ Results:
 | periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified  |
 
 The Silesia 1 MiB overhead remains 0.15% at q2 and is now 25.91% at q9.
+
+## 2026-05-24 — Six-Byte q9 High-Quality Matches
+
+The q9 high-quality parser now admits 6-byte matches with a 150,000-command
+cap. Trials with 8-byte matches improved Silesia q9 to 319,715 bytes, 6-byte
+matches improved it further, and a 4-byte trial overpaid command entropy and
+regressed to 313,641 bytes.
+
+Validation commands:
+
+```nu
+moon fmt
+moon test --target native --filter '*q9 admits shorter high-quality matches*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 9       | 332,140        | 307,056   | 263,791      | Six-byte q9 match win    |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| split-literals-8k       | 9       | 3,434          | 3,434     | 3,418        | Unchanged                |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+| periodic-allbytes-200k  | 2       | 350            | 350       | n/a          | External decode verified |
+| periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified |
+
+The Silesia 1 MiB overhead remains 0.15% at q2 and is now 16.40% at q9.
