@@ -1,6 +1,19 @@
 #!/usr/bin/env nu
 
 const bench_dir = "target/brotli-bench"
+const harness_lock_dir = "tools/brotli/.harness-lock"
+
+def acquire-harness-lock []: nothing -> nothing {
+  let made = (^mkdir $harness_lock_dir | complete)
+  if $made.exit_code != 0 {
+    print --stderr "Another Brotli harness is running; retry after it finishes."
+    exit 1
+  }
+}
+
+def release-harness-lock []: nothing -> nothing {
+  rm --force --recursive $harness_lock_dir
+}
 
 def parse-csv-ints [text: string]: nothing -> list<int> {
   $text | split row "," | each {|value| $value | str trim | into int }
@@ -227,6 +240,7 @@ def main [
   let test_name = $"brotli target perf generated ($run_id)"
   let temp_test = $"src/brotli_target_perf_($run_id)_wbtest.mbt"
   mut rows = []
+  acquire-harness-lock
 
   if $mode == "decode" {
     let decoded_size = (ls $expected | get size.0 | into int)
@@ -276,6 +290,7 @@ def main [
   }
 
   rm --force $temp_test
+  release-harness-lock
   if $json {
     print ($rows | to json --raw)
   } else {

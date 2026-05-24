@@ -2024,3 +2024,38 @@ The older `encode/verify.nu`, `silesia/verify.nu`, and `bench/ratio.nu` scripts
 remain available for file-based verification and historical size telemetry, but
 they are explicitly tagged as legacy JS verification paths rather than default
 benchmark harnesses.
+
+## 2026-05-25 — Literal-Set Collector Speedup
+
+The encoder previously collected several literal symbol sets by linearly
+scanning the already-seen symbol list for every literal. Replacing those
+duplicate checks with 256-entry `seen` tables preserves first-seen symbol order
+while avoiding O(n * unique-symbols) collection cost.
+
+Validation commands:
+
+```nu
+moon check --target all
+moon test --target all
+moon info
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-128k.bin \
+  --mode encode \
+  --quality 2 \
+  --targets wasm-gc,native \
+  --repeats 1 \
+  --samples 2 \
+  --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+```
+
+Results:
+
+| Corpus       | Quality | Target  | Previous ms | New ms | MoonBit bytes | Google bytes | Notes              |
+| ------------ | ------- | ------- | ----------- | ------ | ------------- | ------------ | ------------------ |
+| silesia-128k | 2       | wasm-gc | 178.97      | 163.79 | 51,928        | 44,794       | Same encoded size  |
+| silesia-128k | 2       | native  | 521.30      | 470.19 | 51,928        | 44,794       | Same encoded size  |
+| silesia-1m   | 2       | legacy  | n/a         | n/a    | 329,512       | 320,418      | External verified  |
+
+`target-perf.nu` now also uses the shared Brotli harness lock so concurrent
+temporary white-box benchmark runs cannot invalidate each other's generated
+`src/*_wbtest.mbt` files during Moon test discovery.
