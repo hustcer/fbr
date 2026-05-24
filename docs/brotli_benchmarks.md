@@ -99,3 +99,25 @@ This moves beyond whole-input periods: the encoder can now insert a short
 literal prefix, then copy the remaining suffix from an earlier distance. The
 literal prefix is still limited to four distinct byte values so it can use
 Brotli simple Huffman trees.
+
+## 2026-05-24 — Multi-Command q2 Small-Alphabet Path
+
+Corpus: `target/brotli-encode/small-alpha-multicopy-1207.bin`
+
+Input: `ABCABCX` followed by 200 repetitions of `ABCABC`
+
+Validation command:
+
+```nu
+nu tools/brotli/encode/verify.nu target/brotli-encode/small-alpha-multicopy-1207.bin --quality 2
+```
+
+Result:
+
+| Quality | Encoded bytes | Encoded SHA-256                                                   | External decode SHA-256                                           |
+| ------- | ------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 2       | 17            | `e3004449f7c34d354c3e42c25c80af9eb20fa9a316a7e2266ee9de23161e178e` | `5cda1187aab97e0d2172c16e206ea42c02a568ccb804f9d0e316520da2f677a7` |
+
+This adds a greedy multi-command path for inputs with up to four distinct
+literal bytes. It still uses Brotli simple Huffman trees, so command and
+distance alphabets are capped at four symbols each.

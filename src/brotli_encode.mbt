@@ -29,6 +29,15 @@ priv struct BrotliLiteralSet {
 }
 
 ///|
+priv struct BrotliEncodeCommand {
+  insert_start : Int
+  insert_length : Int
+  has_copy : Bool
+  command : BrotliCommandPrefix
+  distance_prefix : BrotliCommandPrefix
+}
+
+///|
 fn BrotliBitWriter::new(capacity : Int) -> BrotliBitWriter {
   { buf: FixedArray::make(capacity, b'\x00'), bit_pos: 0 }
 }
@@ -324,6 +333,24 @@ fn brotli_distance_prefix_for_distance(
 }
 
 ///|
+fn brotli_add_unique_symbol(
+  symbols : FixedArray[Int],
+  count : Int,
+  symbol : Int,
+) -> Int {
+  for i in 0..<count {
+    if symbols[i] == symbol {
+      return count
+    }
+  }
+  if count >= symbols.length() {
+    return count + 1
+  }
+  symbols[count] = symbol
+  count + 1
+}
+
+///|
 fn brotli_find_command_prefix(
   insert_length : Int,
   copy_length : Int,
@@ -354,6 +381,125 @@ fn brotli_find_command_prefix(
     }
   }
   raise fzip_err(BrotliInvalidMetablock, msg="no Brotli command prefix")
+}
+
+///|
+fn brotli_longest_previous_match(
+  data : FixedArray[Byte],
+  position : Int,
+) -> (Int, Int) {
+  let mut best_length = 0
+  let mut best_distance = 0
+  let max_distance = if position < 256 { position } else { 256 }
+  for distance in 1..<=max_distance {
+    let mut length = 0
+    while length < 6 &&
+          position + length < data.length() &&
+          data[position + length] == data[position + length - distance] {
+      length += 1
+    }
+    if length > best_length {
+      best_length = length
+      best_distance = distance
+    }
+  }
+  (best_length, best_distance)
+}
+
+///|
+fn brotli_make_encode_command(
+  insert_start : Int,
+  insert_length : Int,
+  copy_length : Int,
+  distance : Int,
+  has_copy : Bool,
+) -> BrotliEncodeCommand raise FzipError {
+  let command = if has_copy {
+    brotli_find_command_prefix(insert_length, copy_length, true)
+  } else {
+    brotli_find_command_prefix(insert_length, 2, false)
+  }
+  let distance_prefix = if has_copy {
+    brotli_distance_prefix_for_distance(distance)
+  } else {
+    brotli_distance_prefix_for_distance(1)
+  }
+  { insert_start, insert_length, has_copy, command, distance_prefix }
+}
+
+///|
+fn brotli_build_simple_lz77_commands(
+  data : FixedArray[Byte],
+) -> Array[BrotliEncodeCommand]? raise FzipError {
+  if data.length() < 8 || data.length() > 65536 {
+    return None
+  }
+  match brotli_collect_unique_literals(data, data.length()) {
+    Some(_) => ()
+    None => return None
+  }
+  let commands : Array[BrotliEncodeCommand] = []
+  let mut literal_start = 0
+  let mut position = 0
+  while position < data.length() {
+    let (match_length, distance) = brotli_longest_previous_match(data, position)
+    if match_length >= 4 {
+      let insert_length = position - literal_start
+      commands.push(
+        brotli_make_encode_command(
+          literal_start, insert_length, match_length, distance, true,
+        ),
+      )
+      position += match_length
+      literal_start = position
+    } else {
+      position += 1
+    }
+  }
+  if literal_start < data.length() {
+    commands.push(
+      brotli_make_encode_command(
+        literal_start,
+        data.length() - literal_start,
+        0,
+        0,
+        false,
+      ),
+    )
+  }
+  if commands.length() == 0 {
+    return None
+  }
+  let command_symbols = FixedArray::make(4, 0)
+  let distance_symbols = FixedArray::make(4, 0)
+  let mut command_count = 0
+  let mut distance_count = 0
+  let mut has_copy = false
+  for i in 0..<commands.length() {
+    command_count = brotli_add_unique_symbol(
+      command_symbols,
+      command_count,
+      commands[i].command.symbol,
+    )
+    if command_count > 4 {
+      return None
+    }
+    if commands[i].has_copy {
+      has_copy = true
+      distance_count = brotli_add_unique_symbol(
+        distance_symbols,
+        distance_count,
+        commands[i].distance_prefix.symbol,
+      )
+      if distance_count > 4 {
+        return None
+      }
+    }
+  }
+  if !has_copy {
+    return None
+  }
+  Some(commands)
 }
 
 ///|
@@ -401,6 +547,100 @@ fn brotli_encode_single_copy_match(
 }
 
 ///|
+fn brotli_encode_simple_lz77(
+  data : FixedArray[Byte],
+  opts : BrotliOptions,
+  commands : Array[BrotliEncodeCommand],
+) -> FixedArray[Byte] raise FzipError {
+  let literals = match brotli_collect_unique_literals(data, data.length()) {
+    Some(literals) => literals
+    None =>
+      raise fzip_err(BrotliInvalidMetablock, msg="too many literal symbols")
+  }
+  let command_symbols = FixedArray::make(4, 0)
+  let distance_symbols = FixedArray::make(4, 0)
+  let mut command_count = 0
+  let mut distance_count = 0
+  for i in 0..<commands.length() {
+    command_count = brotli_add_unique_symbol(
+      command_symbols,
+      command_count,
+      commands[i].command.symbol,
+    )
+    if commands[i].has_copy {
+      distance_count = brotli_add_unique_symbol(
+        distance_symbols,
+        distance_count,
+        commands[i].distance_prefix.symbol,
+      )
+    }
+  }
+  let writer = BrotliBitWriter::new(
+    128 + data.length() * 4 + commands.length() * 8,
+  )
+  brotli_encode_window_bits(writer, opts.window_bits)
+  brotli_write_metablock_header(writer, data.length(), true, false)
+  writer.write_bits(1, 0) // one literal block type
+  writer.write_bits(1, 0) // one command block type
+  writer.write_bits(1, 0) // one distance block type
+  writer.write_bits(6, 0) // NPOSTFIX = 0, NDIRECT = 0
+  writer.write_bits(2, 0) // LSB6 literal context mode
+  writer.write_bits(1, 0) // literal context map has one tree
+  writer.write_bits(1, 0) // distance context map has one tree
+  brotli_write_simple_huffman(writer, literals.symbols, literals.count, 8)
+  brotli_write_simple_huffman(writer, command_symbols, command_count, 10)
+  brotli_write_simple_huffman(writer, distance_symbols, distance_count, 6)
+  for i in 0..<commands.length() {
+    let command = commands[i]
+    let command_payload = brotli_simple_huffman_payload(
+      command_symbols,
+      command_count,
+      command.command.symbol,
+    )
+    writer.write_bits(
+      command_payload.insert_extra_bits,
+      command_payload.insert_extra,
+    )
+    writer.write_bits(
+      command.command.insert_extra_bits,
+      command.command.insert_extra,
+    )
+    writer.write_bits(
+      command.command.copy_extra_bits,
+      command.command.copy_extra,
+    )
+    for j in 0..<command.insert_length {
+      let literal = data[command.insert_start + j].to_int()
+      let literal_payload = brotli_simple_huffman_payload(
+        literals.symbols,
+        literals.count,
+        literal,
+      )
+      writer.write_bits(
+        literal_payload.insert_extra_bits,
+        literal_payload.insert_extra,
+      )
+    }
+    if command.has_copy {
+      let distance_payload = brotli_simple_huffman_payload(
+        distance_symbols,
+        distance_count,
+        command.distance_prefix.symbol,
+      )
+      writer.write_bits(
+        distance_payload.insert_extra_bits,
+        distance_payload.insert_extra,
+      )
+      writer.write_bits(
+        command.distance_prefix.insert_extra_bits,
+        command.distance_prefix.insert_extra,
+      )
+    }
+  }
+  writer.finish()
+}
+
+///|
 fn brotli_encode_uncompressed(
   data : FixedArray[Byte],
   opts : BrotliOptions,
@@ -430,6 +670,10 @@ fn brotli_encode_standard(
   if data.length() <= brotli_max_metablock_bytes {
     match brotli_find_single_copy_match(data) {
       Some(match_) => return brotli_encode_single_copy_match(data, opts, match_)
+      None => ()
+    }
+    match brotli_build_simple_lz77_commands(data) {
+      Some(commands) => return brotli_encode_simple_lz77(data, opts, commands)
       None => ()
     }
   }
