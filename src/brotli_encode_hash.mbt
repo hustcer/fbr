@@ -6,6 +6,8 @@ priv struct BrotliHashConfig {
   max_match_checks : Int
   max_match_length : Int
   min_match_length : Int
+  max_distance_cache_codes : Int
+  lazy_lookahead : Int
   scan_step : Int
   max_commands : Int
   min_copy_ratio_percent : Int
@@ -24,6 +26,8 @@ fn brotli_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
     max_match_checks: 4,
     max_match_length: 4096,
     min_match_length: 4,
+    max_distance_cache_codes: brotli_num_distance_short_codes,
+    lazy_lookahead: 3,
     scan_step: 1,
     max_commands: 1200,
     min_copy_ratio_percent: 0,
@@ -35,7 +39,12 @@ fn brotli_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
 }
 
 ///|
-fn brotli_natural_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
+fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
+  let max_distance_cache_codes = if quality <= 2 {
+    0
+  } else {
+    brotli_num_distance_short_codes
+  }
   {
     table_size: 32768,
     table_mask: 32767,
@@ -43,6 +52,12 @@ fn brotli_natural_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
     max_match_checks: 8,
     max_match_length: 16384,
     min_match_length: 10,
+    max_distance_cache_codes,
+    lazy_lookahead: if quality <= 2 {
+      1
+    } else {
+      3
+    },
     scan_step: 1,
     max_commands: 52000,
     min_copy_ratio_percent: 12,
@@ -67,6 +82,8 @@ fn brotli_high_quality_hash_config_for_quality(
     max_match_checks,
     max_match_length: 16384,
     min_match_length,
+    max_distance_cache_codes: brotli_num_distance_short_codes,
+    lazy_lookahead: 3,
     scan_step: 1,
     max_commands,
     min_copy_ratio_percent: 12,
@@ -86,6 +103,8 @@ fn brotli_four_byte_hash_config(config : BrotliHashConfig) -> BrotliHashConfig {
     max_match_checks: config.max_match_checks,
     max_match_length: config.max_match_length,
     min_match_length: config.min_match_length,
+    max_distance_cache_codes: config.max_distance_cache_codes,
+    lazy_lookahead: config.lazy_lookahead,
     scan_step: config.scan_step,
     max_commands: config.max_commands,
     min_copy_ratio_percent: config.min_copy_ratio_percent,
@@ -282,7 +301,7 @@ fn brotli_longest_previous_hash_match_with_cache(
   }
   let mut best_length = 0
   let mut best_distance = 0
-  for code in 0..<brotli_num_distance_short_codes {
+  for code in 0..<config.max_distance_cache_codes {
     let distance = brotli_distance_cache_candidate(distance_cache, code)
     let length = brotli_match_length_at_distance(
       data, position, distance, config,

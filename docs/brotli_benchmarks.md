@@ -1933,3 +1933,46 @@ Results:
 This is intentionally a small boundary-correctness increment. P4 still needs
 a real Zopfli-style parser and stronger entropy modeling for the q10/q11 ratio
 target.
+
+## 2026-05-25 — q2 Fast Profile Scan Reduction
+
+The q2 fast profile was still far slower than Google Brotli even after the
+previous candidate pruning. Two hot spots were reduced:
+
+- The 16-tree UTF-8 literal-context writer now gathers literal symbols and
+  frequencies for all 16 contexts in one pass instead of scanning the command
+  literals once per context for symbols and once per context for frequencies.
+- The q2 natural parser no longer probes Brotli recent-distance short-code
+  candidates before hash-chain candidates, and uses a one-position lazy
+  lookahead instead of three. q9+ keeps the previous full recent-distance probe
+  and three-position lazy lookahead.
+
+A q2 four-hash-check trial encoded Silesia to 339,926 bytes and was rejected
+by Google Brotli as corrupt, so the retained q2 parser still uses eight
+hash-chain checks.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native --filter '*UTF-8 context*'
+moon test --target native --filter '*alternate hash candidates exact-costed*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/periodic-allbytes-200k.bin --qualities 2 --json
+```
+
+Results:
+
+| Corpus                       | Quality | Previous bytes | New bytes | Google bytes | Previous ms | New ms | Notes                    |
+| ---------------------------- | ------- | -------------- | --------- | ------------ | ----------- | ------ | ------------------------ |
+| silesia-1m                   | 2       | 325,887        | 329,512   | 320,418      | 40,862      | 28,054 | Still within 5% window   |
+| split-literals-8k            | 2       | 3,434          | 3,434     | 3,455        | n/a         | 7,335  | Unchanged                |
+| small-alpha-multi-1400       | 2       | 179            | 162       | 169          | n/a         | 9,556  | Smaller than prior q2    |
+| periodic-allbytes-200k       | 2       | 350            | 350       | 293          | n/a         | 6,913  | External decode verified |
+
+The Silesia q2 1 MiB output remains 2.84% larger than Google q2, while the
+measured ratio-harness time drops by about 31% versus the previous retained
+baseline. It is still much slower than Google Brotli; the next q2 speed work
+needs to reduce LZ77 match-search cost rather than only pruning writer scans.
