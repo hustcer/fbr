@@ -2109,7 +2109,7 @@ fn brotli_build_simple_lz77_commands(
           position + 1,
           hash_config,
         )
-        if next_match_length > match_length + 4 {
+        if next_match_length > match_length {
           position += 1
           continue
         }

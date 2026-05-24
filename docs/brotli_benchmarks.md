@@ -1452,3 +1452,39 @@ Results:
 
 The Silesia 1 MiB result is now 0.75% smaller than Google q2 and 15.01% larger
 than Google q9.
+
+## 2026-05-24 — Aggressive Lazy-Match Margin
+
+The lazy-match lookahead now delays a copy whenever the next position has any
+longer match, instead of requiring the next match to beat the current match by
+more than four bytes. Intermediate trials after the short-match lazy increment
+showed q9 improvements at +2 and +1 margins; the zero-margin rule was best.
+
+Validation commands:
+
+```nu
+moon fmt
+moon test --target native --filter '*q9 admits shorter high-quality matches*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                       |
+| ----------------------- | ------- | -------------- | --------- | ------------ | --------------------------- |
+| silesia-1m              | 2       | 318,026        | 317,081   | 320,418      | Aggressive lazy-match win   |
+| silesia-1m              | 9       | 303,384        | 301,268   | 263,791      | Aggressive lazy-match win   |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                   |
+| split-literals-8k       | 9       | 3,434          | 3,434     | 3,418        | Unchanged                   |
+| small-alpha-multi-1400  | 2       | 193            | 193       | 169          | Unchanged                   |
+| small-alpha-multi-1400  | 9       | 193            | 193       | 69           | Unchanged                   |
+| periodic-allbytes-200k  | 2       | 350            | 350       | n/a          | External decode verified    |
+| periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified    |
+
+The Silesia 1 MiB result is now 1.04% smaller than Google q2 and 14.21% larger
+than Google q9.
