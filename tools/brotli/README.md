@@ -62,3 +62,13 @@ nu tools/brotli/encode/verify.nu target/brotli-silesia/silesia-100m.bin --qualit
 Encodes a file with MoonBit `brotli_sync`, decodes the generated stream with
 the external `brotli` CLI, and compares the decoded bytes with the original
 input. This keeps encoder acceptance independent from fzip's own decoder.
+
+## Ratio Benchmark
+
+```nu
+nu tools/brotli/bench/ratio.nu target/brotli-silesia/silesia-100m.bin --qualities 2,9,11
+```
+
+Compares MoonBit `brotli_sync` output size against the Google `brotli` CLI for
+the selected qualities. The script also validates MoonBit output through the
+external decoder by delegating to `tools/brotli/encode/verify.nu`.

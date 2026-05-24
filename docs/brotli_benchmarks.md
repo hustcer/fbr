@@ -147,3 +147,23 @@ This removes the previous four-symbol cap by emitting Brotli complex Huffman
 tree descriptions for literal, command, and distance alphabets when needed.
 The implementation currently uses fixed-length canonical codes padded to a
 power of two, which is simple and deterministic but not yet entropy-optimal.
+
+## 2026-05-24 — Ratio Harness Baseline
+
+Tool:
+
+```nu
+nu tools/brotli/bench/ratio.nu <input> --qualities <list>
+```
+
+Results:
+
+| Corpus                  | Quality | MoonBit bytes | Google bytes | MoonBit ratio | Google ratio |
+| ----------------------- | ------- | ------------- | ------------ | ------------- | ------------ |
+| small-alpha-multi-1400  | 2       | 306           | 169          | 4.58          | 8.28         |
+| silesia-100m            | 2       | 104857629     | 35495150     | 1.00          | 2.95         |
+
+The small synthetic corpus shows the q2 compressed path working but still
+larger than Google. The Silesia baseline shows the current encoder mostly
+falls back to uncompressed meta-blocks on realistic mixed data. Closing this
+requires block splitting plus a broader match finder over large meta-blocks.
