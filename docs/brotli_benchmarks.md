@@ -709,3 +709,34 @@ This is the first broad natural-data back-reference win, reducing the Silesia
 1 MiB q2 overhead from 104.92% to 80.98% versus Google q2. Runtime is still
 far above the P3 target, so the next work needs a cheaper token cost model and
 real block splitting rather than more brute-force candidate writing.
+
+## 2026-05-24 — Long-Match Threshold Tuning
+
+The large-input natural candidate's minimum copy length was tuned after
+benchmarking shorter thresholds under the same 8 KiB input gate and 12%
+copied-byte floor.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native --filter '*splits literal*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+```
+
+Results:
+
+| Natural min copy | Silesia-1m q2 bytes | Notes                                  |
+| ---------------- | ------------------- | -------------------------------------- |
+| 32               | 579,879             | Initial safe threshold                 |
+| 24               | 524,560             | Better ratio, fixtures unchanged       |
+| 16               | 471,230             | Best tested threshold, selected        |
+| 12               | 646,930             | Rejected; command overhead dominates   |
+
+At the selected 16-byte threshold, `split-literals-8k.bin` stays 3,434 bytes,
+`small-alpha-multi-1400.bin` stays 195 bytes for q2/q9, and
+`periodic-allbytes-200k.bin` stays 1,382 bytes with external decode verified.
+The Silesia 1 MiB q2 overhead is now 47.07% versus Google q2.
