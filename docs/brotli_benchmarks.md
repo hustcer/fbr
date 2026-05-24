@@ -223,14 +223,14 @@ Results:
 
 | Corpus                  | Quality | MoonBit bytes | Google bytes | MoonBit SHA-256                                                   | External decode SHA-256                                           |
 | ----------------------- | ------- | ------------- | ------------ | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
-| small-alpha-multi-1400  | 2       | 256           | 169          | `ed71a5d35f6f0a6554c558765e986a652afc3688ac2661daf3a69d7f2134854e` | `0a8c1bc877ff95d68eaea55b7112864aab6b4f048bafc7502419b2d9f7e14406` |
-| periodic-abcde-200k     | 2       | 2,853         | n/a          | `3cb189a64fce9604af88fc3a1b1b4054b1c076bd9f0621584844e05eb6339870` | `24a7979ddb84c3eefb28a14793d9a66bfbc1e8c8ce61b326c699458dc9e951c5` |
+| small-alpha-multi-1400  | 2       | 231           | 169          | `9f089e3ac9defbfbd82c19370b93e716d3f35ae2b500d4dd4e2655531423ad8b` | `0a8c1bc877ff95d68eaea55b7112864aab6b4f048bafc7502419b2d9f7e14406` |
+| periodic-abcde-200k     | 2       | 2,820         | n/a          | `39f3ef856d8b1099306bd1c3272c176cd237c4f5ae8395c5562b2483c6d17327` | `24a7979ddb84c3eefb28a14793d9a66bfbc1e8c8ce61b326c699458dc9e951c5` |
 | silesia-100m            | 2       | 104,862,404   | 35,495,150   | `75561d5802aec1cfcfb8eec0a66c1a9883f93806e58b8209b1bf52855aab1458` | `89ed4fcaea193564aa75b37f596ccee2687985b4584ea29b8b8e72f36ef27579` |
 
 The complex Huffman writer can now describe arbitrary code lengths using a
 generated code-length-code tree, and q2 low-alphabet chunks use frequency
-weighted literal, command, and distance lengths. This improves the irregular
-small-alphabet fixture from 306 to 256 bytes. The highly regular 200 KiB fixture
-is slightly larger than the fixed-length version because weighted tree metadata
-costs more than it saves there. Silesia remains unchanged because the
+weighted literal, command, and distance lengths when they are smaller than the
+fixed-length alternative. This improves the irregular small-alphabet fixture
+from 306 to 231 bytes while preserving the 2,820-byte fixed-tree result for the
+highly regular 200 KiB fixture. Silesia remains unchanged because the
 conservative natural-data gate still falls back to stored chunks.

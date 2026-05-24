@@ -961,6 +961,7 @@ fn brotli_write_simple_lz77_metablock(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
   is_last : Bool,
+  weighted : Bool,
 ) -> Unit raise FzipError {
   let literals = match brotli_collect_unique_literals(data, data.length()) {
     Some(literals) => literals
@@ -999,24 +1000,48 @@ fn brotli_write_simple_lz77_metablock(
       )
     }
   }
-  let literal_spec = brotli_make_weighted_huffman_spec(
-    literals.symbols,
-    literals.count,
-    literal_frequencies,
-    brotli_num_literal_symbols,
-    brotli_num_literal_symbols,
-  )
-  let command_spec = brotli_make_weighted_huffman_spec(
-    command_symbols, command_count, command_frequencies, brotli_num_command_symbols,
-    brotli_num_command_symbols,
-  )
-  let distance_spec = brotli_make_weighted_huffman_spec(
-    distance_symbols,
-    distance_count,
-    distance_frequencies,
-    brotli_distance_alphabet_size(0, 0, 24),
-    brotli_distance_alphabet_size(0, 0, 24),
-  )
+  let literal_spec = if weighted {
+    brotli_make_weighted_huffman_spec(
+      literals.symbols,
+      literals.count,
+      literal_frequencies,
+      brotli_num_literal_symbols,
+      brotli_num_literal_symbols,
+    )
+  } else {
+    brotli_make_huffman_spec(
+      literals.symbols,
+      literals.count,
+      brotli_num_literal_symbols,
+      brotli_num_literal_symbols,
+    )
+  }
+  let command_spec = if weighted {
+    brotli_make_weighted_huffman_spec(
+      command_symbols, command_count, command_frequencies, brotli_num_command_symbols,
+      brotli_num_command_symbols,
+    )
+  } else {
+    brotli_make_huffman_spec(
+      command_symbols, command_count, brotli_num_command_symbols, brotli_num_command_symbols,
+    )
+  }
+  let distance_spec = if weighted {
+    brotli_make_weighted_huffman_spec(
+      distance_symbols,
+      distance_count,
+      distance_frequencies,
+      brotli_distance_alphabet_size(0, 0, 24),
+      brotli_distance_alphabet_size(0, 0, 24),
+    )
+  } else {
+    brotli_make_huffman_spec(
+      distance_symbols,
+      distance_count,
+      brotli_distance_alphabet_size(0, 0, 24),
+      brotli_distance_alphabet_size(0, 0, 24),
+    )
+  }
   brotli_write_metablock_header(writer, data.length(), is_last, false)
   writer.write_bits(1, 0) // one literal block type
   writer.write_bits(1, 0) // one command block type
@@ -1077,12 +1102,21 @@ fn brotli_encode_simple_lz77(
   opts : BrotliOptions,
   commands : Array[BrotliEncodeCommand],
 ) -> FixedArray[Byte] raise FzipError {
-  let writer = BrotliBitWriter::new(
+  let weighted = BrotliBitWriter::new(
     128 + data.length() * 4 + commands.length() * 8,
   )
-  brotli_encode_window_bits(writer, opts.window_bits)
-  brotli_write_simple_lz77_metablock(writer, data, commands, true)
-  writer.finish()
+  brotli_encode_window_bits(weighted, opts.window_bits)
+  brotli_write_simple_lz77_metablock(weighted, data, commands, true, true)
+  let fixed = BrotliBitWriter::new(
+    128 + data.length() * 4 + commands.length() * 8,
+  )
+  brotli_encode_window_bits(fixed, opts.window_bits)
+  brotli_write_simple_lz77_metablock(fixed, data, commands, true, false)
+  if weighted.bit_pos < fixed.bit_pos {
+    weighted.finish()
+  } else {
+    fixed.finish()
+  }
 }
 
 ///|
@@ -1113,11 +1147,19 @@ fn brotli_try_compressed_chunk(
 ) -> BrotliBitWriter? raise FzipError {
   match brotli_build_simple_lz77_commands(data) {
     Some(commands) => {
-      let writer = BrotliBitWriter::new(
+      let fixed = BrotliBitWriter::new(
         128 + data.length() * 4 + commands.length() * 8,
       )
-      brotli_write_simple_lz77_metablock(writer, data, commands, false)
-      Some(writer)
+      brotli_write_simple_lz77_metablock(fixed, data, commands, false, false)
+      let weighted = BrotliBitWriter::new(
+        128 + data.length() * 4 + commands.length() * 8,
+      )
+      brotli_write_simple_lz77_metablock(weighted, data, commands, false, true)
+      if weighted.bit_pos < fixed.bit_pos {
+        Some(weighted)
+      } else {
+        Some(fixed)
+      }
     }
     None => None
   }
