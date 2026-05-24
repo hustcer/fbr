@@ -977,9 +977,9 @@ test "brotli_sync q1 round-trips large input across meta-blocks" {
 }
 
 ///|
-test "brotli_sync q0 through q9 round-trip" {
+test "brotli_sync q0 through q11 round-trip" {
   let input : FixedArray[Byte] = [0, 1, 1, 2, 3, 5, 8, 13]
-  for quality in 0..<=9 {
+  for quality in 0..<=11 {
     let compressed = brotli_sync(input, opts={ quality, window_bits: 22 })
     let decoded = unbrotli_sync(compressed)
     assert_eq(decoded.length(), input.length())
@@ -1001,13 +1001,13 @@ test "brotli_sync default quality round-trips" {
 }
 
 ///|
-test "brotli_sync rejects unsupported high quality phase" {
+test "brotli_sync rejects invalid quality" {
   let input : FixedArray[Byte] = [1]
-  let p4 : Result[FixedArray[Byte], FzipError] = try? brotli_sync(input, opts={
-    quality: 10,
+  let result : Result[FixedArray[Byte], FzipError] = try? brotli_sync(input, opts={
+    quality: 12,
     window_bits: 22,
   })
-  assert_brotli_error(p4, InvalidZipData)
+  assert_brotli_error(result, InvalidZipData)
 }
 
 ///|
