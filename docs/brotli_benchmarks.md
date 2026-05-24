@@ -1815,3 +1815,36 @@ Results:
 The Silesia 1 MiB q9 gap drops from 12.51% to 7.33%; q10 drops from 19.18%
 to 16.76%. P3/P4 still need stronger parsing and entropy modeling to reach the
 final 5% target.
+
+## 2026-05-25 — q2 Chunk Distance-Cache State
+
+A 512 KiB high-quality chunk-size trial produced a smaller 287,762-byte
+Silesia stream, but Google Brotli rejected it. The failure exposed a chunked
+encoder correctness issue: LZ77 command building restarted the recent-distance
+cache for every compressed chunk, while Brotli decoders preserve that cache
+across meta-blocks.
+
+The q2 chunked path now threads a persistent recent-distance cache into LZ77
+command building. The chunk writer snapshots and restores the cache when a
+compressed candidate is rejected in favor of a stored meta-block, since stored
+blocks do not update recent distances.
+
+Validation commands:
+
+```nu
+moon fmt
+moon test --target native --filter '*compresses chunked large input*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+```
+
+Results:
+
+| Corpus                       | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ---------------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m                   | 2       | 325,896        | 325,896   | 320,418      | Valid external decode    |
+| periodic-allbytes-200k       | 2       | 350            | 350       | n/a          | External decode verified |
+
+This is a correctness foundation for future multi-meta-block compressed
+streams. It does not change current q2 ratio because the retained chunk size
+still produces one compressed chunk on the 1 MiB Silesia slice.

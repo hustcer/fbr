@@ -1506,6 +1506,24 @@ fn brotli_update_distance_cache(
 }
 
 ///|
+fn brotli_copy_distance_cache(
+  distance_cache : FixedArray[Int],
+) -> FixedArray[Int] {
+  [distance_cache[0], distance_cache[1], distance_cache[2], distance_cache[3]]
+}
+
+///|
+fn brotli_commit_distance_cache(
+  target : FixedArray[Int],
+  source : FixedArray[Int],
+) -> Unit {
+  target[0] = source[0]
+  target[1] = source[1]
+  target[2] = source[2]
+  target[3] = source[3]
+}
+
+///|
 fn brotli_add_unique_symbol(
   symbols : FixedArray[Int],
   count : Int,
@@ -2107,6 +2125,18 @@ fn brotli_build_simple_lz77_commands(
   data : FixedArray[Byte],
   hash_config : BrotliHashConfig,
 ) -> Array[BrotliEncodeCommand]? {
+  let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
+  brotli_build_simple_lz77_commands_with_distance_cache(
+    data, hash_config, distance_cache,
+  )
+}
+
+///|
+fn brotli_build_simple_lz77_commands_with_distance_cache(
+  data : FixedArray[Byte],
+  hash_config : BrotliHashConfig,
+  distance_cache : FixedArray[Int],
+) -> Array[BrotliEncodeCommand]? {
   if data.length() < 8 || data.length() > 1048576 {
     return None
   }
@@ -2121,7 +2151,6 @@ fn brotli_build_simple_lz77_commands(
   let previous = brotli_previous_match_positions(data, hash_config)
   let mut literal_start = 0
   let mut position = 0
-  let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
   while position < data.length() {
     let (match_length, distance) = brotli_longest_previous_hash_match_with_cache(
       data, previous, position, hash_config, distance_cache,
@@ -3341,16 +3370,26 @@ fn brotli_try_compressed_chunk(
   base_offset : Int,
   window_bits : Int,
   quality : Int,
+  distance_cache : FixedArray[Int],
 ) -> BrotliBitWriter? raise FzipError {
   if quality <= 2 && data.length() >= 8192 {
     let natural_config = brotli_natural_hash_config_for_quality(quality)
-    return brotli_try_compressed_commands(
+    let chunk_cache = brotli_copy_distance_cache(distance_cache)
+    let commands = brotli_build_simple_lz77_commands_with_distance_cache(
+      data, natural_config, chunk_cache,
+    )
+    let candidate = brotli_try_compressed_commands(
       data,
-      brotli_build_simple_lz77_commands(data, natural_config),
+      commands,
       false,
       None,
       quality,
     )
+    match candidate {
+      Some(_) => brotli_commit_distance_cache(distance_cache, chunk_cache)
+      None => ()
+    }
+    return candidate
   }
   let match_commands = brotli_build_simple_lz77_commands(data, hash_config)
   let best = brotli_try_compressed_commands(
@@ -3432,11 +3471,13 @@ fn brotli_encode_chunked_standard(
   let writer = BrotliBitWriter::new(data.length() + 8 + chunk_count * 16)
   brotli_encode_window_bits(writer, opts.window_bits)
   let hash_config = brotli_hash_config_for_quality(opts.quality)
+  let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
   let mut offset = 0
   while offset < data.length() {
     let remaining = data.length() - offset
     let length = if remaining > chunk_size { chunk_size } else { remaining }
     let chunk = slc(data, offset, e=offset + length)
+    let previous_distance_cache = brotli_copy_distance_cache(distance_cache)
     match
       brotli_try_compressed_chunk(
         chunk,
@@ -3444,14 +3485,19 @@ fn brotli_encode_chunked_standard(
         offset,
         opts.window_bits,
         opts.quality,
+        distance_cache,
       ) {
       Some(compressed) =>
         if shft(compressed.bit_pos) + 1 < length + 16 {
           writer.write_from_bits(compressed.buf, compressed.bit_pos)
         } else {
+          brotli_commit_distance_cache(distance_cache, previous_distance_cache)
           brotli_write_uncompressed_metablock(writer, data, offset, length)
         }
-      None => brotli_write_uncompressed_metablock(writer, data, offset, length)
+      None => {
+        brotli_commit_distance_cache(distance_cache, previous_distance_cache)
+        brotli_write_uncompressed_metablock(writer, data, offset, length)
+      }
     }
     offset += length
   }
