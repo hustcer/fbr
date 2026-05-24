@@ -1252,6 +1252,35 @@ test "brotli_sync q2 splits LZ77 command literal blocks" {
 }
 
 ///|
+test "brotli_sync q2 writes UTF-8 context literal trees" {
+  let input = FixedArray::make(4096, b'\x00')
+  let pattern : FixedArray[Byte] = [b' ', b'A', b'1', b'.', b'x', b'e']
+  for i in 0..<input.length() {
+    input[i] = pattern[i % pattern.length()]
+  }
+  let commands : Array[BrotliEncodeCommand] = []
+  commands.push(brotli_make_encode_command(0, input.length(), 0, 0, false))
+  let weighted = BrotliBitWriter::new(
+    128 + input.length() * 4 + commands.length() * 8,
+  )
+  brotli_write_simple_lz77_metablock(weighted, input, commands, true, true)
+  let context = match
+    brotli_write_context_lz77_metablock(input, commands, true) {
+    Some(candidate) => candidate
+    None => fail("expected UTF-8 context candidate")
+  }
+  assert_true(context.bit_pos < weighted.bit_pos)
+  let encoded = BrotliBitWriter::new(16 + context.buf.length())
+  brotli_encode_window_bits(encoded, 22)
+  encoded.write_from_bits(context.buf, context.bit_pos)
+  let decoded = unbrotli_sync(encoded.finish())
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q9 admits shorter high-quality matches" {
   let input = FixedArray::make(2600, b'\x00')
   let pattern : FixedArray[Byte] = [
