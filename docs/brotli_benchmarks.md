@@ -1177,3 +1177,36 @@ Results:
 | periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified |
 
 The Silesia 1 MiB overhead is now 27.32% at q2 and 42.60% at q9.
+
+## 2026-05-24 — Deeper Natural Match Chains
+
+The q2 natural LZ77 parser now checks up to 8 previous hash-chain entries
+instead of 4. The q9 high-quality parser remains at 4 checks: an 8-check q9
+trial regressed Silesia from 376,154 to 376,699 bytes.
+
+Validation commands:
+
+```nu
+moon fmt
+moon test --target native
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 407,942        | 396,543   | 320,418      | Deeper natural chain win |
+| silesia-1m              | 9       | 376,154        | 376,154   | 263,791      | Unchanged                |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| split-literals-8k       | 9       | 3,434          | 3,434     | 3,418        | Unchanged                |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+| periodic-allbytes-200k  | 2       | 350            | 350       | n/a          | External decode verified |
+| periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified |
+
+The Silesia 1 MiB overhead is now 23.76% at q2 and remains 42.60% at q9.

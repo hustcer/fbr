@@ -40,7 +40,7 @@ fn brotli_natural_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
     table_size: 32768,
     table_mask: 32767,
     hash_bytes: 3,
-    max_match_checks: 4,
+    max_match_checks: 8,
     max_match_length: 16384,
     min_match_length: 16,
     scan_step: 1,

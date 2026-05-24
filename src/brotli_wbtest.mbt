@@ -1445,11 +1445,16 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   let four_byte = brotli_four_byte_hash_config(natural)
   inspect(natural.hash_bytes, content="3")
   inspect(natural.table_size, content="32768")
+  inspect(natural.max_match_checks, content="8")
   inspect(four_byte.hash_bytes, content="4")
   inspect(four_byte.table_size, content="32768")
   inspect(
     brotli_high_quality_hash_config_for_quality(9).table_size,
     content="32768",
+  )
+  inspect(
+    brotli_high_quality_hash_config_for_quality(9).max_match_checks,
+    content="4",
   )
   let best3 = match brotli_build_simple_lz77_commands(input, natural) {
     Some(commands) => brotli_write_best_lz77_metablock(input, commands, true)
