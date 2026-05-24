@@ -448,23 +448,126 @@ fn brotli_huffman_payload_from_lengths(
 }
 
 ///|
+fn brotli_complex_huffman_last_nonzero(spec : BrotliHuffmanSpec) -> Int {
+  let mut last_nonzero = 0
+  for i in 0..<spec.alphabet_size_limit {
+    if spec.code_lengths[i] != b'\x00' {
+      last_nonzero = i
+    }
+  }
+  last_nonzero
+}
+
+///|
+fn brotli_add_complex_code_length_symbols(
+  spec : BrotliHuffmanSpec,
+  code_length_symbols : FixedArray[Int],
+  count : Int,
+  last_nonzero : Int,
+) -> Int {
+  let mut count = count
+  let mut symbol = 0
+  while symbol <= last_nonzero {
+    let length = spec.code_lengths[symbol].to_int()
+    if length == 0 {
+      let mut run = 1
+      while symbol + run <= last_nonzero &&
+            spec.code_lengths[symbol + run] == b'\x00' {
+        run += 1
+      }
+      if run >= 3 {
+        count = brotli_add_unique_symbol(
+          code_length_symbols, count, brotli_repeat_zero_code_length,
+        )
+        let remainder = if run > 10 { 1 } else { run % 10 }
+        if remainder == 1 || remainder == 2 {
+          count = brotli_add_unique_symbol(code_length_symbols, count, 0)
+        }
+      } else {
+        count = brotli_add_unique_symbol(code_length_symbols, count, 0)
+      }
+      symbol += run
+    } else {
+      count = brotli_add_unique_symbol(code_length_symbols, count, length)
+      symbol += 1
+    }
+  }
+  count
+}
+
+///|
+fn brotli_write_complex_code_lengths(
+  writer : BrotliBitWriter,
+  spec : BrotliHuffmanSpec,
+  code_length_code_lengths : FixedArray[Byte],
+  last_nonzero : Int,
+) -> Unit raise FzipError {
+  let mut symbol = 0
+  while symbol <= last_nonzero {
+    let length = spec.code_lengths[symbol].to_int()
+    if length == 0 {
+      let mut run = 1
+      while symbol + run <= last_nonzero &&
+            spec.code_lengths[symbol + run] == b'\x00' {
+        run += 1
+      }
+      let run_length = run
+      while run > 10 {
+        let payload = brotli_huffman_payload_from_lengths(
+          code_length_code_lengths, brotli_num_code_length_codes, brotli_repeat_zero_code_length,
+        )
+        writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
+        writer.write_bits(3, 7)
+        run -= 10
+        let zero_payload = brotli_huffman_payload_from_lengths(
+          code_length_code_lengths, brotli_num_code_length_codes, 0,
+        )
+        writer.write_bits(
+          zero_payload.insert_extra_bits,
+          zero_payload.insert_extra,
+        )
+        run -= 1
+      }
+      if run >= 3 {
+        let payload = brotli_huffman_payload_from_lengths(
+          code_length_code_lengths, brotli_num_code_length_codes, brotli_repeat_zero_code_length,
+        )
+        writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
+        writer.write_bits(3, run - 3)
+        run = 0
+      }
+      while run > 0 {
+        let payload = brotli_huffman_payload_from_lengths(
+          code_length_code_lengths, brotli_num_code_length_codes, 0,
+        )
+        writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
+        run -= 1
+      }
+      symbol += run_length
+    } else {
+      let payload = brotli_huffman_payload_from_lengths(
+        code_length_code_lengths, brotli_num_code_length_codes, length,
+      )
+      writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
+      symbol += 1
+    }
+  }
+}
+
+///|
 fn brotli_write_complex_huffman(
   writer : BrotliBitWriter,
   spec : BrotliHuffmanSpec,
 ) -> Unit raise FzipError {
   writer.write_bits(2, 0) // complex Huffman marker, skip 0
+  let last_nonzero = brotli_complex_huffman_last_nonzero(spec)
   let code_length_symbols = FixedArray::make(brotli_num_code_length_codes, 0)
   let mut code_length_count = brotli_add_unique_symbol(
     code_length_symbols, 0, 0,
   )
-  for i in 0..<spec.alphabet_size_limit {
-    let length = spec.code_lengths[i].to_int()
-    if length != 0 {
-      code_length_count = brotli_add_unique_symbol(
-        code_length_symbols, code_length_count, length,
-      )
-    }
-  }
+  code_length_count = brotli_add_complex_code_length_symbols(
+    spec, code_length_symbols, code_length_count, last_nonzero,
+  )
   let padded_count = brotli_next_power_of_two(code_length_count)
   if padded_count > brotli_num_code_length_codes {
     raise fzip_err(BrotliInvalidHuffman, msg="code-length alphabet too large")
@@ -501,20 +604,9 @@ fn brotli_write_complex_huffman(
       }
     }
   }
-  let mut last_nonzero = 0
-  for i in 0..<spec.alphabet_size_limit {
-    if spec.code_lengths[i] != b'\x00' {
-      last_nonzero = i
-    }
-  }
-  for symbol in 0..<=last_nonzero {
-    let payload = brotli_huffman_payload_from_lengths(
-      code_length_code_lengths,
-      brotli_num_code_length_codes,
-      spec.code_lengths[symbol].to_int(),
-    )
-    writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
-  }
+  brotli_write_complex_code_lengths(
+    writer, spec, code_length_code_lengths, last_nonzero,
+  )
 }
 
 ///|

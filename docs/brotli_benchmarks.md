@@ -386,3 +386,37 @@ fields for minimum match length, scan step, command cap, copy-ratio admission,
 and whether dense-match sampling is required. The encoder still uses the
 previous dense-match configuration for all qualities until a stronger
 block/cost model can prove that a sparse natural-data chunk should be written.
+
+## 2026-05-24 — Complex Huffman Repeat-Zero RLE
+
+Complex Huffman tree encoding now uses Brotli code-length symbol 17 to encode
+runs of zero code lengths. Long zero runs are split with a literal zero between
+repeat-zero symbols because Brotli repeat codes accumulate repeat state when
+the same repeat symbol appears consecutively.
+
+Validation commands:
+
+```nu
+moon test --target native --filter '*complex command Huffman*'
+moon test --target native --filter '*high alphabet repetitive*'
+moon test --target native --filter '*chunked large input*'
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-abcde-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9 --json
+```
+
+Results:
+
+| Corpus                  | Quality | Previous MoonBit bytes | New MoonBit bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | ---------------------- | ----------------- | ------------ | ------------------------ |
+| small-alpha-multi-1400  | 2       | 231                    | 195               | 169          | External decode verified |
+| small-alpha-multi-1400  | 9       | 231                    | 195               | 69           | Uses same current backend |
+| periodic-abcde-200k     | 2       | 249                    | 240               | n/a          | External decode verified |
+| periodic-allbytes-200k  | 2       | 1,399                  | 1,399             | n/a          | Unchanged                |
+| silesia-1m              | 2       | 1,048,628              | 1,048,628         | 320,418      | Still stored fallback    |
+| silesia-1m              | 9       | 1,048,628              | 1,048,628         | 263,791      | Still stored fallback    |
+
+This narrows the synthetic q2 gap for sparse alphabets without relaxing the
+natural-data gate. Silesia remains unchanged because ordinary chunks still
+fall back to uncompressed meta-blocks.
