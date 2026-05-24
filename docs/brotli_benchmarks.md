@@ -1660,3 +1660,41 @@ Results:
 
 The Silesia 1 MiB q9 gap remains 12.51%; this expands dictionary transform
 coverage but does not address the remaining P3/P4 natural-corpus gap.
+
+## 2026-05-24 — q10/q11 High-Quality Parser Tuning
+
+Quality 10 and 11 now use a distinct high-quality hash configuration instead
+of reusing q9's parser limits. The q10/q11 parser checks deeper hash chains,
+accepts 5-byte matches, and allows a larger command budget. q9 stays on the
+previous exact-costed settings.
+
+Validation commands:
+
+```nu
+moon fmt
+moon test --target native --filter '*alternate hash candidates exact-costed*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 10 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 9,11 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 9,10,11 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 9,10,11 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 11
+```
+
+Results:
+
+| Corpus                       | Quality | Previous bytes | New bytes | Google bytes | Notes                     |
+| ---------------------------- | ------- | -------------- | --------- | ------------ | ------------------------- |
+| silesia-1m                   | 9       | 296,784        | 296,784   | 263,791      | q9 unchanged              |
+| silesia-1m                   | 10      | 296,784        | 288,988   | 242,485      | q10-specific parser win   |
+| silesia-1m                   | 11      | 296,784        | 288,988   | 239,314      | q11-specific parser win   |
+| split-literals-8k            | 9       | 3,434          | 3,434     | 3,418        | Unchanged                 |
+| split-literals-8k            | 10      | 3,434          | 3,434     | 3,420        | Unchanged                 |
+| split-literals-8k            | 11      | 3,434          | 3,434     | 3,420        | Unchanged                 |
+| small-alpha-multi-1400       | 9       | 179            | 179       | 69           | Unchanged                 |
+| small-alpha-multi-1400       | 10      | 179            | 179       | 63           | Unchanged                 |
+| small-alpha-multi-1400       | 11      | 179            | 179       | 55           | Unchanged                 |
+| periodic-allbytes-200k       | 11      | 350            | 350       | n/a          | External decode verified  |
+
+The Silesia 1 MiB q10 gap drops from 22.39% to 19.18%; q11 drops from 24.01%
+to 20.76%. q10/q11 still share the same parser and do not yet implement a
+full Zopfli/shortest-path backend.
