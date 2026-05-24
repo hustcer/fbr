@@ -1381,3 +1381,38 @@ Results:
 | periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified |
 
 The Silesia 1 MiB overhead remains 0.15% at q2 and is now 16.40% at q9.
+
+## 2026-05-24 — Encoder Distance-Cache Short Codes
+
+The LZ77 command builder now computes Brotli distance-cache short codes against
+the four recent distances instead of only using the implicit same-as-last
+command form. Nonzero short codes are emitted through the distance tree, while
+distance code 0 still uses the compact command-prefix form.
+
+Validation commands:
+
+```nu
+moon fmt
+moon test --target native --filter '*distance-cache short codes*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                         |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ----------------------------- |
+| silesia-1m              | 2       | 320,899        | 320,612   | 320,418      | Distance-cache code win       |
+| silesia-1m              | 9       | 307,056        | 306,645   | 263,791      | Distance-cache code win       |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                     |
+| split-literals-8k       | 9       | 3,434          | 3,434     | 3,418        | Unchanged                     |
+| small-alpha-multi-1400  | 2       | 195            | 193       | 169          | Small distance-cache win      |
+| small-alpha-multi-1400  | 9       | 195            | 193       | 69           | Small distance-cache win      |
+| periodic-allbytes-200k  | 2       | 350            | 350       | n/a          | External decode verified      |
+| periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified      |
+
+The Silesia 1 MiB overhead is now 0.06% at q2 and 16.25% at q9.

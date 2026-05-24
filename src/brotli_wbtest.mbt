@@ -1483,6 +1483,27 @@ test "brotli_sync q9 admits shorter high-quality matches" {
 }
 
 ///|
+test "brotli_sync encoder uses distance-cache short codes" {
+  let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
+  inspect(brotli_compute_distance_code(4, 64, distance_cache), content="0")
+  inspect(brotli_compute_distance_code(11, 64, distance_cache), content="1")
+  inspect(brotli_compute_distance_code(15, 64, distance_cache), content="2")
+  inspect(brotli_compute_distance_code(16, 64, distance_cache), content="3")
+  let same_distance = brotli_make_encode_command_with_distance_code(
+    0, 4, 8, 4, 0,
+  )
+  assert_false(brotli_command_uses_distance_symbol(same_distance))
+  let cached_distance = brotli_make_encode_command_with_distance_code(
+    4, 3, 8, 11, 1,
+  )
+  assert_true(brotli_command_uses_distance_symbol(cached_distance))
+  assert_eq(cached_distance.distance_prefix.symbol, 1)
+  brotli_update_distance_cache(distance_cache, 11, 1)
+  inspect(distance_cache[0], content="11")
+  inspect(distance_cache[1], content="4")
+}
+
+///|
 test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   let input = FixedArray::make(1400, b'\x00')
   let alphabet : FixedArray[Byte] = [b'A', b'B', b'C', b'D']

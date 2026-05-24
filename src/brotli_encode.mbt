@@ -1441,6 +1441,68 @@ fn brotli_distance_prefix_for_distance(
 }
 
 ///|
+fn brotli_distance_prefix_for_code(
+  distance_code : Int,
+) -> BrotliCommandPrefix raise FzipError {
+  if distance_code < 0 {
+    raise fzip_err(BrotliInvalidDistance, msg="negative Brotli distance code")
+  }
+  if distance_code < brotli_num_distance_short_codes {
+    return {
+      symbol: distance_code,
+      insert_extra: 0,
+      copy_extra: 0,
+      insert_extra_bits: 0,
+      copy_extra_bits: 0,
+    }
+  }
+  brotli_distance_prefix_for_distance(
+    distance_code - brotli_num_distance_short_codes + 1,
+  )
+}
+
+///|
+fn brotli_compute_distance_code(
+  distance : Int,
+  max_distance : Int,
+  distance_cache : FixedArray[Int],
+) -> Int {
+  if distance <= max_distance {
+    let distance_plus_3 = distance + 3
+    let offset0 = distance_plus_3 - distance_cache[0]
+    let offset1 = distance_plus_3 - distance_cache[1]
+    if distance == distance_cache[0] {
+      return 0
+    } else if distance == distance_cache[1] {
+      return 1
+    } else if offset0 >= 0 && offset0 < 7 {
+      return (0x9750468 >> (4 * offset0)) & 0xf
+    } else if offset1 >= 0 && offset1 < 7 {
+      return (0xfdb1ace >> (4 * offset1)) & 0xf
+    } else if distance == distance_cache[2] {
+      return 2
+    } else if distance == distance_cache[3] {
+      return 3
+    }
+  }
+  distance + brotli_num_distance_short_codes - 1
+}
+
+///|
+fn brotli_update_distance_cache(
+  distance_cache : FixedArray[Int],
+  distance : Int,
+  distance_code : Int,
+) -> Unit {
+  if distance_code > 0 {
+    distance_cache[3] = distance_cache[2]
+    distance_cache[2] = distance_cache[1]
+    distance_cache[1] = distance_cache[0]
+    distance_cache[0] = distance
+  }
+}
+
+///|
 fn brotli_add_unique_symbol(
   symbols : FixedArray[Int],
   count : Int,
@@ -1544,6 +1606,47 @@ fn brotli_make_encode_command_with_distance_mode(
     has_copy,
     command,
     distance_prefix,
+  }
+}
+
+///|
+fn brotli_make_encode_command_with_distance_code(
+  insert_start : Int,
+  insert_length : Int,
+  copy_length : Int,
+  distance : Int,
+  distance_code : Int,
+) -> BrotliEncodeCommand raise FzipError {
+  if distance_code == 0 {
+    return brotli_make_encode_command_with_distance_mode(
+      insert_start, insert_length, copy_length, distance, true, false,
+    )
+  }
+  let command = brotli_find_command_prefix(insert_length, copy_length, true)
+  {
+    insert_start,
+    insert_length,
+    copy_length,
+    has_copy: true,
+    command,
+    distance_prefix: brotli_distance_prefix_for_code(distance_code),
+  }
+}
+
+///|
+fn brotli_try_make_encode_command_with_distance_code(
+  insert_start : Int,
+  insert_length : Int,
+  copy_length : Int,
+  distance : Int,
+  distance_code : Int,
+) -> BrotliEncodeCommand? {
+  let result : Result[BrotliEncodeCommand, FzipError] = try? brotli_make_encode_command_with_distance_code(
+    insert_start, insert_length, copy_length, distance, distance_code,
+  )
+  match result {
+    Ok(command) => Some(command)
+    Err(_) => None
   }
 }
 
@@ -1993,7 +2096,7 @@ fn brotli_build_simple_lz77_commands(
   let previous = brotli_previous_match_positions(data, hash_config)
   let mut literal_start = 0
   let mut position = 0
-  let mut last_distance = 4
+  let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
   while position < data.length() {
     let (match_length, distance) = brotli_longest_previous_hash_match(
       data, previous, position, hash_config,
@@ -2012,32 +2115,25 @@ fn brotli_build_simple_lz77_commands(
         }
       }
       let insert_length = position - literal_start
-      let command = if distance == last_distance {
-        match
-          brotli_try_make_encode_command_with_distance_mode(
-            literal_start, insert_length, match_length, distance, true, false,
-          ) {
-          Some(command) => command
-          None =>
-            match
-              brotli_try_make_encode_command_with_distance_mode(
-                literal_start, insert_length, match_length, distance, true, true,
-              ) {
-              Some(command) => command
-              None => return None
-            }
-        }
-      } else {
-        match
-          brotli_try_make_encode_command_with_distance_mode(
-            literal_start, insert_length, match_length, distance, true, true,
-          ) {
-          Some(command) => command
-          None => return None
-        }
+      let distance_code = brotli_compute_distance_code(
+        distance, position, distance_cache,
+      )
+      let command = match
+        brotli_try_make_encode_command_with_distance_code(
+          literal_start, insert_length, match_length, distance, distance_code,
+        ) {
+        Some(command) => command
+        None =>
+          match
+            brotli_try_make_encode_command_with_distance_mode(
+              literal_start, insert_length, match_length, distance, true, true,
+            ) {
+            Some(command) => command
+            None => return None
+          }
       }
       commands.push(command)
-      last_distance = distance
+      brotli_update_distance_cache(distance_cache, distance, distance_code)
       if commands.length() > hash_config.max_commands {
         return None
       }
