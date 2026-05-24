@@ -1353,10 +1353,31 @@ test "brotli_sync q2 splits LZ77 command literal blocks" {
 
 ///|
 test "brotli_sync q2 writes UTF-8 context literal trees" {
-  let input = FixedArray::make(4096, b'\x00')
-  let pattern : FixedArray[Byte] = [b' ', b'A', b'1', b'.', b'x', b'e']
-  for i in 0..<input.length() {
-    input[i] = pattern[i % pattern.length()]
+  let input = FixedArray::make(4096, b'e')
+  let previous_1 = FixedArray::make(8, 0)
+  let previous_2 = FixedArray::make(8, 0)
+  let found = FixedArray::make(8, false)
+  for p2 in 0..<256 {
+    for p1 in 0..<256 {
+      let tree = brotli_utf8_context_tree8(brotli_literal_context_id(2, p1, p2))
+      if !found[tree] {
+        previous_1[tree] = p1
+        previous_2[tree] = p2
+        found[tree] = true
+      }
+    }
+  }
+  for tree in 0..<8 {
+    assert_true(found[tree])
+  }
+  let mut offset = 0
+  while offset + 24 <= input.length() {
+    for tree in 0..<8 {
+      input[offset] = previous_2[tree].to_byte()
+      input[offset + 1] = previous_1[tree].to_byte()
+      input[offset + 2] = (97 + tree).to_byte()
+      offset += 3
+    }
   }
   let commands : Array[BrotliEncodeCommand] = []
   commands.push(brotli_make_encode_command(0, input.length(), 0, 0, false))
@@ -1376,6 +1397,15 @@ test "brotli_sync q2 writes UTF-8 context literal trees" {
     None => fail("expected four-tree UTF-8 context candidate")
   }
   assert_true(context4.bit_pos < context.bit_pos)
+  inspect(brotli_utf8_context_tree8(0), content="0")
+  inspect(brotli_utf8_context_tree8(12), content="2")
+  inspect(brotli_utf8_context_tree8(56), content="6")
+  let context8 = match
+    brotli_write_context8_lz77_metablock(input, commands, true) {
+    Some(candidate) => candidate
+    None => fail("expected eight-tree UTF-8 context candidate")
+  }
+  assert_true(context8.bit_pos > 0)
   let encoded = BrotliBitWriter::new(16 + context.buf.length())
   brotli_encode_window_bits(encoded, 22)
   encoded.write_from_bits(context.buf, context.bit_pos)
@@ -1391,6 +1421,14 @@ test "brotli_sync q2 writes UTF-8 context literal trees" {
   assert_eq(decoded4.length(), input.length())
   for i in 0..<decoded4.length() {
     assert_eq(decoded4[i], input[i])
+  }
+  let encoded8 = BrotliBitWriter::new(16 + context8.buf.length())
+  brotli_encode_window_bits(encoded8, 22)
+  encoded8.write_from_bits(context8.buf, context8.bit_pos)
+  let decoded8 = unbrotli_sync(encoded8.finish())
+  assert_eq(decoded8.length(), input.length())
+  for i in 0..<decoded8.length() {
+    assert_eq(decoded8[i], input[i])
   }
 }
 
