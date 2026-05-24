@@ -207,85 +207,73 @@ fn brotli_previous_match_positions(
   data : FixedArray[Byte],
   config : BrotliHashConfig,
 ) -> FixedArray[Int] {
-  let previous = FixedArray::make(data.length(), -1)
+  let len = data.length()
+  let previous = FixedArray::make(len, -1)
   let table = FixedArray::make(config.table_size, -1)
   let hash_bytes = if config.hash_bytes >= 4 { 4 } else { 3 }
-  if data.length() < hash_bytes {
+  if len < hash_bytes {
     return previous
   }
-  for position in 0..<(data.length() - hash_bytes + 1) {
-    let hash = brotli_match_hash(data, position, config)
-    previous[position] = table[hash]
-    table[hash] = position
+  let table_mask = config.table_mask
+  let end = len - hash_bytes + 1
+  if hash_bytes >= 4 {
+    for position in 0..<end {
+      let hash = (
+          (data[position].to_int() * 257) ^
+          (data[position + 1].to_int() * 131) ^
+          (data[position + 2].to_int() * 17) ^
+          data[position + 3].to_int()
+        ) &
+        table_mask
+      previous[position] = table[hash]
+      table[hash] = position
+    }
+  } else {
+    for position in 0..<end {
+      let hash = (
+          (data[position].to_int() * 257) ^
+          (data[position + 1].to_int() * 17) ^
+          data[position + 2].to_int()
+        ) &
+        table_mask
+      previous[position] = table[hash]
+      table[hash] = position
+    }
   }
   previous
 }
 
 ///|
-fn brotli_match_length_at_distance(
-  data : FixedArray[Byte],
-  position : Int,
-  distance : Int,
-  config : BrotliHashConfig,
-) -> Int {
-  if distance <= 0 || distance > position || position + 3 >= data.length() {
-    return 0
-  }
-  let candidate = position - distance
-  let has_min_match = data[position] == data[candidate] &&
-    data[position + 1] == data[candidate + 1] &&
-    data[position + 2] == data[candidate + 2] &&
-    data[position + 3] == data[candidate + 3]
-  if !has_min_match {
-    return 0
-  }
-  let mut length = 4
-  while length < config.max_match_length &&
-        position + length < data.length() &&
-        data[position + length] == data[candidate + length] {
-    length += 1
-  }
-  length
-}
+/// Index/delta pairs for Brotli's recent-distance short codes 0..15.
+/// `(base_index, delta)`: distance = `distance_cache[base_index] + delta`.
+/// Mirrors the if-else chain in `brotli_distance_cache_candidate`.
+let brotli_distance_cache_lookup : FixedArray[Int] = [
+  0, 0, // code 0: cache[0]
+   1, 0, // code 1: cache[1]
+   2, 0, // code 2: cache[2]
+   3, 0, // code 3: cache[3]
+   0, -1, // code 4: cache[0] - 1
+   0, 1, // code 5: cache[0] + 1
+   0, -2, // code 6
+   0, 2, // code 7
+   0, -3, // code 8
+   0, 3, // code 9
+   1, -1, // code 10
+   1, 1, // code 11
+   1, -2, // code 12
+   1, 2, // code 13
+   1, -3, // code 14
+   1, 3, // code 15
+]
 
 ///|
 fn brotli_distance_cache_candidate(
   distance_cache : FixedArray[Int],
   code : Int,
 ) -> Int {
-  if code == 0 {
-    distance_cache[0]
-  } else if code == 1 {
-    distance_cache[1]
-  } else if code == 2 {
-    distance_cache[2]
-  } else if code == 3 {
-    distance_cache[3]
-  } else if code == 4 {
-    distance_cache[0] - 1
-  } else if code == 5 {
-    distance_cache[0] + 1
-  } else if code == 6 {
-    distance_cache[0] - 2
-  } else if code == 7 {
-    distance_cache[0] + 2
-  } else if code == 8 {
-    distance_cache[0] - 3
-  } else if code == 9 {
-    distance_cache[0] + 3
-  } else if code == 10 {
-    distance_cache[1] - 1
-  } else if code == 11 {
-    distance_cache[1] + 1
-  } else if code == 12 {
-    distance_cache[1] - 2
-  } else if code == 13 {
-    distance_cache[1] + 2
-  } else if code == 14 {
-    distance_cache[1] - 3
-  } else {
-    distance_cache[1] + 3
-  }
+  let base_index = brotli_distance_cache_lookup[code * 2]
+  let delta = brotli_distance_cache_lookup[code * 2 + 1]
+  distance_cache[base_index] + delta
 }
 
 ///|
@@ -296,35 +284,63 @@ fn brotli_longest_previous_hash_match_with_cache(
   config : BrotliHashConfig,
   distance_cache : FixedArray[Int],
 ) -> (Int, Int) {
-  if position + 3 >= data.length() {
+  let len = data.length()
+  if position + 3 >= len {
     return (0, 0)
   }
+  let max_match_length = config.max_match_length
+  let b0 = data[position]
+  let b1 = data[position + 1]
+  let b2 = data[position + 2]
+  let b3 = data[position + 3]
   let mut best_length = 0
   let mut best_distance = 0
-  for code in 0..<config.max_distance_cache_codes {
+  // Inlined distance-cache probes
+  let max_cache_codes = config.max_distance_cache_codes
+  for code in 0..<max_cache_codes {
     let distance = brotli_distance_cache_candidate(distance_cache, code)
-    let length = brotli_match_length_at_distance(
-      data, position, distance, config,
-    )
-    if length > best_length {
-      best_length = length
-      best_distance = distance
+    if distance > 0 && distance <= position {
+      let candidate = position - distance
+      if data[candidate] == b0 &&
+        data[candidate + 1] == b1 &&
+        data[candidate + 2] == b2 &&
+        data[candidate + 3] == b3 {
+        let mut length = 4
+        while length < max_match_length &&
+              position + length < len &&
+              data[position + length] == data[candidate + length] {
+          length += 1
+        }
+        if length > best_length {
+          best_length = length
+          best_distance = distance
+        }
+      }
     }
   }
+  // Inlined hash-chain probes
+  let max_match_checks = config.max_match_checks
   let mut candidate = if position < previous.length() {
     previous[position]
   } else {
     -1
   }
   let mut checked = 0
-  while candidate >= 0 && checked < config.max_match_checks {
-    let distance = position - candidate
-    let length = brotli_match_length_at_distance(
-      data, position, distance, config,
-    )
-    if length > best_length {
-      best_length = length
-      best_distance = distance
+  while candidate >= 0 && checked < max_match_checks {
+    if data[candidate] == b0 &&
+      data[candidate + 1] == b1 &&
+      data[candidate + 2] == b2 &&
+      data[candidate + 3] == b3 {
+      let mut length = 4
+      while length < max_match_length &&
+            position + length < len &&
+            data[position + length] == data[candidate + length] {
+        length += 1
+      }
+      if length > best_length {
+        best_length = length
+        best_distance = position - candidate
+      }
     }
     candidate = previous[candidate]
     checked += 1
