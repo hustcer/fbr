@@ -200,17 +200,95 @@ fn brotli_previous_match_positions(
 }
 
 ///|
-fn brotli_longest_previous_hash_match(
+fn brotli_match_length_at_distance(
+  data : FixedArray[Byte],
+  position : Int,
+  distance : Int,
+  config : BrotliHashConfig,
+) -> Int {
+  if distance <= 0 || distance > position || position + 3 >= data.length() {
+    return 0
+  }
+  let candidate = position - distance
+  let has_min_match = data[position] == data[candidate] &&
+    data[position + 1] == data[candidate + 1] &&
+    data[position + 2] == data[candidate + 2] &&
+    data[position + 3] == data[candidate + 3]
+  if !has_min_match {
+    return 0
+  }
+  let mut length = 4
+  while length < config.max_match_length &&
+        position + length < data.length() &&
+        data[position + length] == data[candidate + length] {
+    length += 1
+  }
+  length
+}
+
+///|
+fn brotli_distance_cache_candidate(
+  distance_cache : FixedArray[Int],
+  code : Int,
+) -> Int {
+  if code == 0 {
+    distance_cache[0]
+  } else if code == 1 {
+    distance_cache[1]
+  } else if code == 2 {
+    distance_cache[2]
+  } else if code == 3 {
+    distance_cache[3]
+  } else if code == 4 {
+    distance_cache[0] - 1
+  } else if code == 5 {
+    distance_cache[0] + 1
+  } else if code == 6 {
+    distance_cache[0] - 2
+  } else if code == 7 {
+    distance_cache[0] + 2
+  } else if code == 8 {
+    distance_cache[0] - 3
+  } else if code == 9 {
+    distance_cache[0] + 3
+  } else if code == 10 {
+    distance_cache[1] - 1
+  } else if code == 11 {
+    distance_cache[1] + 1
+  } else if code == 12 {
+    distance_cache[1] - 2
+  } else if code == 13 {
+    distance_cache[1] + 2
+  } else if code == 14 {
+    distance_cache[1] - 3
+  } else {
+    distance_cache[1] + 3
+  }
+}
+
+///|
+fn brotli_longest_previous_hash_match_with_cache(
   data : FixedArray[Byte],
   previous : FixedArray[Int],
   position : Int,
   config : BrotliHashConfig,
+  distance_cache : FixedArray[Int],
 ) -> (Int, Int) {
   if position + 3 >= data.length() {
     return (0, 0)
   }
   let mut best_length = 0
   let mut best_distance = 0
+  for code in 0..<brotli_num_distance_short_codes {
+    let distance = brotli_distance_cache_candidate(distance_cache, code)
+    let length = brotli_match_length_at_distance(
+      data, position, distance, config,
+    )
+    if length > best_length {
+      best_length = length
+      best_distance = distance
+    }
+  }
   let mut candidate = if position < previous.length() {
     previous[position]
   } else {
@@ -219,21 +297,12 @@ fn brotli_longest_previous_hash_match(
   let mut checked = 0
   while candidate >= 0 && checked < config.max_match_checks {
     let distance = position - candidate
-    let has_min_match = data[position] == data[candidate] &&
-      data[position + 1] == data[candidate + 1] &&
-      data[position + 2] == data[candidate + 2] &&
-      data[position + 3] == data[candidate + 3]
-    if has_min_match {
-      let mut length = 4
-      while length < config.max_match_length &&
-            position + length < data.length() &&
-            data[position + length] == data[candidate + length] {
-        length += 1
-      }
-      if length > best_length {
-        best_length = length
-        best_distance = distance
-      }
+    let length = brotli_match_length_at_distance(
+      data, position, distance, config,
+    )
+    if length > best_length {
+      best_length = length
+      best_distance = distance
     }
     candidate = previous[candidate]
     checked += 1

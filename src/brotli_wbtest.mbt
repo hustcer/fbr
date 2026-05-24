@@ -1504,6 +1504,21 @@ test "brotli_sync encoder uses distance-cache short codes" {
 }
 
 ///|
+test "brotli_sync matcher probes distance-cache candidates" {
+  let input : FixedArray[Byte] = [
+    b'a', b'b', b'c', b'd', b'0', b'1', b'a', b'b', b'c', b'd', b'2', b'3',
+  ]
+  let config = brotli_high_quality_hash_config_for_quality(9)
+  let previous = brotli_previous_match_positions(input, config)
+  let distance_cache : FixedArray[Int] = [6, 11, 15, 16]
+  let (length, distance) = brotli_longest_previous_hash_match_with_cache(
+    input, previous, 6, config, distance_cache,
+  )
+  inspect(length, content="4")
+  inspect(distance, content="6")
+}
+
+///|
 test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   let input = FixedArray::make(1400, b'\x00')
   let alphabet : FixedArray[Byte] = [b'A', b'B', b'C', b'D']

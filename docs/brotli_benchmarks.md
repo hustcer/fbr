@@ -1525,3 +1525,42 @@ Results:
 
 The Silesia 1 MiB result is now 1.88% smaller than Google q2 and 13.17% larger
 than Google q9.
+
+## 2026-05-24 — Distance-Cache Match Probes
+
+The LZ77 match finder now probes the 16 Brotli recent-distance short-code
+candidates before walking the hash chain. Equal-length hash-chain matches no
+longer displace a recent-distance match, which lets the existing command
+builder emit cheaper distance symbols more often. A shortened-copy parser
+trial was rejected because it produced the same 298,536-byte q9 output while
+raising runtime to 129,817 ms. A relaxed lazy threshold was also rejected after
+regressing q9 to 303,496 bytes, and an 8-check q9 hash-chain trial remained
+byte-identical at 298,536 bytes.
+
+Validation commands:
+
+```nu
+moon fmt
+moon test --target native --filter '*matcher probes distance-cache candidates*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                       |
+| ----------------------- | ------- | -------------- | --------- | ------------ | --------------------------- |
+| silesia-1m              | 2       | 314,410        | 313,585   | 320,418      | Recent-distance probe win   |
+| silesia-1m              | 9       | 298,536        | 296,784   | 263,791      | Recent-distance probe win   |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                   |
+| split-literals-8k       | 9       | 3,434          | 3,434     | 3,418        | Unchanged                   |
+| small-alpha-multi-1400  | 2       | 193            | 179       | 169          | Recent-distance probe win   |
+| small-alpha-multi-1400  | 9       | 193            | 179       | 69           | Recent-distance probe win   |
+| periodic-allbytes-200k  | 2       | 350            | 350       | n/a          | External decode verified    |
+| periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified    |
+
+The Silesia 1 MiB result is now 2.13% smaller than Google q2 and 12.51% larger
+than Google q9.

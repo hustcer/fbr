@@ -2098,27 +2098,29 @@ fn brotli_build_simple_lz77_commands(
   let mut position = 0
   let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
   while position < data.length() {
-    let (match_length, distance) = brotli_longest_previous_hash_match(
-      data, previous, position, hash_config,
+    let (match_length, distance) = brotli_longest_previous_hash_match_with_cache(
+      data, previous, position, hash_config, distance_cache,
     )
     if match_length >= hash_config.min_match_length {
       if hash_config.min_match_length >= 6 && position + 1 < data.length() {
-        let (next_match_length, _) = brotli_longest_previous_hash_match(
+        let (next_match_length, _) = brotli_longest_previous_hash_match_with_cache(
           data,
           previous,
           position + 1,
           hash_config,
+          distance_cache,
         )
         if next_match_length > match_length {
           position += 1
           continue
         }
         if position + 2 < data.length() {
-          let (second_match_length, _) = brotli_longest_previous_hash_match(
+          let (second_match_length, _) = brotli_longest_previous_hash_match_with_cache(
             data,
             previous,
             position + 2,
             hash_config,
+            distance_cache,
           )
           if second_match_length > match_length {
             position += 2
@@ -2126,11 +2128,12 @@ fn brotli_build_simple_lz77_commands(
           }
         }
         if position + 3 < data.length() {
-          let (third_match_length, _) = brotli_longest_previous_hash_match(
+          let (third_match_length, _) = brotli_longest_previous_hash_match_with_cache(
             data,
             previous,
             position + 3,
             hash_config,
+            distance_cache,
           )
           if third_match_length > match_length {
             position += 3
