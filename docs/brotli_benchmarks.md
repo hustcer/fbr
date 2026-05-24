@@ -773,3 +773,35 @@ Results:
 The Silesia 1 MiB q2 overhead is now 44.24% versus Google q2. This improves
 ratio and reduces the ratio-harness time versus four 65 KiB long-match chunks,
 but the remaining gap still needs better token/block cost modeling.
+
+## 2026-05-24 — One-MiB Standard Chunks
+
+The q2+ chunked standard encoder now uses 1,048,575-byte chunks. The simple
+LZ77 builder accepts chunks up to 1 MiB, and the natural long-match command cap
+rises proportionally from 4,800 to 19,200 commands.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native --filter '*chunked large input*'
+moon test --target native --filter '*high alphabet repetitive*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 462,172        | 460,961   | 320,418      | Harness time 23,655 ms   |
+| periodic-allbytes-200k  | 2       | 494            | 494       | n/a          | External decode verified |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+
+The Silesia 1 MiB q2 overhead is now 43.86% versus Google q2. The small ratio
+gain is valid, but future work should focus on token/block cost modeling before
+raising chunk size further.

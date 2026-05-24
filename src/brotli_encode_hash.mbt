@@ -41,7 +41,7 @@ fn brotli_natural_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
     max_match_length: 4096,
     min_match_length: 16,
     scan_step: 1,
-    max_commands: 4800,
+    max_commands: 19200,
     min_copy_ratio_percent: 12,
     require_dense_match_density: false,
     density_sample_step: 256,
