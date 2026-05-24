@@ -740,3 +740,36 @@ At the selected 16-byte threshold, `split-literals-8k.bin` stays 3,434 bytes,
 `small-alpha-multi-1400.bin` stays 195 bytes for q2/q9, and
 `periodic-allbytes-200k.bin` stays 1,382 bytes with external decode verified.
 The Silesia 1 MiB q2 overhead is now 47.07% versus Google q2.
+
+## 2026-05-24 — Larger Standard Chunks
+
+The q2+ chunked standard encoder now uses 262,143-byte chunks instead of
+65,535-byte chunks. The simple LZ77 builder accepts chunks up to 256 KiB, and
+the natural long-match command cap rises proportionally from 1,200 to 4,800
+commands. The dense baseline remains capped at 1,200 commands.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native --filter '*chunked large input*'
+moon test --target native --filter '*high alphabet repetitive*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 471,230        | 462,172   | 320,418      | Harness time 22,755 ms   |
+| periodic-allbytes-200k  | 2       | 1,382          | 494       | n/a          | External decode verified |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+
+The Silesia 1 MiB q2 overhead is now 44.24% versus Google q2. This improves
+ratio and reduces the ratio-harness time versus four 65 KiB long-match chunks,
+but the remaining gap still needs better token/block cost modeling.

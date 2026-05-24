@@ -1410,7 +1410,7 @@ fn brotli_build_simple_lz77_commands(
   data : FixedArray[Byte],
   hash_config : BrotliHashConfig,
 ) -> Array[BrotliEncodeCommand]? {
-  if data.length() < 8 || data.length() > 65536 {
+  if data.length() < 8 || data.length() > 262144 {
     return None
   }
   if !brotli_has_compressible_match_density(data, hash_config) {
@@ -1802,7 +1802,7 @@ fn brotli_encode_chunked_standard(
   data : FixedArray[Byte],
   opts : BrotliOptions,
 ) -> FixedArray[Byte] raise FzipError {
-  let chunk_size = 65535
+  let chunk_size = 262143
   let chunk_count = (data.length() + chunk_size - 1) / chunk_size
   let writer = BrotliBitWriter::new(data.length() + 8 + chunk_count * 16)
   brotli_encode_window_bits(writer, opts.window_bits)
