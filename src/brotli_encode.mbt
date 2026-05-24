@@ -237,6 +237,24 @@ fn brotli_write_simple_huffman(
 }
 
 ///|
+fn brotli_write_var_len_uint8(writer : BrotliBitWriter, value : Int) -> Unit {
+  if value == 0 {
+    writer.write_bits(1, 0)
+  } else if value == 1 {
+    writer.write_bits(1, 1)
+    writer.write_bits(3, 0)
+  } else {
+    let mut bits = 1
+    while bits < 8 && value >= 1 << (bits + 1) {
+      bits += 1
+    }
+    writer.write_bits(1, 1)
+    writer.write_bits(3, bits)
+    writer.write_bits(bits, value - (1 << bits))
+  }
+}
+
+///|
 fn brotli_next_power_of_two(value : Int) -> Int {
   let mut power = 1
   while power < value {
@@ -815,6 +833,40 @@ fn brotli_collect_unique_literals(
 }
 
 ///|
+fn brotli_collect_unique_literals_range(
+  data : FixedArray[Byte],
+  start : Int,
+  end : Int,
+) -> BrotliLiteralSet? {
+  let symbols = FixedArray::make(brotli_num_literal_symbols, 0)
+  let mut count = 0
+  for i in start..<end {
+    count = brotli_add_unique_symbol(symbols, count, data[i].to_int())
+    if count > brotli_num_literal_symbols {
+      return None
+    }
+  }
+  if count == 0 {
+    None
+  } else {
+    Some({ symbols, count })
+  }
+}
+
+///|
+fn brotli_literal_frequencies_range(
+  data : FixedArray[Byte],
+  start : Int,
+  end : Int,
+) -> FixedArray[Int] {
+  let frequencies = FixedArray::make(brotli_num_literal_symbols, 0)
+  for i in start..<end {
+    frequencies[data[i].to_int()] += 1
+  }
+  frequencies
+}
+
+///|
 fn brotli_collect_command_literals(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
@@ -1071,6 +1123,229 @@ fn brotli_build_literal_only_command(
     Ok(command) => Some([command])
     Err(_) => None
   }
+}
+
+///|
+fn brotli_block_length_prefix(
+  length : Int,
+) -> BrotliCommandPrefix raise FzipError {
+  for symbol in 0..<brotli_num_block_length_symbols {
+    let extra_bits = brotli_block_length_extra_bits[symbol]
+    let extra = length - brotli_block_length_bases[symbol]
+    if extra >= 0 && extra < 1 << extra_bits {
+      return {
+        symbol,
+        insert_extra: extra,
+        copy_extra: 0,
+        insert_extra_bits: extra_bits,
+        copy_extra_bits: 0,
+      }
+    }
+  }
+  raise fzip_err(BrotliInvalidMetablock, msg="invalid Brotli block length")
+}
+
+///|
+fn brotli_write_two_literal_block_header(
+  writer : BrotliBitWriter,
+  first_length : Int,
+  second_length : Int,
+) -> (BrotliHuffmanSpec, BrotliCommandPrefix, BrotliCommandPrefix) raise FzipError {
+  let first_prefix = brotli_block_length_prefix(first_length)
+  let second_prefix = brotli_block_length_prefix(second_length)
+  let length_symbols = FixedArray::make(brotli_num_block_length_symbols, 0)
+  let mut length_count = 0
+  length_count = brotli_add_unique_symbol(
+    length_symbols,
+    length_count,
+    first_prefix.symbol,
+  )
+  length_count = brotli_add_unique_symbol(
+    length_symbols,
+    length_count,
+    second_prefix.symbol,
+  )
+  let length_spec = brotli_make_huffman_spec(
+    length_symbols, length_count, brotli_num_block_length_symbols, brotli_num_block_length_symbols,
+  )
+  brotli_write_var_len_uint8(writer, 1) // two literal block types
+  brotli_write_simple_one_symbol_huffman(writer, 1, 2)
+  brotli_write_huffman_spec(writer, length_spec)
+  let length_payloads = brotli_huffman_payload_table(length_spec)
+  let first_payload = length_payloads[first_prefix.symbol]
+  writer.write_bits(first_payload.insert_extra_bits, first_payload.insert_extra)
+  writer.write_bits(first_prefix.insert_extra_bits, first_prefix.insert_extra)
+  (length_spec, first_prefix, second_prefix)
+}
+
+///|
+fn brotli_write_trivial_two_tree_context_map(
+  writer : BrotliBitWriter,
+) -> Unit raise FzipError {
+  brotli_write_var_len_uint8(writer, 1) // two literal trees
+  writer.write_bits(1, 1) // use RLEMAX
+  writer.write_bits(4, brotli_literal_context_bits - 2)
+  let symbols : FixedArray[Int] = [0, 5, 6]
+  let frequencies = FixedArray::make(7, 0)
+  frequencies[0] = 1
+  frequencies[5] = 2
+  frequencies[6] = 1
+  let spec = brotli_make_weighted_huffman_spec(symbols, 3, frequencies, 7, 7)
+  brotli_write_huffman_spec(writer, spec)
+  let payloads = brotli_huffman_payload_table(spec)
+  let zero_payload = payloads[0]
+  writer.write_bits(zero_payload.insert_extra_bits, zero_payload.insert_extra)
+  let repeat_payload = payloads[5]
+  writer.write_bits(
+    repeat_payload.insert_extra_bits,
+    repeat_payload.insert_extra,
+  )
+  writer.write_bits(5, 31)
+  let one_payload = payloads[6]
+  writer.write_bits(one_payload.insert_extra_bits, one_payload.insert_extra)
+  writer.write_bits(
+    repeat_payload.insert_extra_bits,
+    repeat_payload.insert_extra,
+  )
+  writer.write_bits(5, 31)
+  writer.write_bits(1, 1) // apply inverse move-to-front
+}
+
+///|
+fn brotli_write_split_literal_only_metablock(
+  data : FixedArray[Byte],
+  split : Int,
+  is_last : Bool,
+) -> BrotliBitWriter? raise FzipError {
+  if split <= 0 || split >= data.length() {
+    return None
+  }
+  let first_literals = match
+    brotli_collect_unique_literals_range(data, 0, split) {
+    Some(literals) => literals
+    None => return None
+  }
+  let second_literals = match
+    brotli_collect_unique_literals_range(data, split, data.length()) {
+    Some(literals) => literals
+    None => return None
+  }
+  let command = match brotli_build_literal_only_command(data) {
+    Some(commands) => commands[0]
+    None => return None
+  }
+  let first_frequencies = brotli_literal_frequencies_range(data, 0, split)
+  let second_frequencies = brotli_literal_frequencies_range(
+    data,
+    split,
+    data.length(),
+  )
+  let first_spec = brotli_make_weighted_huffman_spec(
+    first_literals.symbols,
+    first_literals.count,
+    first_frequencies,
+    brotli_num_literal_symbols,
+    brotli_num_literal_symbols,
+  )
+  let second_spec = brotli_make_weighted_huffman_spec(
+    second_literals.symbols,
+    second_literals.count,
+    second_frequencies,
+    brotli_num_literal_symbols,
+    brotli_num_literal_symbols,
+  )
+  let command_symbols : FixedArray[Int] = [command.command.symbol]
+  let command_spec = brotli_make_huffman_spec(
+    command_symbols, 1, brotli_num_command_symbols, brotli_num_command_symbols,
+  )
+  let distance_symbols : FixedArray[Int] = [0]
+  let distance_spec = brotli_make_huffman_spec(
+    distance_symbols,
+    1,
+    brotli_distance_alphabet_size(0, 0, 24),
+    brotli_distance_alphabet_size(0, 0, 24),
+  )
+  let writer = BrotliBitWriter::new(256 + data.length() * 4)
+  brotli_write_metablock_header(writer, data.length(), is_last, false)
+  let (length_spec, _, second_prefix) = brotli_write_two_literal_block_header(
+    writer,
+    split,
+    data.length() - split,
+  )
+  writer.write_bits(1, 0) // one command block type
+  writer.write_bits(1, 0) // one distance block type
+  writer.write_bits(6, 0) // NPOSTFIX = 0, NDIRECT = 0
+  writer.write_bits(2, 0) // LSB6 context mode for literal block 0
+  writer.write_bits(2, 0) // LSB6 context mode for literal block 1
+  brotli_write_trivial_two_tree_context_map(writer)
+  writer.write_bits(1, 0) // distance context map has one tree
+  brotli_write_huffman_spec(writer, first_spec)
+  brotli_write_huffman_spec(writer, second_spec)
+  brotli_write_huffman_spec(writer, command_spec)
+  brotli_write_huffman_spec(writer, distance_spec)
+  let first_payloads = brotli_huffman_payload_table(first_spec)
+  let second_payloads = brotli_huffman_payload_table(second_spec)
+  let command_payloads = brotli_huffman_payload_table(command_spec)
+  let length_payloads = brotli_huffman_payload_table(length_spec)
+  let command_payload = command_payloads[command.command.symbol]
+  writer.write_bits(
+    command_payload.insert_extra_bits,
+    command_payload.insert_extra,
+  )
+  writer.write_bits(
+    command.command.insert_extra_bits,
+    command.command.insert_extra,
+  )
+  writer.write_bits(command.command.copy_extra_bits, command.command.copy_extra)
+  for i in 0..<split {
+    let payload = first_payloads[data[i].to_int()]
+    writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
+  }
+  let type_symbols : FixedArray[Int] = [1]
+  let type_payload = brotli_simple_huffman_payload(type_symbols, 1, 1)
+  writer.write_bits(type_payload.insert_extra_bits, type_payload.insert_extra)
+  let second_length_payload = length_payloads[second_prefix.symbol]
+  writer.write_bits(
+    second_length_payload.insert_extra_bits,
+    second_length_payload.insert_extra,
+  )
+  writer.write_bits(second_prefix.insert_extra_bits, second_prefix.insert_extra)
+  for i in split..<data.length() {
+    let payload = second_payloads[data[i].to_int()]
+    writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
+  }
+  Some(writer)
+}
+
+///|
+fn brotli_try_split_literal_only_metablock(
+  data : FixedArray[Byte],
+  is_last : Bool,
+  best : BrotliBitWriter?,
+) -> BrotliBitWriter? raise FzipError {
+  if data.length() < 2048 || data.length() > 65536 {
+    return best
+  }
+  if !brotli_literal_only_may_beat_stored(data) {
+    return best
+  }
+  let split_points = [data.length() / 2]
+  let mut best = best
+  for i in 0..<split_points.length() {
+    match
+      brotli_write_split_literal_only_metablock(data, split_points[i], is_last) {
+      Some(candidate) =>
+        match best {
+          Some(current) =>
+            if candidate.bit_pos < current.bit_pos {
+              best = Some(candidate)
+            }
+          None => best = Some(candidate)
+        }
+      None => ()
+    }
+  }
+  best
 }
 
 ///|
@@ -1440,6 +1715,7 @@ fn brotli_try_compressed_chunk(
     false,
     best,
   )
+  let best = brotli_try_split_literal_only_metablock(data, false, best)
   brotli_try_compressed_commands(
     data,
     brotli_build_identity_dictionary_commands(
@@ -1508,6 +1784,7 @@ fn brotli_encode_standard(
       true,
       best,
     )
+    best = brotli_try_split_literal_only_metablock(data, true, best)
     best = brotli_try_compressed_commands(
       data,
       brotli_build_identity_dictionary_commands(

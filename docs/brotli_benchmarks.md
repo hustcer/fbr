@@ -569,3 +569,39 @@ Results:
 This adds the first static-dictionary encoder surface but does not count as
 P3 completion. The production-sized ratio target still needs broader
 dictionary heuristics, block splitting, and back-reference cost modeling.
+
+## 2026-05-24 — Two-Literal-Block Split Candidate
+
+The literal-only q2+ candidate selector can now try one midpoint literal block
+split inside a compressed meta-block. This writes two literal block types, a
+block-length tree, a compact trivial context map, and separate weighted literal
+trees for each half. The candidate is exact-costed against the existing
+single-tree literal-only, LZ77, dictionary, and stored fallbacks.
+
+Validation commands:
+
+```nu
+moon test --target native --filter '*splits literal*'
+moon test --target native --filter '*literal chunks*'
+moon test --target native --filter '*static dictionary words*'
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+```
+
+Results:
+
+| Corpus                  | Quality | Previous MoonBit bytes | New MoonBit bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | ---------------------- | ----------------- | ------------ | ------------------------ |
+| split-literals-8k       | 2       | single-tree candidate  | 4,464             | 3,455        | External decode verified |
+| silesia-1m              | 2       | 657,233                | 656,982           | 320,418      | External decode verified |
+| small-alpha-multi-1400  | 2       | 195                    | 195               | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195                    | 195               | 69           | Unchanged                |
+| periodic-allbytes-200k  | 2       | 1,382                  | 1,382             | n/a          | Unchanged                |
+
+A broader trial with three split points improved Silesia further to 656,639
+bytes but took 37,346 ms on the 1 MiB ratio harness. The retained midpoint-only
+candidate keeps the structural block-split support while reducing that run to
+20,575 ms. P3 still needs a cheaper splitter and stronger back-reference cost
+model before full Silesia validation can approach the reference ratio.

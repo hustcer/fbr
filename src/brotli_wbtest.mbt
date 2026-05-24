@@ -1144,6 +1144,37 @@ test "brotli_sync q2 compresses skewed high alphabet literal chunks" {
 }
 
 ///|
+test "brotli_sync q2 splits literal-only blocks" {
+  let input = FixedArray::make(8192, b'\x00')
+  for i in 0..<4096 {
+    input[i] = (97 + i % 4).to_byte()
+  }
+  let mut state = 12345
+  for i in 4096..<input.length() {
+    state = (state * 73 + 41) % 9973
+    input[i] = (32 + state % 95).to_byte()
+  }
+  let single = brotli_write_best_lz77_metablock(
+    input,
+    brotli_build_literal_only_command(input).unwrap(),
+    true,
+  )
+  let split = match brotli_try_split_literal_only_metablock(input, true, None) {
+    Some(candidate) => candidate
+    None => fail("expected split literal candidate")
+  }
+  assert_true(split.bit_pos < single.bit_pos)
+  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
+  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  assert_true(q2.length() < q1.length())
+  let decoded = unbrotli_sync(q2)
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q2 uses identity static dictionary words" {
   let input = str_to_u8(
     "time area unit home work water world house about other these first right after where",
