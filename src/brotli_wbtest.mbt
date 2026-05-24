@@ -1623,7 +1623,7 @@ test "brotli_sync q2 uses uppercase static dictionary transforms" {
   let mut found_transform = false
   for position in 0..<input.length() {
     match brotli_find_identity_dictionary_match(index, input, position, 0, 22) {
-      Some((length, distance)) => {
+      Some((length, _, distance)) => {
         let identity_limit = 1 +
           (1 << brotli_dictionary_size_bits_by_length[length])
         if distance > identity_limit {
@@ -1642,6 +1642,42 @@ test "brotli_sync q2 uses uppercase static dictionary transforms" {
       assert_true(commands[0].has_copy)
     }
     None => fail("expected transformed static dictionary command candidate")
+  }
+  let encoded = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let decoded = unbrotli_sync(encoded)
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
+test "brotli_sync q2 uses static dictionary suffix transforms" {
+  let input = str_to_u8("time area unit ")
+  let config = brotli_hash_config_for_quality(2)
+  let index = brotli_build_dictionary_encode_index()
+  match brotli_find_identity_dictionary_match(index, input, 0, 0, 22) {
+    Some((word_length, output_length, distance)) => {
+      assert_eq(word_length, 4)
+      assert_eq(output_length, 5)
+      let identity_limit = 1 +
+        (1 << brotli_dictionary_size_bits_by_length[word_length])
+      assert_true(distance >= identity_limit)
+    }
+    None => fail("expected suffix static dictionary match")
+  }
+  match brotli_build_identity_dictionary_commands(input, config, 0, 22) {
+    Some(commands) => {
+      assert_true(commands.length() >= 3)
+      assert_eq(commands[0].insert_length, 0)
+      assert_eq(commands[0].copy_length, 4)
+      assert_true(commands[0].has_copy)
+    }
+    None => fail("expected suffix static dictionary command candidate")
   }
   let encoded = brotli_sync(input, opts={
     quality: 2,

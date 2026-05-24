@@ -1613,3 +1613,50 @@ Results:
 
 The Silesia 1 MiB q9 gap remains 12.51%; this is a static-dictionary
 correctness/subsystem increment rather than a large-corpus ratio win.
+
+## 2026-05-24 — Encoder Dictionary Suffix/Prefix Transforms
+
+The encoder static-dictionary path now supports selected Brotli transforms
+whose transformed output length differs from the dictionary word length, such
+as identity plus a trailing space. `BrotliEncodeCommand` tracks both values:
+the encoded command copy length remains the dictionary word length, while
+meta-block accounting uses the transformed output length. This keeps streams
+valid for dictionary transforms that emit prefixes or suffixes.
+
+Validation commands:
+
+```nu
+moon fmt
+moon test --target native --filter '*static dictionary*'
+nu tools/brotli/encode/verify.nu target/brotli-encode/title-small.txt --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/dictionary-words-spaced.txt --quality 2
+nu tools/brotli/bench/ratio.nu target/brotli-encode/dictionary-words.txt --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/dictionary-title-words.txt --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/dictionary-words-spaced.txt --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                       | Quality | Previous bytes | New bytes | Google bytes | Notes                       |
+| ---------------------------- | ------- | -------------- | --------- | ------------ | --------------------------- |
+| dictionary-words             | 2       | 76             | 76        | 78           | Unchanged                   |
+| dictionary-words             | 9       | 76             | 76        | 61           | Unchanged                   |
+| dictionary-title-words       | 2       | 78             | 78        | 89           | Unchanged                   |
+| dictionary-title-words       | 9       | 78             | 78        | 73           | Unchanged                   |
+| dictionary-words-spaced      | 2       | n/a            | 76        | 79           | Suffix transform fixture    |
+| dictionary-words-spaced      | 9       | n/a            | 76        | 62           | Suffix transform fixture    |
+| silesia-1m                   | 9       | 296,784        | 296,784   | 263,791      | Unchanged                   |
+| split-literals-8k            | 2       | 3,434          | 3,434     | 3,455        | Unchanged                   |
+| split-literals-8k            | 9       | 3,434          | 3,434     | 3,418        | Unchanged                   |
+| small-alpha-multi-1400       | 2       | 179            | 179       | 169          | Unchanged                   |
+| small-alpha-multi-1400       | 9       | 179            | 179       | 69           | Unchanged                   |
+| periodic-allbytes-200k       | 2       | 350            | 350       | n/a          | External decode verified    |
+| periodic-allbytes-200k       | 9       | 350            | 350       | n/a          | External decode verified    |
+
+The Silesia 1 MiB q9 gap remains 12.51%; this expands dictionary transform
+coverage but does not address the remaining P3/P4 natural-corpus gap.

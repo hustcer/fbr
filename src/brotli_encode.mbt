@@ -43,6 +43,7 @@ priv struct BrotliEncodeCommand {
   insert_start : Int
   insert_length : Int
   copy_length : Int
+  output_length : Int
   has_copy : Bool
   command : BrotliCommandPrefix
   distance_prefix : BrotliCommandPrefix
@@ -948,7 +949,8 @@ fn brotli_collect_command_literals(
     }
   }
   if count == 0 {
-    None
+    symbols[0] = 0
+    Some({ symbols, count: 1 })
   } else {
     Some({ symbols, count })
   }
@@ -1360,7 +1362,8 @@ fn brotli_commands_copy_bytes(commands : Array[BrotliEncodeCommand]) -> Int {
   let mut total = 0
   for i in 0..<commands.length() {
     if commands[i].has_copy {
-      total += commands[i].copy_length
+      ignore(commands[i].copy_length)
+      total += commands[i].output_length
     }
   }
   total
@@ -1603,6 +1606,7 @@ fn brotli_make_encode_command_with_distance_mode(
     insert_start,
     insert_length,
     copy_length,
+    output_length: copy_length,
     has_copy,
     command,
     distance_prefix,
@@ -1627,6 +1631,7 @@ fn brotli_make_encode_command_with_distance_code(
     insert_start,
     insert_length,
     copy_length,
+    output_length: copy_length,
     has_copy: true,
     command,
     distance_prefix: brotli_distance_prefix_for_code(distance_code),
@@ -1679,6 +1684,26 @@ fn brotli_make_encode_command(
   brotli_make_encode_command_with_distance_mode(
     insert_start, insert_length, copy_length, distance, has_copy, true,
   )
+}
+
+///|
+fn brotli_make_dictionary_encode_command(
+  insert_start : Int,
+  insert_length : Int,
+  word_length : Int,
+  output_length : Int,
+  distance : Int,
+) -> BrotliEncodeCommand raise FzipError {
+  let command = brotli_find_command_prefix(insert_length, word_length, true)
+  {
+    insert_start,
+    insert_length,
+    copy_length: word_length,
+    output_length,
+    has_copy: true,
+    command,
+    distance_prefix: brotli_distance_prefix_for_distance(distance),
+  }
 }
 
 ///|
