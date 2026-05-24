@@ -96,6 +96,18 @@ fn BrotliBitWriter::write_bytes(
 }
 
 ///|
+fn BrotliBitWriter::write_from_bits(
+  self : BrotliBitWriter,
+  data : FixedArray[Byte],
+  bit_count : Int,
+) -> Unit {
+  for pos in 0..<bit_count {
+    let bit = (data[pos / 8].to_int() >> (pos & 7)) & 1
+    self.write_bits(1, bit)
+  }
+}
+
+///|
 fn BrotliBitWriter::finish(self : BrotliBitWriter) -> FixedArray[Byte] {
   trim_buf(self.buf, shft(self.bit_pos))
 }
@@ -478,6 +490,26 @@ fn brotli_collect_unique_literals(
 }
 
 ///|
+fn brotli_count_unique_literals_up_to(
+  data : FixedArray[Byte],
+  limit : Int,
+) -> Int {
+  let seen = FixedArray::make(brotli_num_literal_symbols, false)
+  let mut count = 0
+  for i in 0..<data.length() {
+    let value = data[i].to_int()
+    if !seen[value] {
+      seen[value] = true
+      count += 1
+      if count > limit {
+        return count
+      }
+    }
+  }
+  count
+}
+
+///|
 fn brotli_suffix_is_copy(
   data : FixedArray[Byte],
   insert_length : Int,
@@ -595,24 +627,71 @@ fn brotli_find_command_prefix(
 }
 
 ///|
-fn brotli_longest_previous_match(
+fn brotli_match_hash(data : FixedArray[Byte], position : Int) -> Int {
+  if position + 2 >= data.length() {
+    0
+  } else {
+    (
+      (data[position].to_int() * 257) ^
+      (data[position + 1].to_int() * 17) ^
+      data[position + 2].to_int()
+    ) &
+    4095
+  }
+}
+
+///|
+fn brotli_previous_match_positions(data : FixedArray[Byte]) -> FixedArray[Int] {
+  let previous = FixedArray::make(data.length(), -1)
+  let table = FixedArray::make(4096, -1)
+  if data.length() < 3 {
+    return previous
+  }
+  for position in 0..<(data.length() - 2) {
+    let hash = brotli_match_hash(data, position)
+    previous[position] = table[hash]
+    table[hash] = position
+  }
+  previous
+}
+
+///|
+fn brotli_longest_previous_hash_match(
   data : FixedArray[Byte],
+  previous : FixedArray[Int],
   position : Int,
 ) -> (Int, Int) {
+  if position + 3 >= data.length() {
+    return (0, 0)
+  }
   let mut best_length = 0
   let mut best_distance = 0
-  let max_distance = if position < 256 { position } else { 256 }
-  for distance in 1..<=max_distance {
-    let mut length = 0
-    while length < 6 &&
-          position + length < data.length() &&
-          data[position + length] == data[position + length - distance] {
-      length += 1
+  let mut candidate = if position < previous.length() {
+    previous[position]
+  } else {
+    -1
+  }
+  let mut checked = 0
+  while candidate >= 0 && checked < 4 {
+    let distance = position - candidate
+    let has_min_match = data[position] == data[candidate] &&
+      data[position + 1] == data[candidate + 1] &&
+      data[position + 2] == data[candidate + 2] &&
+      data[position + 3] == data[candidate + 3]
+    if has_min_match {
+      let mut length = 4
+      while length < 64 &&
+            position + length < data.length() &&
+            data[position + length] == data[candidate + length] {
+        length += 1
+      }
+      if length > best_length {
+        best_length = length
+        best_distance = distance
+      }
     }
-    if length > best_length {
-      best_length = length
-      best_distance = distance
-    }
+    candidate = previous[candidate]
+    checked += 1
   }
   (best_length, best_distance)
 }
@@ -641,8 +720,11 @@ fn brotli_make_encode_command(
 ///|
 fn brotli_build_simple_lz77_commands(
   data : FixedArray[Byte],
-) -> Array[BrotliEncodeCommand]? raise FzipError {
+) -> Array[BrotliEncodeCommand]? {
   if data.length() < 8 || data.length() > 65536 {
+    return None
+  }
+  if brotli_count_unique_literals_up_to(data, 16) > 16 {
     return None
   }
   match brotli_collect_unique_literals(data, data.length()) {
@@ -650,17 +732,22 @@ fn brotli_build_simple_lz77_commands(
     None => return None
   }
   let commands : Array[BrotliEncodeCommand] = []
+  let previous = brotli_previous_match_positions(data)
   let mut literal_start = 0
   let mut position = 0
   while position < data.length() {
-    let (match_length, distance) = brotli_longest_previous_match(data, position)
+    let (match_length, distance) = brotli_longest_previous_hash_match(
+      data, previous, position,
+    )
     if match_length >= 4 {
       let insert_length = position - literal_start
-      commands.push(
-        brotli_make_encode_command(
-          literal_start, insert_length, match_length, distance, true,
-        ),
+      let command_result : Result[BrotliEncodeCommand, FzipError] = try? brotli_make_encode_command(
+        literal_start, insert_length, match_length, distance, true,
       )
+      match command_result {
+        Ok(command) => commands.push(command)
+        Err(_) => return None
+      }
       position += match_length
       literal_start = position
     } else {
@@ -668,15 +755,17 @@ fn brotli_build_simple_lz77_commands(
     }
   }
   if literal_start < data.length() {
-    commands.push(
-      brotli_make_encode_command(
-        literal_start,
-        data.length() - literal_start,
-        0,
-        0,
-        false,
-      ),
+    let final_result : Result[BrotliEncodeCommand, FzipError] = try? brotli_make_encode_command(
+      literal_start,
+      data.length() - literal_start,
+      0,
+      0,
+      false,
     )
+    match final_result {
+      Ok(command) => commands.push(command)
+      Err(_) => return None
+    }
   }
   if commands.length() == 0 {
     return None
@@ -758,11 +847,12 @@ fn brotli_encode_single_copy_match(
 }
 
 ///|
-fn brotli_encode_simple_lz77(
+fn brotli_write_simple_lz77_metablock(
+  writer : BrotliBitWriter,
   data : FixedArray[Byte],
-  opts : BrotliOptions,
   commands : Array[BrotliEncodeCommand],
-) -> FixedArray[Byte] raise FzipError {
+  is_last : Bool,
+) -> Unit raise FzipError {
   let literals = match brotli_collect_unique_literals(data, data.length()) {
     Some(literals) => literals
     None =>
@@ -804,11 +894,7 @@ fn brotli_encode_simple_lz77(
     brotli_distance_alphabet_size(0, 0, 24),
     brotli_distance_alphabet_size(0, 0, 24),
   )
-  let writer = BrotliBitWriter::new(
-    128 + data.length() * 4 + commands.length() * 8,
-  )
-  brotli_encode_window_bits(writer, opts.window_bits)
-  brotli_write_metablock_header(writer, data.length(), true, false)
+  brotli_write_metablock_header(writer, data.length(), is_last, false)
   writer.write_bits(1, 0) // one literal block type
   writer.write_bits(1, 0) // one command block type
   writer.write_bits(1, 0) // one distance block type
@@ -860,6 +946,19 @@ fn brotli_encode_simple_lz77(
       )
     }
   }
+}
+
+///|
+fn brotli_encode_simple_lz77(
+  data : FixedArray[Byte],
+  opts : BrotliOptions,
+  commands : Array[BrotliEncodeCommand],
+) -> FixedArray[Byte] raise FzipError {
+  let writer = BrotliBitWriter::new(
+    128 + data.length() * 4 + commands.length() * 8,
+  )
+  brotli_encode_window_bits(writer, opts.window_bits)
+  brotli_write_simple_lz77_metablock(writer, data, commands, true)
   writer.finish()
 }
 
@@ -886,10 +985,58 @@ fn brotli_encode_uncompressed(
 }
 
 ///|
+fn brotli_try_compressed_chunk(
+  data : FixedArray[Byte],
+) -> BrotliBitWriter? raise FzipError {
+  match brotli_build_simple_lz77_commands(data) {
+    Some(commands) => {
+      let writer = BrotliBitWriter::new(
+        128 + data.length() * 4 + commands.length() * 8,
+      )
+      brotli_write_simple_lz77_metablock(writer, data, commands, false)
+      Some(writer)
+    }
+    None => None
+  }
+}
+
+///|
+fn brotli_encode_chunked_standard(
+  data : FixedArray[Byte],
+  opts : BrotliOptions,
+) -> FixedArray[Byte] raise FzipError {
+  let chunk_size = 65535
+  let chunk_count = (data.length() + chunk_size - 1) / chunk_size
+  let writer = BrotliBitWriter::new(data.length() + 8 + chunk_count * 16)
+  brotli_encode_window_bits(writer, opts.window_bits)
+  let mut offset = 0
+  while offset < data.length() {
+    let remaining = data.length() - offset
+    let length = if remaining > chunk_size { chunk_size } else { remaining }
+    let chunk = slc(data, offset, e=offset + length)
+    match brotli_try_compressed_chunk(chunk) {
+      Some(compressed) =>
+        if shft(compressed.bit_pos) < length + 16 {
+          writer.write_from_bits(compressed.buf, compressed.bit_pos)
+        } else {
+          brotli_write_uncompressed_metablock(writer, data, offset, length)
+        }
+      None => brotli_write_uncompressed_metablock(writer, data, offset, length)
+    }
+    offset += length
+  }
+  brotli_write_final_empty_metablock(writer)
+  writer.finish()
+}
+
+///|
 fn brotli_encode_standard(
   data : FixedArray[Byte],
   opts : BrotliOptions,
 ) -> FixedArray[Byte] raise FzipError {
+  if data.length() > 65536 {
+    return brotli_encode_chunked_standard(data, opts)
+  }
   if data.length() <= brotli_max_metablock_bytes {
     match brotli_find_single_copy_match(data) {
       Some(match_) => return brotli_encode_single_copy_match(data, opts, match_)

@@ -167,3 +167,37 @@ The small synthetic corpus shows the q2 compressed path working but still
 larger than Google. The Silesia baseline shows the current encoder mostly
 falls back to uncompressed meta-blocks on realistic mixed data. Closing this
 requires block splitting plus a broader match finder over large meta-blocks.
+
+## 2026-05-24 — Chunked q2 Hash-Match Path
+
+Corpora:
+
+- `target/brotli-encode/periodic-abcde-200k.bin`
+- `target/brotli-bench/silesia-1m.bin`
+- `target/brotli-silesia/silesia-100m.bin`
+
+Validation commands:
+
+```nu
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-abcde-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-bench/silesia-128k.bin --quality 2
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2
+nu tools/brotli/bench/ratio.nu target/brotli-silesia/silesia-100m.bin --qualities 2
+```
+
+Results:
+
+| Corpus                 | Quality | MoonBit bytes | Google bytes | MoonBit SHA-256                                                   | External decode SHA-256                                           |
+| ---------------------- | ------- | ------------- | ------------ | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| periodic-abcde-200k    | 2       | 2,820         | n/a          | `39f3ef856d8b1099306bd1c3272c176cd237c4f5ae8395c5562b2483c6d17327` | `24a7979ddb84c3eefb28a14793d9a66bfbc1e8c8ce61b326c699458dc9e951c5` |
+| silesia-1m             | 2       | 1,048,628     | 320,418      | n/a                                                               | verified by ratio harness                                         |
+| silesia-100m           | 2       | 104,862,404   | 35,495,150   | `75561d5802aec1cfcfb8eec0a66c1a9883f93806e58b8209b1bf52855aab1458` | `89ed4fcaea193564aa75b37f596ccee2687985b4584ea29b8b8e72f36ef27579` |
+
+This increment adds large-input q2 chunking and replaces the local distance
+scan with a bounded hash-chain matcher. Stored chunks are written directly into
+the active stream because uncompressed meta-block padding depends on the current
+bit offset; compressed candidate chunks are only spliced when they beat a stored
+chunk estimate. The q2 compressed path is deliberately gated to very
+low-alphabet chunks until frequency-weighted Huffman coding and general block
+splitting land. The 100 MiB Silesia result is therefore still a stored-block
+baseline, about 195% larger than Google q2.
