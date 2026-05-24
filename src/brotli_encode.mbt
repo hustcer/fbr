@@ -867,38 +867,61 @@ fn brotli_literal_frequencies_range(
 }
 
 ///|
-fn brotli_split_literal_may_beat_single(
+fn brotli_split_literal_saving_bits_with_single(
   data : FixedArray[Byte],
   split : Int,
-) -> Bool {
+  single_bits : Int,
+) -> Int {
   if split <= 0 || split >= data.length() {
-    return false
+    return 0
   }
-  let all_frequencies = brotli_literal_frequencies_range(data, 0, data.length())
   let first_frequencies = brotli_literal_frequencies_range(data, 0, split)
   let second_frequencies = brotli_literal_frequencies_range(
     data,
     split,
     data.length(),
   )
-  let (all_lengths, _) = h_tree(all_frequencies, brotli_huffman_max_code_length)
   let (first_lengths, _) = h_tree(
     first_frequencies, brotli_huffman_max_code_length,
   )
   let (second_lengths, _) = h_tree(
     second_frequencies, brotli_huffman_max_code_length,
   )
-  if all_lengths.length() == 0 ||
-    first_lengths.length() == 0 ||
-    second_lengths.length() == 0 {
-    return false
+  if first_lengths.length() == 0 || second_lengths.length() == 0 {
+    return 0
   }
-  let single_bits = clen(all_frequencies, all_lengths)
   let split_bits = clen(first_frequencies, first_lengths) +
     clen(second_frequencies, second_lengths)
-  // Two literal blocks add block-switch, context-map, and second-tree headers.
-  // Require a material literal-code saving before writing the full candidate.
-  split_bits + 384 < single_bits
+  single_bits - split_bits
+}
+
+///|
+fn brotli_best_split_literal_point(data : FixedArray[Byte]) -> Int {
+  let all_frequencies = brotli_literal_frequencies_range(data, 0, data.length())
+  let (all_lengths, _) = h_tree(all_frequencies, brotli_huffman_max_code_length)
+  if all_lengths.length() == 0 {
+    return 0
+  }
+  let single_bits = clen(all_frequencies, all_lengths)
+  let split_points = [
+    data.length() / 4,
+    data.length() / 2,
+    data.length() * 3 / 4,
+  ]
+  let mut best_split = 0
+  let mut best_saving = 384
+  for i in 0..<split_points.length() {
+    let saving = brotli_split_literal_saving_bits_with_single(
+      data,
+      split_points[i],
+      single_bits,
+    )
+    if saving > best_saving {
+      best_saving = saving
+      best_split = split_points[i]
+    }
+  }
+  best_split
 }
 
 ///|
@@ -1364,26 +1387,19 @@ fn brotli_try_split_literal_only_metablock(
   if !brotli_literal_only_may_beat_stored(data) {
     return best
   }
-  let split_points = [data.length() / 2]
+  let split = brotli_best_split_literal_point(data)
   let mut best = best
-  for i in 0..<split_points.length() {
-    if brotli_split_literal_may_beat_single(data, split_points[i]) {
-      match
-        brotli_write_split_literal_only_metablock(
-          data,
-          split_points[i],
-          is_last,
-        ) {
-        Some(candidate) =>
-          match best {
-            Some(current) =>
-              if candidate.bit_pos < current.bit_pos {
-                best = Some(candidate)
-              }
-            None => best = Some(candidate)
-          }
-        None => ()
-      }
+  if split > 0 {
+    match brotli_write_split_literal_only_metablock(data, split, is_last) {
+      Some(candidate) =>
+        match best {
+          Some(current) =>
+            if candidate.bit_pos < current.bit_pos {
+              best = Some(candidate)
+            }
+          None => best = Some(candidate)
+        }
+      None => ()
     }
   }
   best

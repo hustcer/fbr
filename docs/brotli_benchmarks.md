@@ -638,3 +638,36 @@ Results:
 This is a performance guardrail for the block-splitting path. It does not
 change the P3 ratio target; it keeps the current ratio gain while reducing
 candidate overhead.
+
+## 2026-05-24 — Three-Point Literal Split Selector
+
+The literal split estimator now scores quarter, midpoint, and three-quarter
+split points from a shared single-tree literal cost, then writes only the best
+admitted two-block meta-block candidate. This recovers most of the earlier
+three-split ratio gain without running the expensive split writer three times
+per chunk.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native --filter '*splits literal*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 656,982        | 656,614   | 320,418      | Harness time 16,404 ms   |
+| split-literals-8k       | 2       | 4,464          | 4,464     | 3,455        | External decode verified |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+| periodic-allbytes-200k  | 2       | 1,382          | 1,382     | n/a          | External decode verified |
+
+P3 is still open: the Silesia 1 MiB q2 slice remains 104.92% larger than
+Google q2, so the next ratio work needs broader back-reference admission and a
+real token/block splitter rather than more literal-only split tuning.

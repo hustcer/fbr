@@ -1154,7 +1154,7 @@ test "brotli_sync q2 splits literal-only blocks" {
     state = (state * 73 + 41) % 9973
     input[i] = (32 + state % 95).to_byte()
   }
-  assert_true(brotli_split_literal_may_beat_single(input, 4096))
+  assert_eq(brotli_best_split_literal_point(input), 4096)
   let single = brotli_write_best_lz77_metablock(
     input,
     brotli_build_literal_only_command(input).unwrap(),
@@ -1175,7 +1175,7 @@ test "brotli_sync q2 splits literal-only blocks" {
   }
 
   let flat = FixedArray::make(4096, b'a')
-  assert_false(brotli_split_literal_may_beat_single(flat, 2048))
+  assert_eq(brotli_best_split_literal_point(flat), 0)
 }
 
 ///|
