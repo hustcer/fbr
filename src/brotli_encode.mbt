@@ -821,7 +821,7 @@ fn brotli_longest_previous_hash_match(
       data[position + 3] == data[candidate + 3]
     if has_min_match {
       let mut length = 4
-      while length < 64 &&
+      while length < 4096 &&
             position + length < data.length() &&
             data[position + length] == data[candidate + length] {
         length += 1

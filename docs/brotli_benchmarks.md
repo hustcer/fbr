@@ -266,3 +266,35 @@ ceiling for highly repetitive data, proven by the all-256-byte periodic corpus.
 It still rejects ordinary Silesia chunks and therefore does not change the
 full-corpus ratio; general natural-data block splitting remains the next P3
 requirement.
+
+## 2026-05-24 — Longer q2 Hash Matches
+
+Corpora:
+
+- `target/brotli-encode/periodic-abcde-200k.bin`
+- `target/brotli-encode/periodic-allbytes-200k.bin`
+- `target/brotli-encode/small-alpha-multi-1400.bin`
+- `target/brotli-silesia/silesia-100m.bin`
+
+Validation commands:
+
+```nu
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-abcde-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2
+nu tools/brotli/bench/ratio.nu target/brotli-silesia/silesia-100m.bin --qualities 2
+```
+
+Results:
+
+| Corpus                  | Quality | MoonBit bytes | Google bytes | MoonBit SHA-256                                                   | External decode SHA-256                                           |
+| ----------------------- | ------- | ------------- | ------------ | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| periodic-abcde-200k     | 2       | 249           | n/a          | `59992ec9753734496469262136d5063839da2dacc00434c4f43a185a897d5c8c` | `24a7979ddb84c3eefb28a14793d9a66bfbc1e8c8ce61b326c699458dc9e951c5` |
+| periodic-allbytes-200k  | 2       | 1,399         | n/a          | `75a268e3beae7baff6fb8ca4eedf07306b7a8155f8854ccadf5275fb4fb19c3e` | `c7a7d73b68d21102bf7d6d9be27b4106497efc8119224bebfbd26b375541bde7` |
+| small-alpha-multi-1400  | 2       | 231           | 169          | unchanged                                                         | verified by ratio harness                                         |
+| silesia-100m            | 2       | 104,862,404   | 35,495,150   | `75561d5802aec1cfcfb8eec0a66c1a9883f93806e58b8209b1bf52855aab1458` | `89ed4fcaea193564aa75b37f596ccee2687985b4584ea29b8b8e72f36ef27579` |
+
+The bounded hash matcher now extends copies up to 4,096 bytes instead of 64
+bytes. This sharply reduces command count on repetitive chunks while preserving
+the exact stored fallback on Silesia. Natural-data ratio still requires block
+splitting and less conservative candidate admission.
