@@ -671,3 +671,41 @@ Results:
 P3 is still open: the Silesia 1 MiB q2 slice remains 104.92% larger than
 Google q2, so the next ratio work needs broader back-reference admission and a
 real token/block splitter rather than more literal-only split tuning.
+
+## 2026-05-24 — Large-Input Long-Match Candidate
+
+The q2+ encoder now keeps the dense-match LZ77 baseline unchanged and tries a
+second natural-data candidate only for inputs/chunks of at least 8 KiB. The
+new candidate disables the dense 4-byte match gate, requires 32-byte copies,
+and rejects command streams with less than 12% copied bytes. It is exact-costed
+against the existing literal, split-literal, dictionary, and stored fallbacks,
+so small inputs keep the previous better candidate.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native --filter '*high alphabet repetitive*'
+moon test --target native --filter '*chunked large input*'
+moon test --target native --filter '*literal chunks*'
+moon test --target native --filter '*splits literal*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 656,614        | 579,879   | 320,418      | Harness time 32,999 ms   |
+| split-literals-8k       | 2       | 4,464          | 3,434     | 3,455        | External decode verified |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+| periodic-allbytes-200k  | 2       | 1,382          | 1,382     | n/a          | External decode verified |
+
+This is the first broad natural-data back-reference win, reducing the Silesia
+1 MiB q2 overhead from 104.92% to 80.98% versus Google q2. Runtime is still
+far above the P3 target, so the next work needs a cheaper token cost model and
+real block splitting rather than more brute-force candidate writing.

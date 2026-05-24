@@ -1165,6 +1165,14 @@ test "brotli_sync q2 splits literal-only blocks" {
     None => fail("expected split literal candidate")
   }
   assert_true(split.bit_pos < single.bit_pos)
+  match
+    brotli_build_simple_lz77_commands(
+      input,
+      brotli_natural_hash_config_for_quality(2),
+    ) {
+    Some(commands) => assert_true(brotli_commands_copy_bytes(commands) > 1000)
+    None => fail("expected natural long-match candidate")
+  }
   let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
   let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
   assert_true(q2.length() < q1.length())

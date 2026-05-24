@@ -1763,6 +1763,7 @@ fn brotli_try_compressed_chunk(
   hash_config : BrotliHashConfig,
   base_offset : Int,
   window_bits : Int,
+  quality : Int,
 ) -> BrotliBitWriter? raise FzipError {
   let match_commands = brotli_build_simple_lz77_commands(data, hash_config)
   let best = brotli_try_compressed_commands(data, match_commands, false, None)
@@ -1773,7 +1774,7 @@ fn brotli_try_compressed_chunk(
     best,
   )
   let best = brotli_try_split_literal_only_metablock(data, false, best)
-  brotli_try_compressed_commands(
+  let best = brotli_try_compressed_commands(
     data,
     brotli_build_identity_dictionary_commands(
       data, hash_config, base_offset, window_bits,
@@ -1781,6 +1782,19 @@ fn brotli_try_compressed_chunk(
     false,
     best,
   )
+  if quality >= 2 && data.length() >= 8192 {
+    brotli_try_compressed_commands(
+      data,
+      brotli_build_simple_lz77_commands(
+        data,
+        brotli_natural_hash_config_for_quality(quality),
+      ),
+      false,
+      best,
+    )
+  } else {
+    best
+  }
 }
 
 ///|
@@ -1799,7 +1813,13 @@ fn brotli_encode_chunked_standard(
     let length = if remaining > chunk_size { chunk_size } else { remaining }
     let chunk = slc(data, offset, e=offset + length)
     match
-      brotli_try_compressed_chunk(chunk, hash_config, offset, opts.window_bits) {
+      brotli_try_compressed_chunk(
+        chunk,
+        hash_config,
+        offset,
+        opts.window_bits,
+        opts.quality,
+      ) {
       Some(compressed) =>
         if shft(compressed.bit_pos) + 1 < length + 16 {
           writer.write_from_bits(compressed.buf, compressed.bit_pos)
@@ -1853,6 +1873,17 @@ fn brotli_encode_standard(
       true,
       best,
     )
+    if data.length() >= 8192 {
+      best = brotli_try_compressed_commands(
+        data,
+        brotli_build_simple_lz77_commands(
+          data,
+          brotli_natural_hash_config_for_quality(opts.quality),
+        ),
+        true,
+        best,
+      )
+    }
     match best {
       Some(compressed) => {
         let uncompressed = brotli_encode_uncompressed(data, opts)
