@@ -67,8 +67,11 @@ input. This keeps encoder acceptance independent from fzip's own decoder.
 
 ```nu
 nu tools/brotli/bench/ratio.nu target/brotli-silesia/silesia-100m.bin --qualities 2,9,11
+nu tools/brotli/bench/ratio.nu target/brotli-silesia/silesia-100m.bin --qualities 2 --json
 ```
 
 Compares MoonBit `brotli_sync` output size against the Google `brotli` CLI for
 the selected qualities. The script also validates MoonBit output through the
-external decoder by delegating to `tools/brotli/encode/verify.nu`.
+external decoder by delegating to `tools/brotli/encode/verify.nu`. The default
+table output includes size and ratio columns; `--json` emits full records with
+MoonBit and Google encode timings in milliseconds for regression tracking.

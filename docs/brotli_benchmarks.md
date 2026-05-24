@@ -298,3 +298,25 @@ The bounded hash matcher now extends copies up to 4,096 bytes instead of 64
 bytes. This sharply reduces command count on repetitive chunks while preserving
 the exact stored fallback on Silesia. Natural-data ratio still requires block
 splitting and less conservative candidate admission.
+
+## 2026-05-24 — Timed q2 Ratio Harness
+
+The ratio harness now supports exact JSON output with MoonBit and Google encode
+durations:
+
+```nu
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-silesia/silesia-100m.bin --qualities 2 --json
+```
+
+Results:
+
+| Corpus       | Quality | MoonBit bytes | Google bytes | MoonBit time ms | Google time ms | Size overhead |
+| ------------ | ------- | ------------- | ------------ | --------------- | -------------- | ------------- |
+| silesia-1m   | 2       | 1,048,628     | 320,418      | 836.648         | 44.078         | 227.27%       |
+| silesia-100m | 2       | 104,862,404   | 35,495,150   | 76,009.389      | 817.288        | 195.43%       |
+
+The MoonBit timing currently includes JavaScript bundle rebuild/launch plus
+external decode verification, so it is a conservative end-to-end harness time
+rather than pure encoder CPU time. It is still useful for regression tracking
+while the encoder remains under active P3 development.

@@ -21,7 +21,9 @@ def google-encode [
     | path join $"(($input | path basename)).google.q($quality).br"
     | path expand
   )
+  let started = (date now)
   let run = (bash -lc 'brotli -q "$1" -c "$2" > "$3"' _ ($quality | into string) $input_abs $out | complete)
+  let elapsed = (date now) - $started
   if $run.exit_code != 0 {
     print --stderr $run.stderr
     exit $run.exit_code
@@ -34,6 +36,7 @@ def google-encode [
     input_size: $input_size,
     encoded_size: $encoded_size,
     ratio: ($input_size / $encoded_size),
+    encode_time_ms: ($elapsed | into int | $in / 1_000_000),
     encoded: $out,
   }
 }
@@ -42,7 +45,9 @@ def moonbit-encode [
   input: string
   quality: int
 ]: nothing -> record {
+  let started = (date now)
   let run = (nu tools/brotli/encode/verify.nu $input --quality $quality | complete)
+  let elapsed = (date now) - $started
   if $run.exit_code != 0 {
     print --stderr $run.stdout
     print --stderr $run.stderr
@@ -55,6 +60,7 @@ def moonbit-encode [
     input_size: $encoded.input_size,
     encoded_size: $encoded.encoded_size,
     ratio: ($encoded.input_size / $encoded.encoded_size),
+    encode_time_ms: ($elapsed | into int | $in / 1_000_000),
     encoded_sha256: $encoded.encoded_sha256,
   }
 }
@@ -62,6 +68,7 @@ def moonbit-encode [
 def main [
   input: string
   --qualities (-q): string = "0,1,2,9,10,11"
+  --json
 ]: nothing -> nothing {
   if not ($input | path exists) {
     print --stderr $"Missing benchmark input: ($input)"
@@ -86,10 +93,16 @@ def main [
       moonbit_ratio: $moon.ratio,
       google_ratio: $google.ratio,
       size_overhead: $overhead,
+      moonbit_time_ms: $moon.encode_time_ms,
+      google_time_ms: $google.encode_time_ms,
       moonbit_sha256: $moon.encoded_sha256,
       google_encoded: $google.encoded,
     })
   }
 
-  print ($rows | table)
+  if $json {
+    print ($rows | to json --raw)
+  } else {
+    print ($rows | table)
+  }
 }
