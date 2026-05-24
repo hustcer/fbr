@@ -898,3 +898,39 @@ Results:
 | split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
 | small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
 | small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+
+## 2026-05-24 — High-Quality Long-Match Candidate
+
+Quality 9 now tries an additional exact-costed long-match candidate with a
+12-byte minimum copy length and a 25,600 command cap. The existing q2 natural
+candidate still runs first, so q9 uses this path only when it produces a smaller
+meta-block. A 10-byte trial was rejected because it did not beat the q2-sized
+stream on Silesia.
+
+Validation commands:
+
+```nu
+moon check --target native
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 455,386        | 455,386   | 320,418      | Unchanged                |
+| silesia-1m              | 9       | 455,386        | 422,673   | 263,791      | First distinct q9 stream |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| split-literals-8k       | 9       | 3,434          | 3,434     | 3,418        | Unchanged                |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+| periodic-allbytes-200k  | 2       | 350            | 350       | n/a          | External decode verified |
+| periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified |
+
+The Silesia 1 MiB q9 overhead is now 60.23% versus Google q9. q9 is now
+quality-distinct, but P3 still needs real token/block splitting and a better
+cost model to reach the documented 5% target.

@@ -51,6 +51,26 @@ fn brotli_natural_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
 }
 
 ///|
+fn brotli_high_quality_hash_config_for_quality(
+  _quality : Int,
+) -> BrotliHashConfig {
+  {
+    table_size: 4096,
+    table_mask: 4095,
+    max_match_checks: 4,
+    max_match_length: 16384,
+    min_match_length: 12,
+    scan_step: 1,
+    max_commands: 25600,
+    min_copy_ratio_percent: 12,
+    require_dense_match_density: false,
+    density_sample_step: 256,
+    density_required_numerator: 9,
+    density_required_denominator: 10,
+  }
+}
+
+///|
 fn brotli_count_unique_literals_up_to(
   data : FixedArray[Byte],
   limit : Int,

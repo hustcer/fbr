@@ -1790,7 +1790,7 @@ fn brotli_try_compressed_chunk(
     best,
   )
   if quality >= 2 && data.length() >= 8192 {
-    brotli_try_compressed_commands(
+    let best = brotli_try_compressed_commands(
       data,
       brotli_build_simple_lz77_commands(
         data,
@@ -1799,6 +1799,19 @@ fn brotli_try_compressed_chunk(
       false,
       best,
     )
+    if quality >= 9 {
+      brotli_try_compressed_commands(
+        data,
+        brotli_build_simple_lz77_commands(
+          data,
+          brotli_high_quality_hash_config_for_quality(quality),
+        ),
+        false,
+        best,
+      )
+    } else {
+      best
+    }
   } else {
     best
   }
@@ -1890,6 +1903,17 @@ fn brotli_encode_standard(
         true,
         best,
       )
+      if opts.quality >= 9 {
+        best = brotli_try_compressed_commands(
+          data,
+          brotli_build_simple_lz77_commands(
+            data,
+            brotli_high_quality_hash_config_for_quality(opts.quality),
+          ),
+          true,
+          best,
+        )
+      }
     }
     match best {
       Some(compressed) => {
