@@ -605,3 +605,36 @@ bytes but took 37,346 ms on the 1 MiB ratio harness. The retained midpoint-only
 candidate keeps the structural block-split support while reducing that run to
 20,575 ms. P3 still needs a cheaper splitter and stronger back-reference cost
 model before full Silesia validation can approach the reference ratio.
+
+## 2026-05-24 — Split-Candidate Admission Heuristic
+
+The midpoint split candidate now runs behind a cheap Huffman-length estimator.
+Before writing the full two-block meta-block, the encoder compares the expected
+literal bit cost of one tree against two midpoint trees and requires at least a
+384-bit margin. This preserves the split wins while avoiding expensive
+candidate writes for chunks whose literal distribution is not meaningfully
+different across the midpoint.
+
+Validation commands:
+
+```nu
+moon test --target native --filter '*splits literal*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+```
+
+Results:
+
+| Corpus                  | Quality | Bytes after split | Bytes after heuristic | Notes                    |
+| ----------------------- | ------- | ----------------- | --------------------- | ------------------------ |
+| silesia-1m              | 2       | 656,982           | 656,982               | Harness time 20,575 ms -> 14,736 ms |
+| split-literals-8k       | 2       | 4,464             | 4,464                 | External decode verified |
+| small-alpha-multi-1400  | 2       | 195               | 195                   | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195               | 195                   | Unchanged                |
+| periodic-allbytes-200k  | 2       | 1,382             | 1,382                 | Unchanged                |
+
+This is a performance guardrail for the block-splitting path. It does not
+change the P3 ratio target; it keeps the current ratio gain while reducing
+candidate overhead.

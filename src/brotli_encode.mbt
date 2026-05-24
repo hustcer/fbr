@@ -867,6 +867,41 @@ fn brotli_literal_frequencies_range(
 }
 
 ///|
+fn brotli_split_literal_may_beat_single(
+  data : FixedArray[Byte],
+  split : Int,
+) -> Bool {
+  if split <= 0 || split >= data.length() {
+    return false
+  }
+  let all_frequencies = brotli_literal_frequencies_range(data, 0, data.length())
+  let first_frequencies = brotli_literal_frequencies_range(data, 0, split)
+  let second_frequencies = brotli_literal_frequencies_range(
+    data,
+    split,
+    data.length(),
+  )
+  let (all_lengths, _) = h_tree(all_frequencies, brotli_huffman_max_code_length)
+  let (first_lengths, _) = h_tree(
+    first_frequencies, brotli_huffman_max_code_length,
+  )
+  let (second_lengths, _) = h_tree(
+    second_frequencies, brotli_huffman_max_code_length,
+  )
+  if all_lengths.length() == 0 ||
+    first_lengths.length() == 0 ||
+    second_lengths.length() == 0 {
+    return false
+  }
+  let single_bits = clen(all_frequencies, all_lengths)
+  let split_bits = clen(first_frequencies, first_lengths) +
+    clen(second_frequencies, second_lengths)
+  // Two literal blocks add block-switch, context-map, and second-tree headers.
+  // Require a material literal-code saving before writing the full candidate.
+  split_bits + 384 < single_bits
+}
+
+///|
 fn brotli_collect_command_literals(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
@@ -1332,17 +1367,23 @@ fn brotli_try_split_literal_only_metablock(
   let split_points = [data.length() / 2]
   let mut best = best
   for i in 0..<split_points.length() {
-    match
-      brotli_write_split_literal_only_metablock(data, split_points[i], is_last) {
-      Some(candidate) =>
-        match best {
-          Some(current) =>
-            if candidate.bit_pos < current.bit_pos {
-              best = Some(candidate)
-            }
-          None => best = Some(candidate)
-        }
-      None => ()
+    if brotli_split_literal_may_beat_single(data, split_points[i]) {
+      match
+        brotli_write_split_literal_only_metablock(
+          data,
+          split_points[i],
+          is_last,
+        ) {
+        Some(candidate) =>
+          match best {
+            Some(current) =>
+              if candidate.bit_pos < current.bit_pos {
+                best = Some(candidate)
+              }
+            None => best = Some(candidate)
+          }
+        None => ()
+      }
     }
   }
   best
