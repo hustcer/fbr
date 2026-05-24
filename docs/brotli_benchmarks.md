@@ -1698,3 +1698,37 @@ Results:
 The Silesia 1 MiB q10 gap drops from 22.39% to 19.18%; q11 drops from 24.01%
 to 20.76%. q10/q11 still share the same parser and do not yet implement a
 full Zopfli/shortest-path backend.
+
+## 2026-05-24 — q11 Deeper Parser Tuning
+
+Quality 11 now goes deeper than q10: 32 hash-chain checks and a 300,000-command
+cap, while keeping the q10 settings unchanged. This gives q11 a distinct
+measured output on natural data.
+
+Validation commands:
+
+```nu
+moon fmt
+moon test --target native --filter '*alternate hash candidates exact-costed*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 11 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 10 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 10,11 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 10,11 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 11
+```
+
+Results:
+
+| Corpus                       | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ---------------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m                   | 10      | 288,988        | 288,988   | 242,485      | q10 unchanged            |
+| silesia-1m                   | 11      | 288,988        | 283,133   | 239,314      | q11 deeper-parser win    |
+| split-literals-8k            | 10      | 3,434          | 3,434     | 3,420        | Unchanged                |
+| split-literals-8k            | 11      | 3,434          | 3,434     | 3,420        | Unchanged                |
+| small-alpha-multi-1400       | 10      | 179            | 179       | 63           | Unchanged                |
+| small-alpha-multi-1400       | 11      | 179            | 179       | 55           | Unchanged                |
+| periodic-allbytes-200k       | 11      | 350            | 350       | n/a          | External decode verified |
+
+The Silesia 1 MiB q11 gap drops from 20.76% to 18.31%. P4 still needs a real
+shortest-path parser and stronger entropy modeling before it can meet the
+final q11 target.
