@@ -4,6 +4,7 @@ priv struct BrotliDictionaryEncodeIndex {
   next : FixedArray[Int]
   lengths : FixedArray[Int]
   word_indices : FixedArray[Int]
+  transforms : FixedArray[Int]
 }
 
 ///|
@@ -26,6 +27,12 @@ fn brotli_dictionary_identity_word_total() -> Int {
 }
 
 ///|
+fn brotli_dictionary_encode_entry_capacity() -> Int {
+  brotli_dictionary_identity_word_total() *
+  brotli_dictionary_same_length_transform_count()
+}
+
+///|
 fn brotli_dictionary_hash_update(hash : Int, value : Int) -> Int {
   ((hash << 5) - hash + value) & 0x7fffffff
 }
@@ -44,25 +51,172 @@ fn brotli_dictionary_hash_data(
 }
 
 ///|
-fn brotli_dictionary_hash_word(length : Int, word_index : Int) -> Int {
+fn brotli_dictionary_word_offset(length : Int, word_index : Int) -> Int {
+  brotli_dictionary_offsets_by_length[length] + word_index * length
+}
+
+///|
+fn brotli_dictionary_word_byte_at(
+  length : Int,
+  word_index : Int,
+  byte_index : Int,
+) -> Byte {
+  brotli_dictionary_data[brotli_dictionary_word_offset(length, word_index) +
+  byte_index]
+}
+
+///|
+fn brotli_dictionary_transformed_byte(
+  value : Byte,
+  transform_type : Int,
+  byte_index : Int,
+) -> Byte {
+  if transform_type == brotli_transform_uppercase_all ||
+    (transform_type == brotli_transform_uppercase_first && byte_index == 0) {
+    brotli_ascii_upper(value)
+  } else {
+    value
+  }
+}
+
+///|
+fn brotli_dictionary_transform_type(transform_index : Int) -> Int {
+  brotli_transform_triplets[transform_index * 3 + 1]
+}
+
+///|
+fn brotli_dictionary_transform_prefix_length(transform_index : Int) -> Int {
+  let prefix_id = brotli_transform_triplets[transform_index * 3]
+  brotli_transform_prefix_suffix[brotli_transform_prefix_suffix_map[prefix_id]].to_int()
+}
+
+///|
+fn brotli_dictionary_transform_suffix_length(transform_index : Int) -> Int {
+  let suffix_id = brotli_transform_triplets[transform_index * 3 + 2]
+  brotli_transform_prefix_suffix[brotli_transform_prefix_suffix_map[suffix_id]].to_int()
+}
+
+///|
+fn brotli_dictionary_same_length_transform(transform_index : Int) -> Bool {
+  let transform_type = brotli_dictionary_transform_type(transform_index)
+  (
+    transform_type == brotli_transform_identity ||
+    transform_type == brotli_transform_uppercase_first ||
+    transform_type == brotli_transform_uppercase_all
+  ) &&
+  brotli_dictionary_transform_prefix_length(transform_index) == 0 &&
+  brotli_dictionary_transform_suffix_length(transform_index) == 0
+}
+
+///|
+fn brotli_dictionary_same_length_transform_count() -> Int {
+  let mut count = 0
+  for transform_index in 0..<brotli_transform_count() {
+    if brotli_dictionary_same_length_transform(transform_index) {
+      count += 1
+    }
+  }
+  count
+}
+
+///|
+fn brotli_dictionary_word_has_ascii_lower(
+  length : Int,
+  word_index : Int,
+) -> Bool {
+  for i in 0..<length {
+    let value = brotli_dictionary_word_byte_at(length, word_index, i).to_int()
+    if value >= 97 && value <= 122 {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn brotli_dictionary_word_is_ascii(length : Int, word_index : Int) -> Bool {
+  for i in 0..<length {
+    if brotli_dictionary_word_byte_at(length, word_index, i).to_int() >= 128 {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn brotli_dictionary_transform_allowed(
+  length : Int,
+  word_index : Int,
+  transform_index : Int,
+) -> Bool {
+  if !brotli_dictionary_same_length_transform(transform_index) {
+    return false
+  }
+  let transform_type = brotli_dictionary_transform_type(transform_index)
+  if transform_type == brotli_transform_identity {
+    true
+  } else if transform_type == brotli_transform_uppercase_first {
+    let first = brotli_dictionary_word_byte_at(length, word_index, 0).to_int()
+    first >= 97 && first <= 122
+  } else if transform_type == brotli_transform_uppercase_all {
+    brotli_dictionary_word_is_ascii(length, word_index) &&
+    brotli_dictionary_word_has_ascii_lower(length, word_index)
+  } else {
+    false
+  }
+}
+
+///|
+fn brotli_dictionary_hash_word(
+  length : Int,
+  word_index : Int,
+  transform_index : Int,
+) -> Int {
   let offset = brotli_dictionary_offsets_by_length[length] + word_index * length
   let mut hash = brotli_dictionary_hash_update(17, length)
+  let transform_type = brotli_dictionary_transform_type(transform_index)
   for i in 0..<length {
     hash = brotli_dictionary_hash_update(
       hash,
-      brotli_dictionary_data[offset + i].to_int(),
+      brotli_dictionary_transformed_byte(
+        brotli_dictionary_data[offset + i],
+        transform_type,
+        i,
+      ).to_int(),
     )
   }
   hash & brotli_dictionary_encode_hash_mask
 }
 
 ///|
+fn brotli_add_dictionary_encode_entry(
+  index : BrotliDictionaryEncodeIndex,
+  entry : Int,
+  length : Int,
+  word_index : Int,
+  transform_index : Int,
+) -> Int {
+  if !brotli_dictionary_transform_allowed(length, word_index, transform_index) {
+    return entry
+  }
+  let hash = brotli_dictionary_hash_word(length, word_index, transform_index)
+  index.lengths[entry] = length
+  index.word_indices[entry] = word_index
+  index.transforms[entry] = transform_index
+  index.next[entry] = index.table[hash]
+  index.table[hash] = entry
+  entry + 1
+}
+
+///|
 fn brotli_build_dictionary_encode_index() -> BrotliDictionaryEncodeIndex {
-  let total = brotli_dictionary_identity_word_total()
+  let total = brotli_dictionary_encode_entry_capacity()
   let table = FixedArray::make(brotli_dictionary_encode_hash_size, -1)
   let next = FixedArray::make(total, -1)
   let lengths = FixedArray::make(total, 0)
   let word_indices = FixedArray::make(total, 0)
+  let transforms = FixedArray::make(total, 0)
+  let index = { table, next, lengths, word_indices, transforms }
   let mut entry = 0
   for
     length in brotli_dictionary_min_word_length..<=brotli_dictionary_max_word_length {
@@ -70,17 +224,16 @@ fn brotli_build_dictionary_encode_index() -> BrotliDictionaryEncodeIndex {
     if bits > 0 {
       let word_count = 1 << bits
       for word_index in 0..<word_count {
-        let hash = brotli_dictionary_hash_word(length, word_index)
-        lengths[entry] = length
-        word_indices[entry] = word_index
-        next[entry] = table[hash]
-        table[hash] = entry
-        entry += 1
+        for transform_index in 0..<brotli_transform_count() {
+          entry = brotli_add_dictionary_encode_entry(
+            index, entry, length, word_index, transform_index,
+          )
+        }
       }
     }
   }
   ignore(entry)
-  { table, next, lengths, word_indices }
+  index
 }
 
 ///|
@@ -97,10 +250,17 @@ fn brotli_dictionary_word_matches(
   position : Int,
   length : Int,
   word_index : Int,
+  transform_index : Int,
 ) -> Bool {
-  let offset = brotli_dictionary_offsets_by_length[length] + word_index * length
+  let offset = brotli_dictionary_word_offset(length, word_index)
+  let transform_type = brotli_dictionary_transform_type(transform_index)
   for i in 0..<length {
-    if data[position + i] != brotli_dictionary_data[offset + i] {
+    let expected = brotli_dictionary_transformed_byte(
+      brotli_dictionary_data[offset + i],
+      transform_type,
+      i,
+    )
+    if data[position + i] != expected {
       return false
     }
   }
@@ -147,11 +307,16 @@ fn brotli_find_identity_dictionary_match(
             position,
             length,
             index.word_indices[entry],
+            index.transforms[entry],
           ) {
           let max_distance = brotli_encoder_max_distance(
             global_position, window_bits,
           )
-          let distance = max_distance + 1 + index.word_indices[entry]
+          let word_count = 1 << brotli_dictionary_size_bits_by_length[length]
+          let distance = max_distance +
+            1 +
+            index.word_indices[entry] +
+            index.transforms[entry] * word_count
           return Some((length, distance))
         }
         entry = index.next[entry]
