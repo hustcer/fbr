@@ -870,3 +870,31 @@ Results:
 | small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
 
 The Silesia 1 MiB q2 overhead is now 42.12% versus Google q2.
+
+## 2026-05-24 — Longer Natural Copies
+
+The natural long-match candidate now allows copies up to 16 KiB instead of
+4 KiB. This does not move Silesia, but it reduces command overhead on long
+periodic data.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native --filter '*chunked large input*'
+moon test --target native --filter '*high alphabet repetitive*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 455,386        | 455,386   | 320,418      | Unchanged                |
+| periodic-allbytes-200k  | 2       | 494            | 350       | n/a          | External decode verified |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
