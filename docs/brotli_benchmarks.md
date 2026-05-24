@@ -1777,3 +1777,41 @@ Results:
 The Silesia 1 MiB q2 result moves from 2.13% smaller than Google to 1.71%
 larger than Google, while benchmark time drops by about 49%. This makes q2 a
 fast mode again; deeper exact-costed alternatives remain reserved for q9+.
+
+## 2026-05-25 — Deeper q9/q10 Parser Tuning
+
+Quality 9 and 10 now use q11's deeper high-quality parser settings: 32
+hash-chain checks, 5-byte minimum matches, and a 300,000-command cap. A
+16-check q9 trial improved Silesia q9 to 288,988 bytes; the retained 32-check
+setting improved it further to 283,133 bytes with similar measured runtime.
+
+Validation commands:
+
+```nu
+moon fmt
+moon test --target native --filter '*alternate hash candidates exact-costed*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 10,11 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 9,10,11 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 9,10,11 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                       | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ---------------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m                   | 9       | 296,784        | 283,133   | 263,791      | Deeper q9 parser win     |
+| silesia-1m                   | 10      | 288,988        | 283,133   | 242,485      | Deeper q10 parser win    |
+| silesia-1m                   | 11      | 283,133        | 283,133   | 239,314      | Unchanged                |
+| split-literals-8k            | 9       | 3,434          | 3,434     | 3,418        | Unchanged                |
+| split-literals-8k            | 10      | 3,434          | 3,434     | 3,420        | Unchanged                |
+| split-literals-8k            | 11      | 3,434          | 3,434     | 3,420        | Unchanged                |
+| small-alpha-multi-1400       | 9       | 179            | 179       | 69           | Unchanged                |
+| small-alpha-multi-1400       | 10      | 179            | 179       | 63           | Unchanged                |
+| small-alpha-multi-1400       | 11      | 179            | 179       | 55           | Unchanged                |
+| periodic-allbytes-200k       | 9       | 350            | 350       | n/a          | External decode verified |
+
+The Silesia 1 MiB q9 gap drops from 12.51% to 7.33%; q10 drops from 19.18%
+to 16.76%. P3/P4 still need stronger parsing and entropy modeling to reach the
+final 5% target.

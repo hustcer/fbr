@@ -57,21 +57,9 @@ fn brotli_natural_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
 fn brotli_high_quality_hash_config_for_quality(
   quality : Int,
 ) -> BrotliHashConfig {
-  let max_match_checks = if quality >= 11 {
-    32
-  } else if quality >= 10 {
-    16
-  } else {
-    4
-  }
-  let min_match_length = if quality >= 10 { 5 } else { 6 }
-  let max_commands = if quality >= 11 {
-    300000
-  } else if quality >= 10 {
-    250000
-  } else {
-    150000
-  }
+  let max_match_checks = if quality >= 9 { 32 } else { 4 }
+  let min_match_length = if quality >= 9 { 5 } else { 6 }
+  let max_commands = if quality >= 9 { 300000 } else { 150000 }
   {
     table_size: 32768,
     table_mask: 32767,

@@ -1550,19 +1550,19 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   )
   inspect(
     brotli_high_quality_hash_config_for_quality(9).max_match_checks,
-    content="4",
+    content="32",
   )
   inspect(
     brotli_high_quality_hash_config_for_quality(9).min_match_length,
-    content="6",
+    content="5",
   )
   inspect(
     brotli_high_quality_hash_config_for_quality(9).max_commands,
-    content="150000",
+    content="300000",
   )
   inspect(
     brotli_high_quality_hash_config_for_quality(10).max_match_checks,
-    content="16",
+    content="32",
   )
   inspect(
     brotli_high_quality_hash_config_for_quality(10).min_match_length,
@@ -1570,7 +1570,7 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   )
   inspect(
     brotli_high_quality_hash_config_for_quality(10).max_commands,
-    content="250000",
+    content="300000",
   )
   inspect(
     brotli_high_quality_hash_config_for_quality(11).max_match_checks,
