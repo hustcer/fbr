@@ -1187,6 +1187,37 @@ test "brotli_sync q2 splits literal-only blocks" {
 }
 
 ///|
+test "brotli_sync q9 admits shorter high-quality matches" {
+  let input = FixedArray::make(2600, b'\x00')
+  let pattern : FixedArray[Byte] = [
+    b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l',
+  ]
+  for block in 0..<200 {
+    let offset = block * 13
+    for i in 0..<pattern.length() {
+      input[offset + i] = pattern[i]
+    }
+    input[offset + 12] = (block & 0xff).to_byte()
+  }
+  match
+    brotli_build_simple_lz77_commands(
+      input,
+      brotli_natural_hash_config_for_quality(2),
+    ) {
+    Some(_) => fail("q2 natural candidate should reject 12-byte matches")
+    None => ()
+  }
+  match
+    brotli_build_simple_lz77_commands(
+      input,
+      brotli_high_quality_hash_config_for_quality(9),
+    ) {
+    Some(commands) => assert_true(brotli_commands_copy_bytes(commands) > 2000)
+    None => fail("expected q9 high-quality candidate")
+  }
+}
+
+///|
 test "brotli_sync q2 uses identity static dictionary words" {
   let input = str_to_u8(
     "time area unit home work water world house about other these first right after where",
