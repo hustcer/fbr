@@ -1007,6 +1007,23 @@ test "brotli_sync q2 compresses short periodic input with LZ77 copy" {
 }
 
 ///|
+test "brotli_sync q2 emits complex literal Huffman tree" {
+  let input = FixedArray::make(1025, b'\x00')
+  let pattern : FixedArray[Byte] = [b'A', b'B', b'C', b'D', b'E']
+  for i in 0..<input.length() {
+    input[i] = pattern[i % pattern.length()]
+  }
+  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
+  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  assert_true(q2.length() < q1.length())
+  let decoded = unbrotli_sync(q2)
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q2 compresses literal prefix then copied suffix" {
   let input = FixedArray::make(1024, b'\x00')
   input[0] = b'X'
@@ -1034,6 +1051,32 @@ test "brotli_sync q2 compresses multiple small alphabet copies" {
   let pattern : FixedArray[Byte] = [b'A', b'B', b'C', b'A', b'B', b'C']
   for i in prefix.length()..<input.length() {
     input[i] = pattern[(i - prefix.length()) % pattern.length()]
+  }
+  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
+  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  assert_true(q2.length() < q1.length())
+  let decoded = unbrotli_sync(q2)
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
+test "brotli_sync q2 emits complex command Huffman tree" {
+  let input = FixedArray::make(1400, b'\x00')
+  let alphabet : FixedArray[Byte] = [b'A', b'B', b'C', b'D']
+  let mut state = 17
+  for chunk in 0..<200 {
+    let offset = chunk * 7
+    input[offset] = b'A'
+    input[offset + 1] = b'B'
+    input[offset + 2] = b'C'
+    input[offset + 3] = b'A'
+    input[offset + 4] = b'B'
+    input[offset + 5] = b'C'
+    input[offset + 6] = alphabet[state % 4]
+    state = (state * 73 + 41) % 257
   }
   let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
   let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })

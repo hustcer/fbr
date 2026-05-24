@@ -121,3 +121,29 @@ Result:
 This adds a greedy multi-command path for inputs with up to four distinct
 literal bytes. It still uses Brotli simple Huffman trees, so command and
 distance alphabets are capped at four symbols each.
+
+## 2026-05-24 — Complex Huffman q2 Path
+
+Corpora:
+
+- `target/brotli-encode/periodic-abcde-1025.bin`
+- `target/brotli-encode/small-alpha-multi-1400.bin`
+
+Validation commands:
+
+```nu
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-abcde-1025.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/small-alpha-multi-1400.bin --quality 2
+```
+
+Results:
+
+| Corpus                  | Quality | Encoded bytes | Encoded SHA-256                                                   | External decode SHA-256                                           |
+| ----------------------- | ------- | ------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| periodic-abcde-1025     | 2       | 22            | `7cc14af91a972848744c19fec74d38a850ef059aaffaa490e566a0886fceefb0` | `f4dc1e54e392d07b8c8d9756d1960471cc7b55a2ac7d6ccf2765952d5d1acfb1` |
+| small-alpha-multi-1400  | 2       | 306           | `385baf3fcd2396020985a9736ad9517ad1b4eaf45644043495fa9d04912a89cc` | `0a8c1bc877ff95d68eaea55b7112864aab6b4f048bafc7502419b2d9f7e14406` |
+
+This removes the previous four-symbol cap by emitting Brotli complex Huffman
+tree descriptions for literal, command, and distance alphabets when needed.
+The implementation currently uses fixed-length canonical codes padded to a
+power of two, which is simple and deterministic but not yet entropy-optimal.
