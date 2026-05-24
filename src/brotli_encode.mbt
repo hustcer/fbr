@@ -5,6 +5,15 @@ priv struct BrotliBitWriter {
 }
 
 ///|
+priv struct BrotliCommandPrefix {
+  symbol : Int
+  insert_extra : Int
+  copy_extra : Int
+  insert_extra_bits : Int
+  copy_extra_bits : Int
+}
+
+///|
 fn BrotliBitWriter::new(capacity : Int) -> BrotliBitWriter {
   { buf: FixedArray::make(capacity, b'\x00'), bit_pos: 0 }
 }
@@ -107,17 +116,32 @@ fn brotli_write_length_nibbles(
 }
 
 ///|
+fn brotli_write_metablock_header(
+  writer : BrotliBitWriter,
+  length : Int,
+  is_last : Bool,
+  is_uncompressed : Bool,
+) -> Unit {
+  let mnibbles = brotli_metablock_mnibbles(length)
+  writer.write_bits(1, if is_last { 1 } else { 0 })
+  if is_last {
+    writer.write_bits(1, 0) // not empty
+  }
+  writer.write_bits(2, mnibbles)
+  brotli_write_length_nibbles(writer, length, mnibbles)
+  if !is_last {
+    writer.write_bits(1, if is_uncompressed { 1 } else { 0 })
+  }
+}
+
+///|
 fn brotli_write_uncompressed_metablock(
   writer : BrotliBitWriter,
   data : FixedArray[Byte],
   offset : Int,
   length : Int,
 ) -> Unit {
-  let mnibbles = brotli_metablock_mnibbles(length)
-  writer.write_bits(1, 0) // ISLAST = false; final empty block terminates.
-  writer.write_bits(2, mnibbles)
-  brotli_write_length_nibbles(writer, length, mnibbles)
-  writer.write_bits(1, 1) // ISUNCOMPRESSED
+  brotli_write_metablock_header(writer, length, false, true)
   writer.write_bytes(data, offset, length)
 }
 
@@ -135,6 +159,90 @@ fn brotli_encoded_capacity(input_len : Int) -> Int {
     (input_len + brotli_max_metablock_bytes - 1) / brotli_max_metablock_bytes
   }
   input_len + 8 + blocks * 8
+}
+
+///|
+fn brotli_write_simple_one_symbol_huffman(
+  writer : BrotliBitWriter,
+  symbol : Int,
+  symbol_bits : Int,
+) -> Unit {
+  writer.write_bits(2, 1) // simple Huffman marker
+  writer.write_bits(2, 0) // one symbol
+  writer.write_bits(symbol_bits, symbol)
+}
+
+///|
+fn brotli_is_single_repeated_byte(data : FixedArray[Byte]) -> Bool {
+  if data.length() < 3 {
+    return false
+  }
+  let first = data[0]
+  for i in 1..<data.length() {
+    if data[i] != first {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn brotli_find_command_prefix(
+  insert_length : Int,
+  copy_length : Int,
+  explicit_distance : Bool,
+) -> BrotliCommandPrefix raise FzipError {
+  for symbol in 0..<brotli_num_command_symbols {
+    let info = brotli_command_info(symbol)
+    let distance_ok = if explicit_distance {
+      info.distance_code < 0
+    } else {
+      info.distance_code >= 0
+    }
+    if distance_ok &&
+      insert_length >= info.insert_len_offset &&
+      copy_length >= info.copy_len_offset {
+      let insert_extra = insert_length - info.insert_len_offset
+      let copy_extra = copy_length - info.copy_len_offset
+      if insert_extra < 1 << info.insert_len_extra_bits &&
+        copy_extra < 1 << info.copy_len_extra_bits {
+        return {
+          symbol,
+          insert_extra,
+          copy_extra,
+          insert_extra_bits: info.insert_len_extra_bits,
+          copy_extra_bits: info.copy_len_extra_bits,
+        }
+      }
+    }
+  }
+  raise fzip_err(BrotliInvalidMetablock, msg="no Brotli command prefix")
+}
+
+///|
+fn brotli_encode_repeated_byte(
+  data : FixedArray[Byte],
+  opts : BrotliOptions,
+) -> FixedArray[Byte] raise FzipError {
+  let copy_length = data.length() - 1
+  let command = brotli_find_command_prefix(1, copy_length, true)
+  let writer = BrotliBitWriter::new(128)
+  brotli_encode_window_bits(writer, opts.window_bits)
+  brotli_write_metablock_header(writer, data.length(), true, false)
+  writer.write_bits(1, 0) // one literal block type
+  writer.write_bits(1, 0) // one command block type
+  writer.write_bits(1, 0) // one distance block type
+  writer.write_bits(6, 0) // NPOSTFIX = 0, NDIRECT = 0
+  writer.write_bits(2, 0) // LSB6 literal context mode
+  writer.write_bits(1, 0) // literal context map has one tree
+  writer.write_bits(1, 0) // distance context map has one tree
+  brotli_write_simple_one_symbol_huffman(writer, data[0].to_int(), 8)
+  brotli_write_simple_one_symbol_huffman(writer, command.symbol, 10)
+  brotli_write_simple_one_symbol_huffman(writer, 16, 6) // distance 1 prefix
+  writer.write_bits(command.insert_extra_bits, command.insert_extra)
+  writer.write_bits(command.copy_extra_bits, command.copy_extra)
+  writer.write_bits(1, 0) // distance code 16 extra bit: distance 1
+  writer.finish()
 }
 
 ///|
@@ -160,6 +268,18 @@ fn brotli_encode_uncompressed(
 }
 
 ///|
+fn brotli_encode_standard(
+  data : FixedArray[Byte],
+  opts : BrotliOptions,
+) -> FixedArray[Byte] raise FzipError {
+  if data.length() <= brotli_max_metablock_bytes &&
+    brotli_is_single_repeated_byte(data) {
+    return brotli_encode_repeated_byte(data, opts)
+  }
+  brotli_encode_uncompressed(data, opts)
+}
+
+///|
 fn brotli_validate_options(opts : BrotliOptions) -> Unit raise FzipError {
   if opts.quality < 0 || opts.quality > 11 {
     raise fzip_err(InvalidZipData, msg="Brotli quality must be 0..=11")
@@ -180,7 +300,8 @@ pub fn brotli_sync(
 ) -> FixedArray[Byte] raise FzipError {
   brotli_validate_options(opts)
   match opts.quality {
-    0..=11 => brotli_encode_uncompressed(data, opts)
+    0 | 1 => brotli_encode_uncompressed(data, opts)
+    2..=11 => brotli_encode_standard(data, opts)
     _ => raise fzip_err(InvalidZipData, msg="Brotli quality must be 0..=11")
   }
 }
