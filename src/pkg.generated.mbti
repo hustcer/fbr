@@ -84,6 +84,7 @@ pub(all) suberror FzipError {
 pub(all) struct BrotliOptions {
   quality : Int
   window_bits : Int
+  max_input_size : Int
 } derive(@debug.Debug)
 pub fn BrotliOptions::default() -> Self
 

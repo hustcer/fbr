@@ -932,7 +932,11 @@ test "unbrotli_sync decodes q0 uncompressed Brotli stream from CLI" {
 ///|
 test "brotli_sync q0 encodes empty stream" {
   let input : FixedArray[Byte] = []
-  let compressed = brotli_sync(input, opts={ quality: 0, window_bits: 16 })
+  let compressed = brotli_sync(input, opts={
+    quality: 0,
+    window_bits: 16,
+    max_input_size: default_max_input_size,
+  })
   let decoded = unbrotli_sync(compressed)
   assert_eq(decoded.length(), 0)
 }
@@ -940,7 +944,11 @@ test "brotli_sync q0 encodes empty stream" {
 ///|
 test "brotli_sync q0 round-trips uncompressed meta-block" {
   let input : FixedArray[Byte] = [1, 2, 3, 4, 5, 0, 255]
-  let compressed = brotli_sync(input, opts={ quality: 0, window_bits: 16 })
+  let compressed = brotli_sync(input, opts={
+    quality: 0,
+    window_bits: 16,
+    max_input_size: default_max_input_size,
+  })
   let decoded = unbrotli_sync(compressed)
   assert_eq(decoded.length(), input.length())
   for i in 0..<input.length() {
@@ -952,7 +960,11 @@ test "brotli_sync q0 round-trips uncompressed meta-block" {
 test "brotli_sync supports all standard window bits" {
   let input : FixedArray[Byte] = [42]
   for window_bits in 10..<=24 {
-    let compressed = brotli_sync(input, opts={ quality: 0, window_bits })
+    let compressed = brotli_sync(input, opts={
+      quality: 0,
+      window_bits,
+      max_input_size: default_max_input_size,
+    })
     let decoded = unbrotli_sync(compressed)
     assert_eq(decoded.length(), 1)
     assert_eq(decoded[0], input[0])
@@ -965,7 +977,11 @@ test "brotli_sync q1 round-trips large input across meta-blocks" {
   for i in 0..<input.length() {
     input[i] = (i & 0xff).to_byte()
   }
-  let compressed = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
+  let compressed = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   let decoded = unbrotli_sync(compressed)
   assert_eq(decoded.length(), input.length())
   assert_eq(decoded[0], input[0])
@@ -979,9 +995,21 @@ test "brotli_sync q1 round-trips large input across meta-blocks" {
 ///|
 test "brotli_sync q2 compresses repeated byte with LZ77 copy" {
   let input = FixedArray::make(1024, b'A')
-  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
-  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
-  let q9 = brotli_sync(input, opts={ quality: 9, window_bits: 22 })
+  let q1 = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q9 = brotli_sync(input, opts={
+    quality: 9,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   assert_true(q2.length() < q1.length())
   assert_true(q9.length() < q1.length())
   let decoded = unbrotli_sync(q2)
@@ -998,9 +1026,21 @@ test "brotli_sync q2 compresses short periodic input with LZ77 copy" {
   for i in 0..<input.length() {
     input[i] = pattern[i & 3]
   }
-  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
-  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
-  let q9 = brotli_sync(input, opts={ quality: 9, window_bits: 22 })
+  let q1 = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q9 = brotli_sync(input, opts={
+    quality: 9,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   assert_true(q2.length() < q1.length())
   assert_true(q9.length() < q1.length())
   let decoded = unbrotli_sync(q2)
@@ -1044,8 +1084,16 @@ test "brotli_sync q2 emits complex literal Huffman tree" {
   for i in 0..<input.length() {
     input[i] = pattern[i % pattern.length()]
   }
-  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
-  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  let q1 = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   assert_true(q2.length() < q1.length())
   let decoded = unbrotli_sync(q2)
   assert_eq(decoded.length(), input.length())
@@ -1062,8 +1110,16 @@ test "brotli_sync q2 compresses literal prefix then copied suffix" {
   for i in 1..<input.length() {
     input[i] = pattern[(i - 1) % 3]
   }
-  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
-  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  let q1 = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   assert_true(q2.length() < q1.length())
   let decoded = unbrotli_sync(q2)
   assert_eq(decoded.length(), input.length())
@@ -1083,8 +1139,16 @@ test "brotli_sync q2 compresses multiple small alphabet copies" {
   for i in prefix.length()..<input.length() {
     input[i] = pattern[(i - prefix.length()) % pattern.length()]
   }
-  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
-  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  let q1 = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   assert_true(q2.length() < q1.length())
   let decoded = unbrotli_sync(q2)
   assert_eq(decoded.length(), input.length())
@@ -1109,9 +1173,21 @@ test "brotli_sync q2 emits complex command Huffman tree" {
     input[offset + 6] = alphabet[state % 4]
     state = (state * 73 + 41) % 257
   }
-  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
-  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
-  let q9 = brotli_sync(input, opts={ quality: 9, window_bits: 22 })
+  let q1 = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q9 = brotli_sync(input, opts={
+    quality: 9,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   assert_true(q2.length() < q1.length())
   assert_true(q9.length() < q1.length())
   let decoded = unbrotli_sync(q2)
@@ -1129,8 +1205,16 @@ test "brotli_sync q2 compresses low alphabet literal chunks" {
     input[i] = (mixed + 65).to_byte()
   }
   assert_true(brotli_count_unique_literals_up_to(input, 64) <= 64)
-  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
-  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  let q1 = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   assert_true(q2.length() < q1.length())
   let decoded = unbrotli_sync(q2)
   assert_eq(decoded.length(), input.length())
@@ -1160,8 +1244,16 @@ test "brotli_sync q2 compresses skewed high alphabet literal chunks" {
     Some(_) => ()
     None => fail("expected high-alphabet literal-only candidate")
   }
-  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
-  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  let q1 = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   assert_true(q2.length() < q1.length())
   let decoded = unbrotli_sync(q2)
   assert_eq(decoded.length(), input.length())
@@ -1200,8 +1292,16 @@ test "brotli_sync q2 splits literal-only blocks" {
     Some(commands) => assert_true(brotli_commands_copy_bytes(commands) > 1000)
     None => fail("expected natural long-match candidate")
   }
-  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
-  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  let q1 = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   assert_true(q2.length() < q1.length())
   let decoded = unbrotli_sync(q2)
   assert_eq(decoded.length(), input.length())
@@ -1355,7 +1455,11 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   }
   assert_true(best3.bit_pos > 0)
   assert_true(best4.bit_pos > 0)
-  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   assert_true(q2.length() <= 195)
   let decoded = unbrotli_sync(q2)
   assert_eq(decoded.length(), input.length())
@@ -1379,8 +1483,16 @@ test "brotli_sync q2 uses identity static dictionary words" {
     }
     None => fail("expected static dictionary command candidate")
   }
-  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
-  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  let q1 = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   assert_true(q2.length() < q1.length())
   let decoded = unbrotli_sync(q2)
   assert_eq(decoded.length(), input.length())
@@ -1396,8 +1508,16 @@ test "brotli_sync q2 compresses chunked large input" {
   for i in 0..<input.length() {
     input[i] = pattern[i % pattern.length()]
   }
-  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
-  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  let q1 = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   assert_true(q2.length() < q1.length())
   let decoded = unbrotli_sync(q2)
   assert_eq(decoded.length(), input.length())
@@ -1413,8 +1533,16 @@ test "brotli_sync q2 compresses high alphabet repetitive chunks" {
     input[i] = (i & 0xff).to_byte()
   }
   assert_true(brotli_count_unique_literals_up_to(input, 16) > 16)
-  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
-  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  let q1 = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
   assert_true(q2.length() < q1.length())
   let decoded = unbrotli_sync(q2)
   assert_eq(decoded.length(), input.length())
@@ -1427,7 +1555,11 @@ test "brotli_sync q2 compresses high alphabet repetitive chunks" {
 test "brotli_sync q0 through q11 round-trip" {
   let input : FixedArray[Byte] = [0, 1, 1, 2, 3, 5, 8, 13]
   for quality in 0..<=11 {
-    let compressed = brotli_sync(input, opts={ quality, window_bits: 22 })
+    let compressed = brotli_sync(input, opts={
+      quality,
+      window_bits: 22,
+      max_input_size: default_max_input_size,
+    })
     let decoded = unbrotli_sync(compressed)
     assert_eq(decoded.length(), input.length())
     for i in 0..<input.length() {
@@ -1453,6 +1585,18 @@ test "brotli_sync rejects invalid quality" {
   let result : Result[FixedArray[Byte], FzipError] = try? brotli_sync(input, opts={
     quality: 12,
     window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  assert_brotli_error(result, InvalidZipData)
+}
+
+///|
+test "brotli_sync enforces max_input_size" {
+  let input : FixedArray[Byte] = [1, 2]
+  let result : Result[FixedArray[Byte], FzipError] = try? brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: 1,
   })
   assert_brotli_error(result, InvalidZipData)
 }

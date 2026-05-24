@@ -2898,6 +2898,9 @@ fn brotli_validate_options(opts : BrotliOptions) -> Unit raise FzipError {
   if opts.quality < 0 || opts.quality > 11 {
     raise fzip_err(InvalidZipData, msg="Brotli quality must be 0..=11")
   }
+  if opts.max_input_size < 0 {
+    raise fzip_err(InvalidZipData, msg="Brotli max_input_size must be >= 0")
+  }
   brotli_validate_window_bits(opts.window_bits)
 }
 
@@ -2913,6 +2916,15 @@ pub fn brotli_sync(
   opts? : BrotliOptions = BrotliOptions::default(),
 ) -> FixedArray[Byte] raise FzipError {
   brotli_validate_options(opts)
+  if data.length() > opts.max_input_size {
+    raise fzip_err(InvalidZipData, msg="input exceeds max_input_size")
+  }
+  if opts.quality >= 10 && data.length() > 256 * 1024 * 1024 {
+    raise fzip_err(
+      InvalidZipData,
+      msg="Brotli q10/q11 input exceeds 256 MiB safety cap",
+    )
+  }
   match opts.quality {
     0 | 1 => brotli_encode_uncompressed(data, opts)
     2..=11 => brotli_encode_standard(data, opts)

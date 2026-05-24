@@ -52,7 +52,7 @@ def main [
       "  \"  const fs = require('fs');\\n\" +"
       "  \"  const crypto = require('crypto');\\n\" +"
       "  \"  const input = fs.readFileSync(\" + JSON.stringify(inputPath) + \");\\n\" +"
-      "  \"  const opts = new _M0TP27hustcer4fzip13BrotliOptions(\" + quality + \", \" + windowBits + \");\\n\" +"
+      "  \"  const opts = new _M0TP27hustcer4fzip13BrotliOptions(\" + quality + \", \" + windowBits + \", 1073741824);\\n\" +"
       "  \"  const result = _M0FP27hustcer4fzip20brotli__sync_2einner(input, opts);\\n\" +"
       "  \"  if (result.$tag !== 1) { console.error('encode failed', result._0); process.exit(1); }\\n\" +"
       "  \"  const out = Buffer.from(result._0);\\n\" +"

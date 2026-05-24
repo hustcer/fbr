@@ -82,18 +82,22 @@ pub fn UnbrotliOptions::default() -> UnbrotliOptions {
 /// `quality` follows Brotli's 0-11 scale. All standard quality levels are
 /// accepted by the current encoder backend. `window_bits` controls the
 /// advertised Brotli window and must stay within the standard RFC 7932 range 10
-/// through 24.
+/// through 24. `max_input_size` caps the sync API input before encoder
+/// allocation; q=10 and q=11 apply an additional 256 MiB safety cap for the
+/// future suffix-tree/Zopfli backend.
 pub(all) struct BrotliOptions {
   /// Compression quality, from 0 (fastest) to 11 (maximum compression).
   quality : Int
   /// Standard Brotli window size in bits, from 10 to 24.
   window_bits : Int
+  /// Maximum allowed uncompressed input size.
+  max_input_size : Int
 } derive(Debug)
 
 ///|
 /// Return the default Brotli compression options.
 pub fn BrotliOptions::default() -> BrotliOptions {
-  { quality: 11, window_bits: 22 }
+  { quality: 11, window_bits: 22, max_input_size: default_max_input_size }
 }
 
 ///|
