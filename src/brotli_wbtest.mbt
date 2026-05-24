@@ -1095,6 +1095,24 @@ test "brotli_sync q2 emits complex command Huffman tree" {
 }
 
 ///|
+test "brotli_sync q2 compresses low alphabet literal chunks" {
+  let input = FixedArray::make(4096, b'\x00')
+  for i in 0..<input.length() {
+    let mixed = (i * 73 + i / 31 * 19 + i / 997 * 11) & 31
+    input[i] = (mixed + 65).to_byte()
+  }
+  assert_true(brotli_count_unique_literals_up_to(input, 64) <= 64)
+  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
+  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  assert_true(q2.length() < q1.length())
+  let decoded = unbrotli_sync(q2)
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q2 compresses chunked large input" {
   let input = FixedArray::make(200_000, b'\x00')
   let pattern : FixedArray[Byte] = [b'A', b'B', b'C', b'D', b'E']

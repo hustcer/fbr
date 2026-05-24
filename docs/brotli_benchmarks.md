@@ -454,3 +454,46 @@ Results:
 The gain appears on high-alphabet periodic chunks where generated complex
 trees contain repeated nonzero code lengths. Natural-data ratio remains gated
 on block splitting and candidate admission.
+
+## 2026-05-24 — Literal-Only Compressed Candidates
+
+The q2+ chunk selector now tries a literal-only compressed meta-block for
+chunks with at most 64 distinct literal bytes. This uses one insert-only
+command that fills the meta-block; the decoder returns after the insert and
+therefore does not consume the command's nominal copy distance. A cheap
+`brotli_count_unique_literals_up_to(..., 64)` gate avoids building this
+candidate for ordinary high-alphabet chunks.
+
+The chunk stored-size comparison was also tightened to compare the candidate's
+rounded-up byte size, avoiding one-byte stored regressions.
+
+Validation commands:
+
+```nu
+moon test --target native --filter '*literal chunks*'
+moon test --target native --filter '*complex command Huffman*'
+moon test --target native --filter '*high alphabet repetitive*'
+moon test --target native --filter '*chunked large input*'
+nu tools/brotli/bench/ratio.nu target/brotli-encode/alpha64-xorshift-16000.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-abcde-200k.bin --quality 2
+```
+
+Results:
+
+| Corpus                  | Quality | Previous MoonBit bytes | New MoonBit bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | ---------------------- | ----------------- | ------------ | ------------------------ |
+| alpha64-xorshift-16000  | 2       | 16,004                 | 12,022            | 12,029       | External decode verified |
+| small-alpha-multi-1400  | 2       | 195                    | 195               | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195                    | 195               | 69           | Unchanged                |
+| periodic-allbytes-200k  | 2       | 1,382                  | 1,382             | n/a          | Unchanged                |
+| periodic-abcde-200k     | 2       | 240                    | 240               | n/a          | Unchanged                |
+| silesia-1m              | 2       | 1,048,628              | 1,048,628         | 320,418      | Still stored fallback    |
+| silesia-1m              | 9       | 1,048,628              | 1,048,628         | 263,791      | Still stored fallback    |
+
+This adds a real compressed path for low-alphabet data even when no accepted
+back-reference candidate exists. It does not remove the main Silesia blocker:
+ordinary natural chunks still need block splitting and a stronger candidate
+admission model.

@@ -889,6 +889,33 @@ fn brotli_find_command_prefix(
 }
 
 ///|
+fn brotli_find_insert_only_command_prefix(
+  insert_length : Int,
+) -> BrotliCommandPrefix raise FzipError {
+  for symbol in 0..<brotli_num_command_symbols {
+    let info = brotli_command_info(symbol)
+    if insert_length >= info.insert_len_offset {
+      let insert_extra = insert_length - info.insert_len_offset
+      if insert_extra < 1 << info.insert_len_extra_bits &&
+        2 >= info.copy_len_offset &&
+        2 - info.copy_len_offset < 1 << info.copy_len_extra_bits {
+        return {
+          symbol,
+          insert_extra,
+          copy_extra: 2 - info.copy_len_offset,
+          insert_extra_bits: info.insert_len_extra_bits,
+          copy_extra_bits: info.copy_len_extra_bits,
+        }
+      }
+    }
+  }
+  raise fzip_err(
+    BrotliInvalidMetablock,
+    msg="no Brotli insert-only command prefix",
+  )
+}
+
+///|
 fn brotli_make_encode_command(
   insert_start : Int,
   insert_length : Int,
@@ -899,7 +926,7 @@ fn brotli_make_encode_command(
   let command = if has_copy {
     brotli_find_command_prefix(insert_length, copy_length, true)
   } else {
-    brotli_find_command_prefix(insert_length, 2, false)
+    brotli_find_insert_only_command_prefix(insert_length)
   }
   let distance_prefix = if has_copy {
     brotli_distance_prefix_for_distance(distance)
@@ -913,6 +940,33 @@ fn brotli_make_encode_command(
     has_copy,
     command,
     distance_prefix,
+  }
+}
+
+///|
+fn brotli_build_literal_only_command(
+  data : FixedArray[Byte],
+) -> Array[BrotliEncodeCommand]? {
+  if data.length() == 0 || data.length() > 65536 {
+    return None
+  }
+  if brotli_count_unique_literals_up_to(data, 64) > 64 {
+    return None
+  }
+  match brotli_collect_unique_literals(data, data.length()) {
+    Some(_) => ()
+    None => return None
+  }
+  let command_result : Result[BrotliEncodeCommand, FzipError] = try? brotli_make_encode_command(
+    0,
+    data.length(),
+    0,
+    0,
+    false,
+  )
+  match command_result {
+    Ok(command) => Some([command])
+    Err(_) => None
   }
 }
 
@@ -1099,6 +1153,10 @@ fn brotli_write_simple_lz77_metablock(
       )
     }
   }
+  if distance_count == 0 {
+    distance_symbols[0] = 0
+    distance_count = 1
+  }
   let literal_spec = if weighted {
     brotli_make_weighted_huffman_spec(
       literals.symbols,
@@ -1196,25 +1254,47 @@ fn brotli_write_simple_lz77_metablock(
 }
 
 ///|
-fn brotli_encode_simple_lz77(
+fn brotli_write_best_lz77_metablock(
   data : FixedArray[Byte],
-  opts : BrotliOptions,
   commands : Array[BrotliEncodeCommand],
-) -> FixedArray[Byte] raise FzipError {
+  is_last : Bool,
+) -> BrotliBitWriter raise FzipError {
   let weighted = BrotliBitWriter::new(
     128 + data.length() * 4 + commands.length() * 8,
   )
-  brotli_encode_window_bits(weighted, opts.window_bits)
-  brotli_write_simple_lz77_metablock(weighted, data, commands, true, true)
+  brotli_write_simple_lz77_metablock(weighted, data, commands, is_last, true)
   let fixed = BrotliBitWriter::new(
     128 + data.length() * 4 + commands.length() * 8,
   )
-  brotli_encode_window_bits(fixed, opts.window_bits)
-  brotli_write_simple_lz77_metablock(fixed, data, commands, true, false)
+  brotli_write_simple_lz77_metablock(fixed, data, commands, is_last, false)
   if weighted.bit_pos < fixed.bit_pos {
-    weighted.finish()
+    weighted
   } else {
-    fixed.finish()
+    fixed
+  }
+}
+
+///|
+fn brotli_try_compressed_commands(
+  data : FixedArray[Byte],
+  commands : Array[BrotliEncodeCommand]?,
+  is_last : Bool,
+  best : BrotliBitWriter?,
+) -> BrotliBitWriter? raise FzipError {
+  match commands {
+    Some(commands) => {
+      let candidate = brotli_write_best_lz77_metablock(data, commands, is_last)
+      match best {
+        Some(best) =>
+          if candidate.bit_pos < best.bit_pos {
+            Some(candidate)
+          } else {
+            Some(best)
+          }
+        None => Some(candidate)
+      }
+    }
+    None => best
   }
 }
 
@@ -1245,24 +1325,14 @@ fn brotli_try_compressed_chunk(
   data : FixedArray[Byte],
   hash_config : BrotliHashConfig,
 ) -> BrotliBitWriter? raise FzipError {
-  match brotli_build_simple_lz77_commands(data, hash_config) {
-    Some(commands) => {
-      let fixed = BrotliBitWriter::new(
-        128 + data.length() * 4 + commands.length() * 8,
-      )
-      brotli_write_simple_lz77_metablock(fixed, data, commands, false, false)
-      let weighted = BrotliBitWriter::new(
-        128 + data.length() * 4 + commands.length() * 8,
-      )
-      brotli_write_simple_lz77_metablock(weighted, data, commands, false, true)
-      if weighted.bit_pos < fixed.bit_pos {
-        Some(weighted)
-      } else {
-        Some(fixed)
-      }
-    }
-    None => None
-  }
+  let match_commands = brotli_build_simple_lz77_commands(data, hash_config)
+  let best = brotli_try_compressed_commands(data, match_commands, false, None)
+  brotli_try_compressed_commands(
+    data,
+    brotli_build_literal_only_command(data),
+    false,
+    best,
+  )
 }
 
 ///|
@@ -1282,7 +1352,7 @@ fn brotli_encode_chunked_standard(
     let chunk = slc(data, offset, e=offset + length)
     match brotli_try_compressed_chunk(chunk, hash_config) {
       Some(compressed) =>
-        if shft(compressed.bit_pos) < length + 16 {
+        if shft(compressed.bit_pos) + 1 < length + 16 {
           writer.write_from_bits(compressed.buf, compressed.bit_pos)
         } else {
           brotli_write_uncompressed_metablock(writer, data, offset, length)
@@ -1309,8 +1379,32 @@ fn brotli_encode_standard(
       Some(match_) => return brotli_encode_single_copy_match(data, opts, match_)
       None => ()
     }
-    match brotli_build_simple_lz77_commands(data, hash_config) {
-      Some(commands) => return brotli_encode_simple_lz77(data, opts, commands)
+    let mut best : BrotliBitWriter? = None
+    best = brotli_try_compressed_commands(
+      data,
+      brotli_build_simple_lz77_commands(data, hash_config),
+      true,
+      best,
+    )
+    best = brotli_try_compressed_commands(
+      data,
+      brotli_build_literal_only_command(data),
+      true,
+      best,
+    )
+    match best {
+      Some(compressed) => {
+        let uncompressed = brotli_encode_uncompressed(data, opts)
+        let compressed_size = shft(compressed.bit_pos) + 1
+        if compressed_size < uncompressed.length() {
+          let writer = BrotliBitWriter::new(
+            8 + compressed_size + data.length() / 8,
+          )
+          brotli_encode_window_bits(writer, opts.window_bits)
+          writer.write_from_bits(compressed.buf, compressed.bit_pos)
+          return writer.finish()
+        }
+      }
       None => ()
     }
   }
