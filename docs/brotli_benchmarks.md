@@ -1976,3 +1976,46 @@ The Silesia q2 1 MiB output remains 2.84% larger than Google q2, while the
 measured ratio-harness time drops by about 31% versus the previous retained
 baseline. It is still much slower than Google Brotli; the next q2 speed work
 needs to reduce LZ77 match-search cost rather than only pruning writer scans.
+
+## 2026-05-25 — wasm-gc/native Target Performance Harness
+
+`tools/brotli/bench/target-perf.nu` now measures Brotli performance through
+temporary MoonBit white-box tests on selected targets. The default targets are
+`wasm-gc,native`; JavaScript remains useful for file-oriented verification but
+is no longer the preferred performance signal.
+
+Decode command:
+
+```nu
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-1m.bin.google.q11.br \
+  --mode decode \
+  --expected target/brotli-bench/silesia-1m.bin \
+  --targets wasm-gc,native \
+  --repeats 5 \
+  --samples 2 \
+  --json
+```
+
+Encode command:
+
+```nu
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-128k.bin \
+  --mode encode \
+  --quality 2 \
+  --targets wasm-gc,native \
+  --repeats 1 \
+  --samples 1 \
+  --json
+```
+
+Results:
+
+| Mode   | Corpus          | Target  | Quality | MoonBit bytes | Google bytes | Target ms | Google ms | Slowdown | Notes                         |
+| ------ | --------------- | ------- | ------- | ------------- | ------------ | --------- | --------- | -------- | ----------------------------- |
+| decode | silesia-1m q11  | wasm-gc | n/a     | n/a           | n/a          | 48.7      | 14.5      | 3.36x    | 1 MiB decoded output          |
+| decode | silesia-1m q11  | native  | n/a     | n/a           | n/a          | 131.6     | 14.5      | 9.06x    | 1 MiB decoded output          |
+| encode | silesia-128k    | wasm-gc | 2       | 51,928        | 44,794       | 182.6     | 38.7      | 4.72x    | External decode via verifier  |
+| encode | silesia-128k    | native  | 2       | 51,928        | 44,794       | 503.8     | 38.7      | 13.03x   | External decode via verifier  |
+
+The target-specific results confirm that Brotli algorithm decisions must track
+both size and runtime. Ratio-only changes are not sufficient for P3/P4 review.

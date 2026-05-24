@@ -76,6 +76,30 @@ external decoder by delegating to `tools/brotli/encode/verify.nu`. The default
 table output includes size and ratio columns; `--json` emits full records with
 MoonBit and Google encode timings in milliseconds for regression tracking.
 
+## Target Performance Benchmark
+
+```nu
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-1m.bin.google.q11.br \
+  --mode decode \
+  --expected target/brotli-bench/silesia-1m.bin \
+  --targets wasm-gc,native \
+  --json
+
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-128k.bin \
+  --mode encode \
+  --quality 2 \
+  --targets wasm-gc,native \
+  --json
+```
+
+Measures Brotli decode or encode time through temporary MoonBit white-box tests
+on the selected targets. The default targets are `wasm-gc,native`, because
+those are the performance targets that matter for Brotli work; the older
+JavaScript harness remains useful for file-based verification but is not a good
+default performance signal. Encode mode reports both target encode time and
+MoonBit-vs-Google output size so ratio work cannot hide unacceptable runtime
+regressions.
+
 ## Chunk Match Diagnostics
 
 ```nu
