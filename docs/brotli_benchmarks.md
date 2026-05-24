@@ -76,3 +76,26 @@ Result:
 This extends the compressed path to period lengths 1 through 4 when the period
 symbols are unique. It proves literal payload emission for simple Huffman trees,
 explicit distances 1 through 4, and larger insert/copy command prefixes.
+
+## 2026-05-24 — Single-Copy q2 Prefix Path
+
+Corpus: `target/brotli-encode/prefix-x-abc-1k.bin`
+
+Input: 1024 bytes: `X` followed by repeated `ABC`
+
+Validation command:
+
+```nu
+nu tools/brotli/encode/verify.nu target/brotli-encode/prefix-x-abc-1k.bin --quality 2
+```
+
+Result:
+
+| Quality | Encoded bytes | Encoded SHA-256                                                   | External decode SHA-256                                           |
+| ------- | ------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 2       | 15            | `c4b785c5553afc3e367bb3db0cb9a487292d4cc127eb107ff502043aab815993` | `b0ac63f256924c623429f859f6106c51afb4b2e2da1623ba19ec644765f48914` |
+
+This moves beyond whole-input periods: the encoder can now insert a short
+literal prefix, then copy the remaining suffix from an earlier distance. The
+literal prefix is still limited to four distinct byte values so it can use
+Brotli simple Huffman trees.
