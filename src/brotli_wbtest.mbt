@@ -1113,6 +1113,37 @@ test "brotli_sync q2 compresses low alphabet literal chunks" {
 }
 
 ///|
+test "brotli_sync q2 compresses skewed high alphabet literal chunks" {
+  let input = FixedArray::make(8192, b'\x00')
+  for i in 0..<128 {
+    input[i] = i.to_byte()
+  }
+  let common : FixedArray[Byte] = [b' ', b'e', b't', b'a', b'o', b'n']
+  let mut state = 37
+  for i in 128..<input.length() {
+    state = (state * 73 + 19) % 9973
+    input[i] = if state % 8 == 0 {
+      (state % 128).to_byte()
+    } else {
+      common[state % common.length()]
+    }
+  }
+  assert_true(brotli_count_unique_literals_up_to(input, 64) > 64)
+  match brotli_build_literal_only_command(input) {
+    Some(_) => ()
+    None => fail("expected high-alphabet literal-only candidate")
+  }
+  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
+  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  assert_true(q2.length() < q1.length())
+  let decoded = unbrotli_sync(q2)
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q2 compresses chunked large input" {
   let input = FixedArray::make(200_000, b'\x00')
   let pattern : FixedArray[Byte] = [b'A', b'B', b'C', b'D', b'E']

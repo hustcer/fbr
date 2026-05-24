@@ -497,3 +497,42 @@ This adds a real compressed path for low-alphabet data even when no accepted
 back-reference candidate exists. It does not remove the main Silesia blocker:
 ordinary natural chunks still need block splitting and a stronger candidate
 admission model.
+
+## 2026-05-24 — High-Alphabet Literal Entropy Candidates
+
+Literal-only compressed chunks now use length-limited weighted Huffman trees
+for literal alphabets larger than 16 symbols. A cheap entropy precheck admits
+high-alphabet chunks only when the literal code lengths have enough margin to
+beat stored output, and the final rounded-byte comparison still rejects any
+candidate that does not actually win.
+
+This also fixed a shared Huffman helper bug: its sentinel frequency was too
+small for 65 KiB Brotli chunks, which could panic when one symbol appeared
+more than 25,001 times.
+
+Validation commands:
+
+```nu
+moon test --target native --filter '*literal chunks*'
+moon test --target native --filter '*huffman*'
+moon test --target native --filter '*q0 through q11*'
+nu tools/brotli/encode/verify.nu target/brotli-bench/silesia-128k.bin --quality 2
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+```
+
+Results:
+
+| Corpus                  | Quality | Previous MoonBit bytes | New MoonBit bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | ---------------------- | ----------------- | ------------ | ------------------------ |
+| silesia-128k            | 2       | stored fallback        | 82,602            | n/a          | External decode verified |
+| silesia-1m              | 2       | 1,048,628              | 657,233           | 320,418      | External decode verified |
+| small-alpha-multi-1400  | 2       | 195                    | 195               | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195                    | 195               | 69           | Unchanged                |
+| periodic-allbytes-200k  | 2       | 1,382                  | 1,382             | n/a          | Unchanged                |
+
+This is the first natural-data ratio gain on Silesia: q2 improves from the
+stored fallback to a 1.60x ratio on the 1 MiB slice. It remains 105.12% larger
+than Google q2 on that slice, so P3 still needs block splitting and
+back-reference admission beyond entropy-only chunks.

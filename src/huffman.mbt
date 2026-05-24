@@ -178,7 +178,7 @@ fn h_tree(d : FixedArray[Int], mb : Int) -> (FixedArray[Byte], Int) {
   nodes.sort_by(fn(a, b) { f_arr[a] - f_arr[b] })
   // sentinel
   s_arr[next_node_idx] = -1
-  f_arr[next_node_idx] = 25001
+  f_arr[next_node_idx] = 1 << 30
   l_arr[next_node_idx] = -1
   r_arr[next_node_idx] = -1
   nodes.push(next_node_idx)
