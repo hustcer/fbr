@@ -739,11 +739,12 @@ fn brotli_make_encode_command(
 ///|
 fn brotli_build_simple_lz77_commands(
   data : FixedArray[Byte],
+  hash_config : BrotliHashConfig,
 ) -> Array[BrotliEncodeCommand]? {
   if data.length() < 8 || data.length() > 65536 {
     return None
   }
-  if !brotli_has_compressible_match_density(data) {
+  if !brotli_has_compressible_match_density(data, hash_config) {
     return None
   }
   match brotli_collect_unique_literals(data, data.length()) {
@@ -751,12 +752,12 @@ fn brotli_build_simple_lz77_commands(
     None => return None
   }
   let commands : Array[BrotliEncodeCommand] = []
-  let previous = brotli_previous_match_positions(data)
+  let previous = brotli_previous_match_positions(data, hash_config)
   let mut literal_start = 0
   let mut position = 0
   while position < data.length() {
     let (match_length, distance) = brotli_longest_previous_hash_match(
-      data, previous, position,
+      data, previous, position, hash_config,
     )
     if match_length >= 4 {
       let insert_length = position - literal_start
@@ -1057,8 +1058,9 @@ fn brotli_encode_uncompressed(
 ///|
 fn brotli_try_compressed_chunk(
   data : FixedArray[Byte],
+  hash_config : BrotliHashConfig,
 ) -> BrotliBitWriter? raise FzipError {
-  match brotli_build_simple_lz77_commands(data) {
+  match brotli_build_simple_lz77_commands(data, hash_config) {
     Some(commands) => {
       let fixed = BrotliBitWriter::new(
         128 + data.length() * 4 + commands.length() * 8,
@@ -1087,12 +1089,13 @@ fn brotli_encode_chunked_standard(
   let chunk_count = (data.length() + chunk_size - 1) / chunk_size
   let writer = BrotliBitWriter::new(data.length() + 8 + chunk_count * 16)
   brotli_encode_window_bits(writer, opts.window_bits)
+  let hash_config = brotli_hash_config_for_quality(opts.quality)
   let mut offset = 0
   while offset < data.length() {
     let remaining = data.length() - offset
     let length = if remaining > chunk_size { chunk_size } else { remaining }
     let chunk = slc(data, offset, e=offset + length)
-    match brotli_try_compressed_chunk(chunk) {
+    match brotli_try_compressed_chunk(chunk, hash_config) {
       Some(compressed) =>
         if shft(compressed.bit_pos) < length + 16 {
           writer.write_from_bits(compressed.buf, compressed.bit_pos)
@@ -1115,12 +1118,13 @@ fn brotli_encode_standard(
   if data.length() > 65536 {
     return brotli_encode_chunked_standard(data, opts)
   }
+  let hash_config = brotli_hash_config_for_quality(opts.quality)
   if data.length() <= brotli_max_metablock_bytes {
     match brotli_find_single_copy_match(data) {
       Some(match_) => return brotli_encode_single_copy_match(data, opts, match_)
       None => ()
     }
-    match brotli_build_simple_lz77_commands(data) {
+    match brotli_build_simple_lz77_commands(data, hash_config) {
       Some(commands) => return brotli_encode_simple_lz77(data, opts, commands)
       None => ()
     }
