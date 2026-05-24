@@ -1144,6 +1144,31 @@ test "brotli_sync q2 compresses skewed high alphabet literal chunks" {
 }
 
 ///|
+test "brotli_sync q2 uses identity static dictionary words" {
+  let input = str_to_u8(
+    "time area unit home work water world house about other these first right after where",
+  )
+  let config = brotli_hash_config_for_quality(2)
+  match brotli_build_identity_dictionary_commands(input, config, 0, 22) {
+    Some(commands) => {
+      assert_true(commands.length() > 8)
+      assert_eq(commands[0].insert_length, 0)
+      assert_eq(commands[0].copy_length, 4)
+      assert_true(commands[0].has_copy)
+    }
+    None => fail("expected static dictionary command candidate")
+  }
+  let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
+  let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  assert_true(q2.length() < q1.length())
+  let decoded = unbrotli_sync(q2)
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q2 compresses chunked large input" {
   let input = FixedArray::make(200_000, b'\x00')
   let pattern : FixedArray[Byte] = [b'A', b'B', b'C', b'D', b'E']

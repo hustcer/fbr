@@ -536,3 +536,36 @@ This is the first natural-data ratio gain on Silesia: q2 improves from the
 stored fallback to a 1.60x ratio on the 1 MiB slice. It remains 105.12% larger
 than Google q2 on that slice, so P3 still needs block splitting and
 back-reference admission beyond entropy-only chunks.
+
+## 2026-05-24 — Identity Static-Dictionary Candidate
+
+The q2+ candidate selector can now build insert/copy command streams that
+reference identity-transform words from the RFC static dictionary. This first
+encoder dictionary path is deliberately narrow: it is enabled for small
+single-block inputs only, after a chunked Silesia trial showed that broad
+per-chunk dictionary probing added runtime and selected streams 10 bytes larger
+on the 1 MiB slice.
+
+Validation commands:
+
+```nu
+moon test --target native --filter '*static dictionary words*'
+moon test --target native --filter '*literal chunks*'
+moon test --target native --filter '*chunked large input*'
+nu tools/brotli/encode/verify.nu target/brotli-encode/dictionary-words.txt --quality 2
+nu tools/brotli/bench/ratio.nu target/brotli-encode/dictionary-words.txt --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+```
+
+Results:
+
+| Corpus                  | Quality | MoonBit bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | ------------- | ------------ | ------------------------ |
+| dictionary-words        | 2       | 76            | 78           | External decode verified |
+| silesia-1m              | 2       | 657,233       | 320,418      | Unchanged                |
+| periodic-allbytes-200k  | 2       | 1,382         | n/a          | Unchanged                |
+
+This adds the first static-dictionary encoder surface but does not count as
+P3 completion. The production-sized ratio target still needs broader
+dictionary heuristics, block splitting, and back-reference cost modeling.

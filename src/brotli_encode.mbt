@@ -1429,12 +1429,22 @@ fn brotli_encode_uncompressed(
 fn brotli_try_compressed_chunk(
   data : FixedArray[Byte],
   hash_config : BrotliHashConfig,
+  base_offset : Int,
+  window_bits : Int,
 ) -> BrotliBitWriter? raise FzipError {
   let match_commands = brotli_build_simple_lz77_commands(data, hash_config)
   let best = brotli_try_compressed_commands(data, match_commands, false, None)
-  brotli_try_compressed_commands(
+  let best = brotli_try_compressed_commands(
     data,
     brotli_build_literal_only_command(data),
+    false,
+    best,
+  )
+  brotli_try_compressed_commands(
+    data,
+    brotli_build_identity_dictionary_commands(
+      data, hash_config, base_offset, window_bits,
+    ),
     false,
     best,
   )
@@ -1455,7 +1465,8 @@ fn brotli_encode_chunked_standard(
     let remaining = data.length() - offset
     let length = if remaining > chunk_size { chunk_size } else { remaining }
     let chunk = slc(data, offset, e=offset + length)
-    match brotli_try_compressed_chunk(chunk, hash_config) {
+    match
+      brotli_try_compressed_chunk(chunk, hash_config, offset, opts.window_bits) {
       Some(compressed) =>
         if shft(compressed.bit_pos) + 1 < length + 16 {
           writer.write_from_bits(compressed.buf, compressed.bit_pos)
@@ -1494,6 +1505,17 @@ fn brotli_encode_standard(
     best = brotli_try_compressed_commands(
       data,
       brotli_build_literal_only_command(data),
+      true,
+      best,
+    )
+    best = brotli_try_compressed_commands(
+      data,
+      brotli_build_identity_dictionary_commands(
+        data,
+        hash_config,
+        0,
+        opts.window_bits,
+      ),
       true,
       best,
     )
