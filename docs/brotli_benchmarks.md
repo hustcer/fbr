@@ -320,3 +320,41 @@ The MoonBit timing currently includes JavaScript bundle rebuild/launch plus
 external decode verification, so it is a conservative end-to-end harness time
 rather than pure encoder CPU time. It is still useful for regression tracking
 while the encoder remains under active P3 development.
+
+## 2026-05-24 — q2 Chunk Match Diagnostics
+
+Added `tools/brotli/bench/chunk-match.nu` to summarize per-chunk match density
+and bounded greedy-copy estimates before changing q2 natural-data heuristics.
+The script uses the same 65,535-byte chunk size and 1,200-command cap as the
+current q2 compressed-chunk path.
+
+Validation commands:
+
+```nu
+nu --ide-check 100 tools/brotli/bench/chunk-match.nu
+nu tools/brotli/bench/chunk-match.nu target/brotli-bench/silesia-1m.bin --max-chunks 16 --min-lengths 4,8,16,24,32 --json
+nu tools/brotli/bench/chunk-match.nu target/brotli-encode/periodic-allbytes-200k.bin --max-chunks 1 --min-lengths 4,16,32 --json
+```
+
+First 16 Silesia chunks:
+
+| Min match length | Avg commands | Avg copy ratio | Capped chunks |
+| ---------------- | ------------ | -------------- | ------------- |
+| 4                | 1,201.000    | 15.09%         | 16            |
+| 8                | 1,201.000    | 27.53%         | 16            |
+| 16               | 909.125      | 35.02%         | 0             |
+| 24               | 486.375      | 24.07%         | 0             |
+| 32               | 233.000      | 14.08%         | 0             |
+
+One 65,535-byte all-256-byte periodic chunk:
+
+| Min match length | Commands | Unique literals | Sampled 4-byte density | Copy ratio |
+| ---------------- | -------- | --------------- | ---------------------- | ---------- |
+| 4                | 16       | 256             | 99.61%                 | 99.61%     |
+| 16               | 16       | 256             | 99.61%                 | 99.61%     |
+| 32               | 16       | 256             | 99.61%                 | 99.61%     |
+
+The diagnostic confirms the existing sampled-density gate is appropriate for
+pathological periodic data but is not a substitute for natural-data block
+splitting. On Silesia, short matches either exceed the current command cap or
+do not produce enough copied bytes once the minimum match length is raised.

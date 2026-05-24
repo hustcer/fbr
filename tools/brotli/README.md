@@ -75,3 +75,15 @@ the selected qualities. The script also validates MoonBit output through the
 external decoder by delegating to `tools/brotli/encode/verify.nu`. The default
 table output includes size and ratio columns; `--json` emits full records with
 MoonBit and Google encode timings in milliseconds for regression tracking.
+
+## Chunk Match Diagnostics
+
+```nu
+nu tools/brotli/bench/chunk-match.nu target/brotli-bench/silesia-1m.bin --max-chunks 16
+nu tools/brotli/bench/chunk-match.nu target/brotli-bench/silesia-1m.bin --max-chunks 16 --json
+```
+
+Reports per-chunk unique literal counts, sampled 4-byte match density, and
+bounded greedy match estimates for selected minimum match lengths. This is a
+planning aid for P3 block splitting and match admission work; it does not
+encode or verify Brotli streams.
