@@ -1,5 +1,8 @@
 #!/usr/bin/env nu
 
+# Legacy JS file-IO verifier for large acceptance artifacts. Keep performance
+# measurements on target-perf.nu so wasm-gc/native stay the default signal.
+
 const default_compressed = "target/brotli-silesia/silesia-100m.bin.br"
 const default_expected = "target/brotli-silesia/silesia-100m.bin"
 const generated_test = "_build/js/debug/test/fzip.whitebox_test.js"
@@ -60,7 +63,7 @@ def main [
       "  \"  const out = Buffer.from(result._0);\\n\" +"
       "  \"  const sha = crypto.createHash('sha256').update(out).digest('hex');\\n\" +"
       "  \"  const expectedSha = crypto.createHash('sha256').update(expected).digest('hex');\\n\" +"
-      "  \"  console.log(JSON.stringify({decoded_size: out.length, sha256: sha, expected_size: expected.length, expected_sha256: expectedSha}));\\n\" +"
+      "  \"  console.log(JSON.stringify({purpose: 'file-io-verification', moonbit_backend: 'legacy-js', decoded_size: out.length, sha256: sha, expected_size: expected.length, expected_sha256: expectedSha}));\\n\" +"
       "  \"  if (out.length !== expected.length || sha !== expectedSha) { process.exit(1); }\\n\" +"
       "  \"})();\\n\";"
       "vm.runInNewContext(src, {require, console, process, Buffer, Uint8Array, exports: {}, module: {exports: {}}}, {filename: 'fzip.whitebox_test.silesia.js'});"

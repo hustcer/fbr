@@ -1,6 +1,5 @@
 #!/usr/bin/env nu
 
-const temp_test = "src/brotli_target_perf_wbtest.mbt"
 const bench_dir = "target/brotli-bench"
 
 def parse-csv-ints [text: string]: nothing -> list<int> {
@@ -11,15 +10,18 @@ def parse-csv-strings [text: string]: nothing -> list<string> {
   $text | split row "," | each {|value| $value | str trim }
 }
 
-def parse-first-json-line [text: string]: nothing -> record {
+def parse-size-marker [text: string]: nothing -> int {
   $text
   | lines
-  | where {|line| ($line | str trim) != "" }
+  | where {|line| $line | str starts-with "MBT_PERF_SIZE=" }
   | first
-  | from json
+  | str replace "MBT_PERF_SIZE=" ""
+  | into int
 }
 
 def make-temp-test [
+  temp_test: string
+  test_name: string
   mode: string
   input: string
   quality: int
@@ -30,7 +32,7 @@ def make-temp-test [
   let input_abs = ($input | path expand)
   let node_code = '
 const fs = require("fs");
-const [inputPath, mode, qualityText, repeatsText, expectedTotalText, maxOutputText, outPath] = process.argv.slice(1);
+const [inputPath, mode, qualityText, repeatsText, expectedTotalText, maxOutputText, outPath, testName] = process.argv.slice(1);
 const data = fs.readFileSync(inputPath);
 const quality = Number(qualityText);
 const repeats = Number(repeatsText);
@@ -44,23 +46,29 @@ for (let i = 0; i < data.length; i += 16) {
 }
 const literal = rows.join(",\n");
 let body;
+let check;
 if (mode === "decode") {
   body = `    let decoded = unbrotli_sync(
       input,
       opts={ out: None, max_output_size: ${maxOutput}, max_input_size: input.length() + 1 },
     )
     total += decoded.length()`;
+  check = `  inspect(total, content="${expectedTotal}")`;
 } else if (mode === "encode") {
   body = `    let encoded = brotli_sync(
       input,
       opts={ quality: ${quality}, window_bits: 22, max_input_size: input.length() + 1 },
     )
+    if total == 0 {
+      println("MBT_PERF_SIZE=" + encoded.length().to_string())
+    }
     total += encoded.length()`;
+  check = `  inspect(total > 0, content="true")`;
 } else {
   throw new Error("unsupported mode: " + mode);
 }
 const content = `///|
-test "brotli target perf generated" {
+test "${testName}" {
   let input : FixedArray[Byte] = [
 ${literal}
   ]
@@ -68,25 +76,31 @@ ${literal}
   for _ in 0..<${repeats} {
 ${body}
   }
-  inspect(total, content="${expectedTotal}")
+${check}
 }
 `;
 fs.writeFileSync(outPath, content);
 '
-  node -e $node_code $input_abs $mode ($quality | into string) ($repeats | into string) ($expected_total | into string) ($max_output_size | into string) $temp_test
+  node -e $node_code $input_abs $mode ($quality | into string) ($repeats | into string) ($expected_total | into string) ($max_output_size | into string) $temp_test $test_name
 }
 
 def run-target [
+  test_name: string
   target: string
   repeats: int
   samples: int
 ]: nothing -> record {
-  let filter = "brotli target perf generated"
+  let filter = $test_name
   let warmup = (moon test --target $target --filter $filter | complete)
   if $warmup.exit_code != 0 {
     print --stderr $warmup.stdout
     print --stderr $warmup.stderr
     exit $warmup.exit_code
+  }
+  let encoded_size = if $warmup.stdout =~ "MBT_PERF_SIZE=" {
+    parse-size-marker $warmup.stdout
+  } else {
+    0
   }
   mut times = []
   for _ in 0..<$samples {
@@ -106,6 +120,7 @@ def run-target [
     total_avg_ms: ($times | math avg),
     per_op_min_ms: (($times | math min) / $repeats),
     per_op_avg_ms: (($times | math avg) / $repeats),
+    encoded_size: $encoded_size,
     samples_ms: $times,
   }
 }
@@ -183,19 +198,6 @@ def google-encode [
   }
 }
 
-def moonbit-encoded-size [
-  input: string
-  quality: int
-]: nothing -> record {
-  let run = (nu tools/brotli/encode/verify.nu $input --quality $quality | complete)
-  if $run.exit_code != 0 {
-    print --stderr $run.stdout
-    print --stderr $run.stderr
-    exit $run.exit_code
-  }
-  parse-first-json-line $run.stdout
-}
-
 def main [
   input: string
   --mode (-m): string = "decode" # decode or encode
@@ -221,15 +223,18 @@ def main [
 
   let targets = parse-csv-strings $targets
   let input_size = (ls $input | get size.0 | into int)
+  let run_id = $"((date now | into int))-((random int 0..1000000000))"
+  let test_name = $"brotli target perf generated ($run_id)"
+  let temp_test = $"src/brotli_target_perf_($run_id)_wbtest.mbt"
   mut rows = []
 
   if $mode == "decode" {
     let decoded_size = (ls $expected | get size.0 | into int)
     let expected_total = $decoded_size * $repeats
-    make-temp-test decode $input 0 $repeats $expected_total $decoded_size
+    make-temp-test $temp_test $test_name decode $input 0 $repeats $expected_total $decoded_size
     let google = google-decode $input $repeats $samples
     for target in $targets {
-      let measured = run-target $target $repeats $samples
+      let measured = run-target $test_name $target $repeats $samples
       $rows = ($rows | append {
         mode: "decode",
         target: $target,
@@ -244,20 +249,22 @@ def main [
       })
     }
   } else {
-    let moon = moonbit-encoded-size $input $quality
     let google = google-encode $input $quality $repeats $samples
-    let expected_total = $moon.encoded_size * $repeats
-    make-temp-test encode $input $quality $repeats $expected_total 0
+    make-temp-test $temp_test $test_name encode $input $quality $repeats 0 0
     for target in $targets {
-      let measured = run-target $target $repeats $samples
+      let measured = run-target $test_name $target $repeats $samples
+      if $measured.encoded_size <= 0 {
+        print --stderr $"Target ($target) did not report MBT_PERF_SIZE"
+        exit 1
+      }
       $rows = ($rows | append {
         mode: "encode",
         target: $target,
         quality: $quality,
         input_bytes: $input_size,
-        moonbit_size: $moon.encoded_size,
+        moonbit_size: $measured.encoded_size,
         google_size: $google.encoded_size,
-        size_overhead: (($moon.encoded_size - $google.encoded_size) / $google.encoded_size),
+        size_overhead: (($measured.encoded_size - $google.encoded_size) / $google.encoded_size),
         target_min_ms: $measured.per_op_min_ms,
         target_avg_ms: $measured.per_op_avg_ms,
         google_min_ms: $google.per_op_min_ms,

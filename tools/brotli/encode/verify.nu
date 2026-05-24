@@ -1,5 +1,8 @@
 #!/usr/bin/env nu
 
+# Legacy JS file-IO verifier. This is intentionally retained for exact
+# external-decoder validation; target-perf.nu is the default perf harness.
+
 const generated_test = "_build/js/debug/test/fzip.whitebox_test.js"
 const temp_dir = "target/brotli-encode"
 const temp_runner = "target/brotli-encode/verify-generated.js"
@@ -88,6 +91,8 @@ def main [
   rm --force $decoded
   print (
     {
+      purpose: "file-io-verification",
+      moonbit_backend: "legacy-js",
       external_decoder: "brotli",
       quality: $quality,
       decoded_sha256: $decoded_sha,

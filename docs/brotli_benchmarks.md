@@ -1982,7 +1982,8 @@ needs to reduce LZ77 match-search cost rather than only pruning writer scans.
 `tools/brotli/bench/target-perf.nu` now measures Brotli performance through
 temporary MoonBit white-box tests on selected targets. The default targets are
 `wasm-gc,native`; JavaScript remains useful for file-oriented verification but
-is no longer the preferred performance signal.
+is no longer the preferred performance signal. Decode time, encode time, and
+encoded size should use this harness by default.
 
 Decode command:
 
@@ -2014,8 +2015,12 @@ Results:
 | ------ | --------------- | ------- | ------- | ------------- | ------------ | --------- | --------- | -------- | ----------------------------- |
 | decode | silesia-1m q11  | wasm-gc | n/a     | n/a           | n/a          | 48.7      | 14.5      | 3.36x    | 1 MiB decoded output          |
 | decode | silesia-1m q11  | native  | n/a     | n/a           | n/a          | 131.6     | 14.5      | 9.06x    | 1 MiB decoded output          |
-| encode | silesia-128k    | wasm-gc | 2       | 51,928        | 44,794       | 182.6     | 38.7      | 4.72x    | External decode via verifier  |
-| encode | silesia-128k    | native  | 2       | 51,928        | 44,794       | 503.8     | 38.7      | 13.03x   | External decode via verifier  |
+| encode | silesia-128k    | wasm-gc | 2       | 51,928        | 44,794       | 185.5     | 38.5      | 4.82x    | Size reported by target run   |
+| encode | silesia-128k    | native  | 2       | 51,928        | 44,794       | 504.3     | 38.5      | 13.11x   | Size reported by target run   |
 
 The target-specific results confirm that Brotli algorithm decisions must track
 both size and runtime. Ratio-only changes are not sufficient for P3/P4 review.
+The older `encode/verify.nu`, `silesia/verify.nu`, and `bench/ratio.nu` scripts
+remain available for file-based verification and historical size telemetry, but
+they are explicitly tagged as legacy JS verification paths rather than default
+benchmark harnesses.

@@ -1,5 +1,9 @@
 #!/usr/bin/env nu
 
+# Size-ratio helper. MoonBit output is still produced through the legacy JS
+# file-IO verifier so the generated stream can be decoded by the external CLI.
+# Use target-perf.nu for wasm-gc/native encode/decode performance numbers.
+
 const bench_dir = "target/brotli-bench"
 
 def parse-first-json-line [text: string]: nothing -> record {
@@ -56,6 +60,7 @@ def moonbit-encode [
   let encoded = parse-first-json-line $run.stdout
   {
     encoder: "moonbit",
+    moonbit_backend: "legacy-js-verify",
     quality: $quality,
     input_size: $encoded.input_size,
     encoded_size: $encoded.encoded_size,
@@ -94,7 +99,10 @@ def main [
       google_ratio: $google.ratio,
       size_overhead: $overhead,
       moonbit_time_ms: $moon.encode_time_ms,
+      moonbit_time_backend: "legacy-js-verify",
       google_time_ms: $google.encode_time_ms,
+      google_time_backend: "cli",
+      performance_benchmark: "tools/brotli/bench/target-perf.nu",
       moonbit_sha256: $moon.encoded_sha256,
       google_encoded: $google.encoded,
     })

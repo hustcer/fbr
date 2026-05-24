@@ -50,7 +50,8 @@ Verifies a Google Brotli q=11 stream against an expected output file through
 the JavaScript backend. The default paths are the local 100 MiB Silesia
 acceptance artifact under `target/brotli-silesia/`. The script rebuilds the
 MoonBit JS test bundle, calls `unbrotli_sync`, and prints decoded and expected
-SHA-256 values.
+SHA-256 values. This is a legacy file-IO verifier, not the default performance
+benchmark.
 
 ## Encoder Verification
 
@@ -61,7 +62,9 @@ nu tools/brotli/encode/verify.nu target/brotli-silesia/silesia-100m.bin --qualit
 
 Encodes a file with MoonBit `brotli_sync`, decodes the generated stream with
 the external `brotli` CLI, and compares the decoded bytes with the original
-input. This keeps encoder acceptance independent from fzip's own decoder.
+input. This legacy JS verifier keeps encoder acceptance independent from
+fzip's own decoder; use `bench/target-perf.nu` for wasm-gc/native encode
+timings.
 
 ## Ratio Benchmark
 
@@ -72,9 +75,10 @@ nu tools/brotli/bench/ratio.nu target/brotli-silesia/silesia-100m.bin --qualitie
 
 Compares MoonBit `brotli_sync` output size against the Google `brotli` CLI for
 the selected qualities. The script also validates MoonBit output through the
-external decoder by delegating to `tools/brotli/encode/verify.nu`. The default
-table output includes size and ratio columns; `--json` emits full records with
-MoonBit and Google encode timings in milliseconds for regression tracking.
+external decoder by delegating to the legacy JS file verifier
+`tools/brotli/encode/verify.nu`. Treat the timing columns as historical
+JS-verifier telemetry only; the JSON output includes backend metadata and points
+performance consumers to `tools/brotli/bench/target-perf.nu`.
 
 ## Target Performance Benchmark
 
@@ -97,8 +101,8 @@ on the selected targets. The default targets are `wasm-gc,native`, because
 those are the performance targets that matter for Brotli work; the older
 JavaScript harness remains useful for file-based verification but is not a good
 default performance signal. Encode mode reports both target encode time and
-MoonBit-vs-Google output size so ratio work cannot hide unacceptable runtime
-regressions.
+MoonBit-vs-Google output size from the same target run, so ratio work cannot
+hide unacceptable runtime regressions.
 
 ## Chunk Match Diagnostics
 
