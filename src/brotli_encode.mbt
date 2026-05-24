@@ -343,7 +343,7 @@ fn brotli_make_weighted_huffman_spec(
       symbols, count, alphabet_size_max, alphabet_size_limit,
     )
   }
-  if count > 16 && alphabet_size_limit <= brotli_num_literal_symbols {
+  if count > 16 {
     let (tree_lengths, _) = h_tree(frequencies, brotli_huffman_max_code_length)
     if tree_lengths.length() == 0 {
       return brotli_make_huffman_spec(
@@ -362,11 +362,6 @@ fn brotli_make_weighted_huffman_spec(
       alphabet_size_limit,
       simple: false,
     }
-  }
-  if count > 16 {
-    return brotli_make_huffman_spec(
-      symbols, count, alphabet_size_max, alphabet_size_limit,
-    )
   }
   let node_count = count * 2 - 1
   let weights = FixedArray::make(node_count, 0)

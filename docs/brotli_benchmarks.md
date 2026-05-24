@@ -805,3 +805,35 @@ Results:
 The Silesia 1 MiB q2 overhead is now 43.86% versus Google q2. The small ratio
 gain is valid, but future work should focus on token/block cost modeling before
 raising chunk size further.
+
+## 2026-05-24 — Weighted Command and Distance Trees
+
+Weighted Huffman construction now applies to command and distance alphabets as
+well as literals. Previously, non-literal alphabets with more than 16 symbols
+fell back to uniform code lengths, which overpaid on natural LZ77 command
+streams.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native --filter '*splits literal*'
+moon test --target native --filter '*chunked large input*'
+moon test --target native --filter '*literal chunks*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 460,961        | 457,776   | 320,418      | Harness time 23,837 ms   |
+| periodic-allbytes-200k  | 2       | 494            | 494       | n/a          | External decode verified |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+
+The Silesia 1 MiB q2 overhead is now 42.87% versus Google q2.
