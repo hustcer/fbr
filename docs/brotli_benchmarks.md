@@ -934,3 +934,29 @@ Results:
 The Silesia 1 MiB q9 overhead is now 60.23% versus Google q9. q9 is now
 quality-distinct, but P3 still needs real token/block splitting and a better
 cost model to reach the documented 5% target.
+
+## 2026-05-24 — Q9 Candidate Runtime
+
+Quality 9 now skips the q2 natural long-match candidate and runs only the q9
+high-quality long-match candidate after the shared dense, literal,
+split-literal, and dictionary candidates. The q9-specific candidate produced
+the same bytes on the measured fixtures, so the q2 natural pass was duplicate
+work for q9.
+
+Validation commands:
+
+```nu
+moon check --target native
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Previous time | New time  | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------- | --------- | ------------------------ |
+| silesia-1m              | 2       | 455,386        | 455,386   | n/a           | 23,739 ms | Unchanged                |
+| silesia-1m              | 9       | 422,673        | 422,673   | 45,860 ms     | 23,732 ms | Same bytes, faster       |
+| split-literals-8k       | 9       | 3,434          | 3,434     | n/a           | 4,619 ms  | Unchanged                |
+| periodic-allbytes-200k  | 9       | 350            | 350       | n/a           | n/a       | External decode verified |
