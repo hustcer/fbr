@@ -358,3 +358,31 @@ The diagnostic confirms the existing sampled-density gate is appropriate for
 pathological periodic data but is not a substitute for natural-data block
 splitting. On Silesia, short matches either exceed the current command cap or
 do not produce enough copied bytes once the minimum match length is raised.
+
+## 2026-05-24 — q9 Sparse-Match Trial Rejected
+
+An experimental q9 configuration tried to admit ordinary natural-data chunks
+with longer matches only: minimum match length 16, one candidate check, scan
+step 8, 1,200-command cap, and a 35% copied-byte precheck. The implementation
+was not kept enabled because it did not improve the benchmark slice and made
+encoding much slower.
+
+Validation commands:
+
+```nu
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+```
+
+Rejected-trial results:
+
+| Corpus                 | Quality | MoonBit bytes | Google bytes | MoonBit time ms | Outcome                                      |
+| ---------------------- | ------- | ------------- | ------------ | --------------- | -------------------------------------------- |
+| silesia-1m             | 9       | 1,048,628     | 263,791      | 12,158.154      | No ratio gain versus stored fallback         |
+| small-alpha-multi-1400 | 9       | 1,404         | 69           | 333.415         | Regressed from the existing 231-byte q2 path |
+
+The retained code from this trial is limited to safe plumbing: hash config
+fields for minimum match length, scan step, command cap, copy-ratio admission,
+and whether dense-match sampling is required. The encoder still uses the
+previous dense-match configuration for all qualities until a stronger
+block/cost model can prove that a sparse natural-data chunk should be written.

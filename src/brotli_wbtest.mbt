@@ -981,7 +981,9 @@ test "brotli_sync q2 compresses repeated byte with LZ77 copy" {
   let input = FixedArray::make(1024, b'A')
   let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
   let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  let q9 = brotli_sync(input, opts={ quality: 9, window_bits: 22 })
   assert_true(q2.length() < q1.length())
+  assert_true(q9.length() < q1.length())
   let decoded = unbrotli_sync(q2)
   assert_eq(decoded.length(), input.length())
   for i in 0..<decoded.length() {
@@ -998,7 +1000,9 @@ test "brotli_sync q2 compresses short periodic input with LZ77 copy" {
   }
   let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
   let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  let q9 = brotli_sync(input, opts={ quality: 9, window_bits: 22 })
   assert_true(q2.length() < q1.length())
+  assert_true(q9.length() < q1.length())
   let decoded = unbrotli_sync(q2)
   assert_eq(decoded.length(), input.length())
   for i in 0..<decoded.length() {
@@ -1080,7 +1084,9 @@ test "brotli_sync q2 emits complex command Huffman tree" {
   }
   let q1 = brotli_sync(input, opts={ quality: 1, window_bits: 22 })
   let q2 = brotli_sync(input, opts={ quality: 2, window_bits: 22 })
+  let q9 = brotli_sync(input, opts={ quality: 9, window_bits: 22 })
   assert_true(q2.length() < q1.length())
+  assert_true(q9.length() < q1.length())
   let decoded = unbrotli_sync(q2)
   assert_eq(decoded.length(), input.length())
   for i in 0..<decoded.length() {

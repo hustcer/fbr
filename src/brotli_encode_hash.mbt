@@ -4,6 +4,11 @@ priv struct BrotliHashConfig {
   table_mask : Int
   max_match_checks : Int
   max_match_length : Int
+  min_match_length : Int
+  scan_step : Int
+  max_commands : Int
+  min_copy_ratio_percent : Int
+  require_dense_match_density : Bool
   density_sample_step : Int
   density_required_numerator : Int
   density_required_denominator : Int
@@ -16,6 +21,11 @@ fn brotli_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
     table_mask: 4095,
     max_match_checks: 4,
     max_match_length: 4096,
+    min_match_length: 4,
+    scan_step: 1,
+    max_commands: 1200,
+    min_copy_ratio_percent: 0,
+    require_dense_match_density: true,
     density_sample_step: 256,
     density_required_numerator: 9,
     density_required_denominator: 10,
@@ -47,6 +57,9 @@ fn brotli_has_compressible_match_density(
   data : FixedArray[Byte],
   config : BrotliHashConfig,
 ) -> Bool {
+  if !config.require_dense_match_density {
+    return true
+  }
   if data.length() < 64 {
     return true
   }
