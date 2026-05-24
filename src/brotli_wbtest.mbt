@@ -1270,6 +1270,12 @@ test "brotli_sync q2 writes UTF-8 context literal trees" {
     None => fail("expected UTF-8 context candidate")
   }
   assert_true(context.bit_pos < weighted.bit_pos)
+  let context4 = match
+    brotli_write_context4_lz77_metablock(input, commands, true) {
+    Some(candidate) => candidate
+    None => fail("expected four-tree UTF-8 context candidate")
+  }
+  assert_true(context4.bit_pos < context.bit_pos)
   let encoded = BrotliBitWriter::new(16 + context.buf.length())
   brotli_encode_window_bits(encoded, 22)
   encoded.write_from_bits(context.buf, context.bit_pos)
@@ -1277,6 +1283,14 @@ test "brotli_sync q2 writes UTF-8 context literal trees" {
   assert_eq(decoded.length(), input.length())
   for i in 0..<decoded.length() {
     assert_eq(decoded[i], input[i])
+  }
+  let encoded4 = BrotliBitWriter::new(16 + context4.buf.length())
+  brotli_encode_window_bits(encoded4, 22)
+  encoded4.write_from_bits(context4.buf, context4.bit_pos)
+  let decoded4 = unbrotli_sync(encoded4.finish())
+  assert_eq(decoded4.length(), input.length())
+  for i in 0..<decoded4.length() {
+    assert_eq(decoded4[i], input[i])
   }
 }
 

@@ -651,28 +651,39 @@ fn brotli_write_complex_huffman(
   code_length_count = brotli_add_complex_code_length_symbols(
     spec, code_length_symbols, code_length_count, last_nonzero,
   )
-  let padded_count = brotli_next_power_of_two(code_length_count)
-  if padded_count > brotli_num_code_length_codes {
-    raise fzip_err(BrotliInvalidHuffman, msg="code-length alphabet too large")
-  }
-  let bits = brotli_log2_floor_plus_one(padded_count) - 1
   let code_length_code_lengths = FixedArray::make(
     brotli_num_code_length_codes, b'\x00',
   )
-  for i in 0..<code_length_count {
-    code_length_code_lengths[code_length_symbols[i]] = bits.to_byte()
-  }
-  let mut written = code_length_count
-  let mut candidate = 0
-  while written < padded_count {
-    if !brotli_contains_symbol(
-        code_length_symbols, code_length_count, candidate,
-      ) {
-      code_length_symbols[written] = candidate
-      code_length_code_lengths[candidate] = bits.to_byte()
-      written += 1
+  let padded_count = brotli_next_power_of_two(code_length_count)
+  if padded_count <= brotli_num_code_length_codes {
+    let bits = brotli_log2_floor_plus_one(padded_count) - 1
+    for i in 0..<code_length_count {
+      code_length_code_lengths[code_length_symbols[i]] = bits.to_byte()
     }
-    candidate += 1
+    let mut written = code_length_count
+    let mut candidate = 0
+    while written < padded_count {
+      if !brotli_contains_symbol(
+          code_length_symbols, code_length_count, candidate,
+        ) {
+        code_length_symbols[written] = candidate
+        code_length_code_lengths[candidate] = bits.to_byte()
+        written += 1
+      }
+      candidate += 1
+    }
+  } else {
+    let frequencies = FixedArray::make(brotli_num_code_length_codes, 0)
+    for i in 0..<code_length_count {
+      frequencies[code_length_symbols[i]] += 1
+    }
+    let (tree_lengths, _) = h_tree(frequencies, 5)
+    if tree_lengths.length() == 0 {
+      raise fzip_err(BrotliInvalidHuffman, msg="code-length alphabet too large")
+    }
+    for i in 0..<tree_lengths.length() {
+      code_length_code_lengths[i] = tree_lengths[i]
+    }
   }
   let mut space = 32
   for i in 0..<brotli_code_length_code_order.length() {
@@ -1024,6 +1035,26 @@ fn brotli_command_literal_utf8_context_tree(
 }
 
 ///|
+fn brotli_command_literal_utf8_context_tree4(
+  data : FixedArray[Byte],
+  position : Int,
+) -> Int raise FzipError {
+  let previous_byte_1 = if position > 0 {
+    data[position - 1].to_int()
+  } else {
+    0
+  }
+  let previous_byte_2 = if position > 1 {
+    data[position - 2].to_int()
+  } else {
+    0
+  }
+  brotli_utf8_context_tree4(
+    brotli_literal_context_id(2, previous_byte_1, previous_byte_2),
+  )
+}
+
+///|
 fn brotli_collect_command_literals_by_utf8_context(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
@@ -1052,6 +1083,34 @@ fn brotli_collect_command_literals_by_utf8_context(
 }
 
 ///|
+fn brotli_collect_command_literals_by_utf8_context4(
+  data : FixedArray[Byte],
+  commands : Array[BrotliEncodeCommand],
+  tree : Int,
+) -> BrotliLiteralSet? raise FzipError {
+  let symbols = FixedArray::make(brotli_num_literal_symbols, 0)
+  let mut count = 0
+  for i in 0..<commands.length() {
+    let command = commands[i]
+    for j in 0..<command.insert_length {
+      let position = command.insert_start + j
+      if brotli_command_literal_utf8_context_tree4(data, position) == tree {
+        let literal = data[position].to_int()
+        count = brotli_add_unique_symbol(symbols, count, literal)
+        if count > brotli_num_literal_symbols {
+          return None
+        }
+      }
+    }
+  }
+  if count == 0 {
+    None
+  } else {
+    Some({ symbols, count })
+  }
+}
+
+///|
 fn brotli_command_literal_frequencies_by_utf8_context(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
@@ -1063,6 +1122,25 @@ fn brotli_command_literal_frequencies_by_utf8_context(
     for j in 0..<command.insert_length {
       let position = command.insert_start + j
       if brotli_command_literal_utf8_context_tree(data, position) == tree {
+        frequencies[data[position].to_int()] += 1
+      }
+    }
+  }
+  frequencies
+}
+
+///|
+fn brotli_command_literal_frequencies_by_utf8_context4(
+  data : FixedArray[Byte],
+  commands : Array[BrotliEncodeCommand],
+  tree : Int,
+) -> FixedArray[Int] raise FzipError {
+  let frequencies = FixedArray::make(brotli_num_literal_symbols, 0)
+  for i in 0..<commands.length() {
+    let command = commands[i]
+    for j in 0..<command.insert_length {
+      let position = command.insert_start + j
+      if brotli_command_literal_utf8_context_tree4(data, position) == tree {
         frequencies[data[position].to_int()] += 1
       }
     }
@@ -1514,6 +1592,19 @@ fn brotli_utf8_context_tree(context : Int) -> Int {
 }
 
 ///|
+fn brotli_utf8_context_tree4(context : Int) -> Int {
+  if context >= 56 {
+    3
+  } else if context <= 11 {
+    0
+  } else if context >= 44 {
+    2
+  } else {
+    1
+  }
+}
+
+///|
 fn brotli_write_utf8_context_map(
   writer : BrotliBitWriter,
 ) -> Unit raise FzipError {
@@ -1525,6 +1616,24 @@ fn brotli_write_utf8_context_map(
   let payloads = brotli_huffman_payload_table(spec)
   for context in 0..<64 {
     let tree = brotli_utf8_context_tree(context)
+    let payload = payloads[tree]
+    writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
+  }
+  writer.write_bits(1, 0) // no inverse move-to-front
+}
+
+///|
+fn brotli_write_utf8_context_map4(
+  writer : BrotliBitWriter,
+) -> Unit raise FzipError {
+  brotli_write_var_len_uint8(writer, 3) // four literal trees
+  writer.write_bits(1, 0) // no RLE prefix
+  let symbols : FixedArray[Int] = [0, 1, 2, 3]
+  let spec = brotli_make_huffman_spec(symbols, 4, 4, 4)
+  brotli_write_huffman_spec(writer, spec)
+  let payloads = brotli_huffman_payload_table(spec)
+  for context in 0..<64 {
+    let tree = brotli_utf8_context_tree4(context)
     let payload = payloads[tree]
     writer.write_bits(payload.insert_extra_bits, payload.insert_extra)
   }
@@ -2315,6 +2424,187 @@ fn brotli_write_context_lz77_metablock(
 }
 
 ///|
+fn brotli_write_context4_lz77_metablock(
+  data : FixedArray[Byte],
+  commands : Array[BrotliEncodeCommand],
+  is_last : Bool,
+) -> BrotliBitWriter? raise FzipError {
+  let first_literals = match
+    brotli_collect_command_literals_by_utf8_context4(data, commands, 0) {
+    Some(literals) => literals
+    None => return None
+  }
+  let second_literals = match
+    brotli_collect_command_literals_by_utf8_context4(data, commands, 1) {
+    Some(literals) => literals
+    None => return None
+  }
+  let third_literals = match
+    brotli_collect_command_literals_by_utf8_context4(data, commands, 2) {
+    Some(literals) => literals
+    None => return None
+  }
+  let fourth_literals = match
+    brotli_collect_command_literals_by_utf8_context4(data, commands, 3) {
+    Some(literals) => literals
+    None => return None
+  }
+  let command_symbols = FixedArray::make(brotli_num_command_symbols, 0)
+  let distance_symbols = FixedArray::make(
+    brotli_distance_alphabet_size(0, 0, 24),
+    0,
+  )
+  let first_frequencies = brotli_command_literal_frequencies_by_utf8_context4(
+    data, commands, 0,
+  )
+  let second_frequencies = brotli_command_literal_frequencies_by_utf8_context4(
+    data, commands, 1,
+  )
+  let third_frequencies = brotli_command_literal_frequencies_by_utf8_context4(
+    data, commands, 2,
+  )
+  let fourth_frequencies = brotli_command_literal_frequencies_by_utf8_context4(
+    data, commands, 3,
+  )
+  let command_frequencies = FixedArray::make(brotli_num_command_symbols, 0)
+  let distance_frequencies = FixedArray::make(
+    brotli_distance_alphabet_size(0, 0, 24),
+    0,
+  )
+  let mut command_count = 0
+  let mut distance_count = 0
+  for i in 0..<commands.length() {
+    let command = commands[i]
+    command_frequencies[command.command.symbol] += 1
+    command_count = brotli_add_unique_symbol(
+      command_symbols,
+      command_count,
+      command.command.symbol,
+    )
+    if brotli_command_uses_distance_symbol(command) {
+      distance_frequencies[command.distance_prefix.symbol] += 1
+      distance_count = brotli_add_unique_symbol(
+        distance_symbols,
+        distance_count,
+        command.distance_prefix.symbol,
+      )
+    }
+  }
+  if distance_count == 0 {
+    distance_symbols[0] = 0
+    distance_count = 1
+  }
+  let first_spec = brotli_make_weighted_huffman_spec(
+    first_literals.symbols,
+    first_literals.count,
+    first_frequencies,
+    brotli_num_literal_symbols,
+    brotli_num_literal_symbols,
+  )
+  let second_spec = brotli_make_weighted_huffman_spec(
+    second_literals.symbols,
+    second_literals.count,
+    second_frequencies,
+    brotli_num_literal_symbols,
+    brotli_num_literal_symbols,
+  )
+  let third_spec = brotli_make_weighted_huffman_spec(
+    third_literals.symbols,
+    third_literals.count,
+    third_frequencies,
+    brotli_num_literal_symbols,
+    brotli_num_literal_symbols,
+  )
+  let fourth_spec = brotli_make_weighted_huffman_spec(
+    fourth_literals.symbols,
+    fourth_literals.count,
+    fourth_frequencies,
+    brotli_num_literal_symbols,
+    brotli_num_literal_symbols,
+  )
+  let command_spec = brotli_make_weighted_huffman_spec(
+    command_symbols, command_count, command_frequencies, brotli_num_command_symbols,
+    brotli_num_command_symbols,
+  )
+  let distance_spec = brotli_make_weighted_huffman_spec(
+    distance_symbols,
+    distance_count,
+    distance_frequencies,
+    brotli_distance_alphabet_size(0, 0, 24),
+    brotli_distance_alphabet_size(0, 0, 24),
+  )
+  let writer = BrotliBitWriter::new(
+    256 + data.length() * 4 + commands.length() * 8,
+  )
+  brotli_write_metablock_header(writer, data.length(), is_last, false)
+  writer.write_bits(1, 0) // one literal block type
+  writer.write_bits(1, 0) // one command block type
+  writer.write_bits(1, 0) // one distance block type
+  writer.write_bits(6, 0) // NPOSTFIX = 0, NDIRECT = 0
+  writer.write_bits(2, 2) // UTF-8 literal context mode
+  brotli_write_utf8_context_map4(writer)
+  writer.write_bits(1, 0) // distance context map has one tree
+  brotli_write_huffman_spec(writer, first_spec)
+  brotli_write_huffman_spec(writer, second_spec)
+  brotli_write_huffman_spec(writer, third_spec)
+  brotli_write_huffman_spec(writer, fourth_spec)
+  brotli_write_huffman_spec(writer, command_spec)
+  brotli_write_huffman_spec(writer, distance_spec)
+  let first_payloads = brotli_huffman_payload_table(first_spec)
+  let second_payloads = brotli_huffman_payload_table(second_spec)
+  let third_payloads = brotli_huffman_payload_table(third_spec)
+  let fourth_payloads = brotli_huffman_payload_table(fourth_spec)
+  let command_payloads = brotli_huffman_payload_table(command_spec)
+  let distance_payloads = brotli_huffman_payload_table(distance_spec)
+  for i in 0..<commands.length() {
+    let command = commands[i]
+    let command_payload = command_payloads[command.command.symbol]
+    writer.write_bits(
+      command_payload.insert_extra_bits,
+      command_payload.insert_extra,
+    )
+    writer.write_bits(
+      command.command.insert_extra_bits,
+      command.command.insert_extra,
+    )
+    writer.write_bits(
+      command.command.copy_extra_bits,
+      command.command.copy_extra,
+    )
+    for j in 0..<command.insert_length {
+      let position = command.insert_start + j
+      let literal = data[position].to_int()
+      let tree = brotli_command_literal_utf8_context_tree4(data, position)
+      let literal_payload = if tree == 0 {
+        first_payloads[literal]
+      } else if tree == 1 {
+        second_payloads[literal]
+      } else if tree == 2 {
+        third_payloads[literal]
+      } else {
+        fourth_payloads[literal]
+      }
+      writer.write_bits(
+        literal_payload.insert_extra_bits,
+        literal_payload.insert_extra,
+      )
+    }
+    if brotli_command_uses_distance_symbol(command) {
+      let distance_payload = distance_payloads[command.distance_prefix.symbol]
+      writer.write_bits(
+        distance_payload.insert_extra_bits,
+        distance_payload.insert_extra,
+      )
+      writer.write_bits(
+        command.distance_prefix.insert_extra_bits,
+        command.distance_prefix.insert_extra,
+      )
+    }
+  }
+  Some(writer)
+}
+
+///|
 fn brotli_write_best_lz77_metablock(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
@@ -2345,6 +2635,10 @@ fn brotli_write_best_lz77_metablock(
     }
   }
   match brotli_write_context_lz77_metablock(data, commands, is_last) {
+    Some(candidate) => if candidate.bit_pos < best.bit_pos { best = candidate }
+    None => ()
+  }
+  match brotli_write_context4_lz77_metablock(data, commands, is_last) {
     Some(candidate) => if candidate.bit_pos < best.bit_pos { best = candidate }
     None => ()
   }

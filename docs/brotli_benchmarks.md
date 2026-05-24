@@ -1068,3 +1068,41 @@ Results:
 
 The Silesia 1 MiB overhead is now 36.95% at q2 and 55.00% at q9. This is a
 large P3 ratio improvement but remains outside the 5% target.
+
+## 2026-05-24 — Four-Tree UTF-8 Literal Context Candidate
+
+The complex Huffman writer now supports non-power-of-two code-length
+alphabets by building a bounded Huffman tree for the code-length-code alphabet
+instead of rejecting 17- and 18-symbol descriptors. This enables a richer
+exact-costed UTF-8 literal-context candidate with four literal trees:
+control/space/digit contexts, punctuation/other contexts, uppercase contexts,
+and lowercase contexts.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/split-literals-8k.bin --qualities 2,9 --json
+nu tools/brotli/bench/ratio.nu target/brotli-encode/small-alpha-multi-1400.bin --qualities 2,9 --json
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 2
+nu tools/brotli/encode/verify.nu target/brotli-encode/periodic-allbytes-200k.bin --quality 9
+```
+
+Results:
+
+| Corpus                  | Quality | Previous bytes | New bytes | Google bytes | Notes                    |
+| ----------------------- | ------- | -------------- | --------- | ------------ | ------------------------ |
+| silesia-1m              | 2       | 438,806        | 424,532   | 320,418      | Four-tree context win    |
+| silesia-1m              | 9       | 408,875        | 396,969   | 263,791      | Four-tree context win    |
+| split-literals-8k       | 2       | 3,434          | 3,434     | 3,455        | Unchanged                |
+| split-literals-8k       | 9       | 3,434          | 3,434     | 3,418        | Unchanged                |
+| small-alpha-multi-1400  | 2       | 195            | 195       | 169          | Unchanged                |
+| small-alpha-multi-1400  | 9       | 195            | 195       | 69           | Unchanged                |
+| periodic-allbytes-200k  | 2       | 350            | 350       | n/a          | External decode verified |
+| periodic-allbytes-200k  | 9       | 350            | 350       | n/a          | External decode verified |
+
+The Silesia 1 MiB overhead is now 32.49% at q2 and 50.49% at q9. P3 still
+needs better match parsing, block splitting, and histogram clustering to reach
+the documented 5% target.
