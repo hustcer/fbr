@@ -469,39 +469,59 @@ fn brotli_read_symbol(
   table : FixedArray[BrotliHuffmanCode],
   root_bits : Int,
 ) -> Int raise FzipError {
-  if table.length() > 0 && table[0].bits == 0 {
+  if table[0].bits == 0 {
     return table[0].value
   }
-  let index = if reader.bits_avail < root_bits &&
-    reader.byte_pos >= reader.byte_end &&
-    reader.bits_avail > 0 {
-    (reader.bit_buf & brotli_low_mask(root_bits)).reinterpret_as_int()
-  } else {
-    reader.peek_bits(root_bits).reinterpret_as_int()
+  // Inlined fast path: refill until we have root_bits, or tolerate
+  // running short at end of stream when an existing prefix can still
+  // resolve a short Huffman code in the root table.
+  if reader.bits_avail < root_bits {
+    if reader.byte_pos >= reader.byte_end {
+      if reader.bits_avail == 0 {
+        raise fzip_err(
+          UnexpectedEOF,
+          msg="brotli input ended during Huffman code",
+        )
+      }
+      // Tail decode: leave bit_buf as-is, lookup may still pick a short code
+    } else {
+      reader.refill_to(root_bits)
+    }
   }
-  if index < 0 || index >= table.length() {
+  let mask_root = brotli_low_mask_lut[root_bits]
+  let index = (reader.bit_buf & mask_root).reinterpret_as_int()
+  if index >= table.length() {
     raise fzip_err(BrotliInvalidHuffman, msg="Huffman lookup out of range")
   }
   let entry = table[index]
-  if entry.bits < 0 {
+  let entry_bits = entry.bits
+  if entry_bits < 0 {
     raise fzip_err(
       BrotliInvalidHuffman,
       msg="uninitialized Huffman table entry",
     )
   }
-  if entry.bits <= root_bits {
-    if entry.bits > reader.bits_avail && reader.byte_pos >= reader.byte_end {
+  if entry_bits <= root_bits {
+    if entry_bits > reader.bits_avail {
       raise fzip_err(
         UnexpectedEOF,
         msg="brotli input ended during Huffman code",
       )
     }
-    reader.drop_bits(entry.bits)
+    // Inlined drop_bits: bit_buf >>= entry_bits; bits_avail -= entry_bits
+    reader.bit_buf = reader.bit_buf >> entry_bits
+    reader.bits_avail -= entry_bits
     return entry.value
   }
-  reader.drop_bits(root_bits)
-  let extra_bits = entry.bits - root_bits
-  let sub_index = reader.peek_bits(extra_bits).reinterpret_as_int()
+  // Sub-table path: drop root_bits, refill for the extra bits, lookup.
+  reader.bit_buf = reader.bit_buf >> root_bits
+  reader.bits_avail -= root_bits
+  let extra_bits = entry_bits - root_bits
+  if reader.bits_avail < extra_bits {
+    reader.refill_to(extra_bits)
+  }
+  let mask_extra = brotli_low_mask_lut[extra_bits]
+  let sub_index = (reader.bit_buf & mask_extra).reinterpret_as_int()
   let sub_entry = table[entry.value + sub_index]
   if sub_entry.bits < 0 {
     raise fzip_err(
@@ -509,6 +529,7 @@ fn brotli_read_symbol(
       msg="uninitialized Brotli Huffman sub-table entry",
     )
   }
-  reader.drop_bits(sub_entry.bits)
+  reader.bit_buf = reader.bit_buf >> sub_entry.bits
+  reader.bits_avail -= sub_entry.bits
   sub_entry.value
 }

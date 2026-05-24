@@ -6,7 +6,6 @@ priv struct BrotliBitReader {
   byte_end : Int
   mut bit_buf : UInt
   mut bits_avail : Int
-  mut consumed : Int
 }
 
 ///|
@@ -21,7 +20,6 @@ fn BrotliBitReader::new(
     byte_end: offset + length,
     bit_buf: 0U,
     bits_avail: 0,
-    consumed: 0,
   }
 }
 
@@ -30,11 +28,30 @@ fn BrotliBitReader::refill_to(
   self : BrotliBitReader,
   n : Int,
 ) -> Unit raise FzipError {
+  // Fast path: when at least one byte of room remains in the accumulator
+  // (bits_avail <= 24) and at least 3 bytes of input are available, fill
+  // three bytes at once. Branch-free, no EOF check needed for the fast
+  // path because we only take it when 3 input bytes are guaranteed.
+  if self.bits_avail < n &&
+    self.bits_avail <= 8 &&
+    self.byte_pos + 2 < self.byte_end {
+    let p = self.byte_pos
+    let buf = self.buf
+    self.bit_buf = self.bit_buf |
+      (buf[p].to_uint() << self.bits_avail) |
+      (buf[p + 1].to_uint() << (self.bits_avail + 8)) |
+      (buf[p + 2].to_uint() << (self.bits_avail + 16))
+    self.byte_pos = p + 3
+    self.bits_avail += 24
+    if self.bits_avail >= n {
+      return
+    }
+  }
   while self.bits_avail < n {
     if self.byte_pos >= self.byte_end {
       raise fzip_err(
         UnexpectedEOF,
-        msg="brotli input ended while reading bits need=\{n} available=\{self.bits_avail} consumed=\{self.consumed}",
+        msg="brotli input ended while reading bits need=\{n} available=\{self.bits_avail}",
       )
     }
     self.bit_buf = self.bit_buf |
@@ -45,14 +62,19 @@ fn BrotliBitReader::refill_to(
 }
 
 ///|
+/// Pre-computed low-`n` bit masks indexed by `n` (0..=32). Allows
+/// `brotli_low_mask(n)` to be a single array load instead of a branched
+/// shift, which removes a measurable slice from the Huffman hot path.
+let brotli_low_mask_lut : FixedArray[UInt] = [
+  0U, 0x1U, 0x3U, 0x7U, 0xfU, 0x1fU, 0x3fU, 0x7fU, 0xffU, 0x1ffU, 0x3ffU, 0x7ffU,
+  0xfffU, 0x1fffU, 0x3fffU, 0x7fffU, 0xffffU, 0x1ffffU, 0x3ffffU, 0x7ffffU, 0xfffffU,
+  0x1fffffU, 0x3fffffU, 0x7fffffU, 0xffffffU, 0x1ffffffU, 0x3ffffffU, 0x7ffffffU,
+  0xfffffffU, 0x1fffffffU, 0x3fffffffU, 0x7fffffffU, 0xffffffffU,
+]
+
+///|
 fn brotli_low_mask(n : Int) -> UInt {
-  if n == 0 {
-    0U
-  } else if n >= 32 {
-    0xffffffffU
-  } else {
-    (1U << n) - 1U
-  }
+  brotli_low_mask_lut[n]
 }
 
 ///|
@@ -77,7 +99,6 @@ fn BrotliBitReader::drop_bits(
   }
   self.bit_buf = self.bit_buf >> n
   self.bits_avail -= n
-  self.consumed += n
 }
 
 ///|
@@ -94,9 +115,12 @@ fn BrotliBitReader::take_bits(
 fn BrotliBitReader::align_to_byte(
   self : BrotliBitReader,
 ) -> Unit raise FzipError {
-  let extra = self.consumed & 7
+  // bits_avail is always non-negative; `bits_avail & 7` matches the number of
+  // padding bits we must consume to land on the next byte boundary (because
+  // every refill loads whole bytes and starts byte-aligned).
+  let extra = self.bits_avail & 7
   if extra > 0 {
-    let padding = self.take_bits(8 - extra)
+    let padding = self.take_bits(extra)
     if padding != 0U {
       raise fzip_err(BrotliInvalidPadding)
     }
@@ -120,7 +144,6 @@ fn BrotliBitReader::take_bytes(
     out[dst] = (self.bit_buf & 0xffU).to_byte()
     self.bit_buf = self.bit_buf >> 8
     self.bits_avail -= 8
-    self.consumed += 8
     dst += 1
   }
   let remaining = end - dst
@@ -135,7 +158,6 @@ fn BrotliBitReader::take_bytes(
       dst_offset=dst,
     )
     self.byte_pos += remaining
-    self.consumed += remaining * 8
   }
 }
 

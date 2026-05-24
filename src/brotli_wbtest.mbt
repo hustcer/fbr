@@ -216,7 +216,7 @@ test "BrotliBitReader reads and aligns LSB-first bits" {
   inspect(reader.take_bits(1), content="1")
   inspect(reader.take_bits(3), content="0")
   inspect(reader.take_bits(3), content="2")
-  inspect(reader.consumed, content="7")
+  inspect(reader.byte_pos * 8 - reader.bits_avail, content="7")
   inspect(reader.take_bits(1), content="1")
   inspect(reader.take_bits(1), content="1")
   reader.expect_final_padding_zero()
@@ -260,7 +260,7 @@ test "brotli_build_huffman_table supports single-symbol tree" {
   let table = brotli_build_huffman_table(lengths, 4, 3)
   let reader = BrotliBitReader::new([0xff], 0, 1)
   inspect(brotli_read_symbol(reader, table, 3), content="2")
-  inspect(reader.consumed, content="0")
+  inspect(reader.byte_pos * 8 - reader.bits_avail, content="0")
 }
 
 ///|
@@ -1931,4 +1931,123 @@ test "UnbrotliStream buffers chunks until final push" {
   assert_eq(output.length(), 1)
   assert_true(finals[0])
   assert_eq(output[0].length(), 0)
+}
+
+///|
+/// Reference implementation of the UTF-8 first-byte context category (RFC
+/// 7932 §7.1), kept here so the LUT round-trip test can validate the
+/// generated table against the original spec logic.
+fn brotli_ascii_utf8_context1_ref(byte : Int) -> Int {
+  if byte == 9 || byte == 10 || byte == 13 {
+    1
+  } else if byte == 32 {
+    2
+  } else if byte == 34 || byte == 39 {
+    4
+  } else if byte == 37 {
+    5
+  } else if byte == 40 || byte == 60 || byte == 91 || byte == 123 {
+    6
+  } else if byte == 41 || byte == 62 || byte == 93 || byte == 125 {
+    7
+  } else if byte == 44 || byte == 59 || byte == 58 {
+    8
+  } else if byte == 46 {
+    9
+  } else if byte == 61 {
+    10
+  } else if byte >= 48 && byte <= 57 {
+    11
+  } else if byte == 65 || byte == 69 || byte == 73 || byte == 79 || byte == 85 {
+    12
+  } else if byte >= 65 && byte <= 90 {
+    13
+  } else if byte == 97 ||
+    byte == 101 ||
+    byte == 105 ||
+    byte == 111 ||
+    byte == 117 {
+    14
+  } else if byte >= 97 && byte <= 122 {
+    15
+  } else if byte < 32 || byte == 127 {
+    0
+  } else {
+    3
+  }
+}
+
+///|
+/// Reference implementation of the UTF-8 second-byte context category (RFC
+/// 7932 §7.1).
+fn brotli_ascii_utf8_context2_ref(byte : Int) -> Int {
+  if byte <= 32 || byte == 127 {
+    0
+  } else if byte >= 48 && byte <= 57 {
+    2
+  } else if byte >= 65 && byte <= 90 {
+    2
+  } else if byte >= 97 && byte <= 122 {
+    3
+  } else {
+    1
+  }
+}
+
+///|
+test "brotli literal context LUT matches if-else reference for UTF8 and signed" {
+  for p1 in 0..<256 {
+    let expected_lut1_utf8 = if p1 < 128 {
+      brotli_ascii_utf8_context1_ref(p1) << 2
+    } else if p1 < 192 {
+      p1 & 1
+    } else {
+      2 | (p1 & 1)
+    }
+    assert_eq(brotli_utf8_lut1[p1], expected_lut1_utf8)
+    let expected_lut2_utf8 = if p1 < 128 {
+      brotli_ascii_utf8_context2_ref(p1)
+    } else if p1 < 224 {
+      0
+    } else {
+      2
+    }
+    assert_eq(brotli_utf8_lut2[p1], expected_lut2_utf8)
+    let expected_lut1_signed = if p1 == 0 {
+      0
+    } else if p1 < 16 {
+      8
+    } else if p1 < 64 {
+      16
+    } else if p1 < 128 {
+      24
+    } else if p1 < 192 {
+      32
+    } else if p1 < 240 {
+      40
+    } else if p1 < 255 {
+      48
+    } else {
+      56
+    }
+    assert_eq(brotli_signed_lut1[p1], expected_lut1_signed)
+    let expected_lut2_signed = if p1 == 0 {
+      0
+    } else if p1 < 16 {
+      1
+    } else if p1 < 64 {
+      2
+    } else if p1 < 128 {
+      3
+    } else if p1 < 192 {
+      4
+    } else if p1 < 240 {
+      5
+    } else if p1 < 255 {
+      6
+    } else {
+      7
+    }
+    assert_eq(brotli_signed_lut2[p1], expected_lut2_signed)
+  }
 }
