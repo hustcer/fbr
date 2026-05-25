@@ -102,9 +102,11 @@ def run-target [
   target: string
   repeats: int
   samples: int
+  release: bool
 ]: nothing -> record {
   let filter = $test_name
-  let warmup = (moon test --target $target --filter $filter | complete)
+  let release_flag = if $release { ["--release"] } else { [] }
+  let warmup = (^moon test --target $target ...$release_flag --filter $filter | complete)
   if $warmup.exit_code != 0 {
     print --stderr $warmup.stdout
     print --stderr $warmup.stderr
@@ -118,7 +120,7 @@ def run-target [
   mut times = []
   for _ in 0..<$samples {
     let started = date now
-    let run = (moon test --target $target --filter $filter | complete)
+    let run = (^moon test --target $target ...$release_flag --filter $filter | complete)
     let elapsed = ((date now) - $started | into int) / 1_000_000
     if $run.exit_code != 0 {
       print --stderr $run.stdout
@@ -219,6 +221,7 @@ def main [
   --targets (-t): string = "wasm-gc,native"
   --repeats (-r): int = 10
   --samples (-s): int = 5
+  --debug # Run MoonBit with debug profile instead of release
   --json
 ]: nothing -> nothing {
   if $mode != "decode" and $mode != "encode" {
@@ -235,6 +238,7 @@ def main [
   }
 
   let targets = parse-csv-strings $targets
+  let release = not $debug
   let input_size = (ls $input | get size.0 | into int)
   let run_id = $"((date now | into int))-((random int 0..1000000000))"
   let test_name = $"brotli target perf generated ($run_id)"
@@ -248,7 +252,7 @@ def main [
     make-temp-test $temp_test $test_name decode $input 0 $repeats $expected_total $decoded_size
     let google = google-decode $input $repeats $samples
     for target in $targets {
-      let measured = run-target $test_name $target $repeats $samples
+      let measured = run-target $test_name $target $repeats $samples $release
       $rows = ($rows | append {
         mode: "decode",
         target: $target,
@@ -266,7 +270,7 @@ def main [
     let google = google-encode $input $quality $repeats $samples
     make-temp-test $temp_test $test_name encode $input $quality $repeats 0 0
     for target in $targets {
-      let measured = run-target $test_name $target $repeats $samples
+      let measured = run-target $test_name $target $repeats $samples $release
       if $measured.encoded_size <= 0 {
         print --stderr $"Target ($target) did not report MBT_PERF_SIZE"
         exit 1
