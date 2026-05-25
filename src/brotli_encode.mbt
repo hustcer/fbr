@@ -3263,10 +3263,30 @@ fn brotli_write_best_lz77_metablock(
     brotli_count_unique_literals_up_to(data, 16) > 16 {
     return weighted
   }
-  if quality <= 2 && data.length() >= 8192 {
+  if quality <= 2 && data.length() >= 131072 {
     return weighted
   }
   let mut best = weighted
+  if quality <= 2 && data.length() >= 8192 {
+    let split = brotli_best_command_literal_split_point(data, commands)
+    if split > 0 {
+      match brotli_write_split_lz77_metablock(data, commands, split, is_last) {
+        Some(candidate) =>
+          if candidate.bit_pos < best.bit_pos {
+            best = candidate
+          }
+        None => ()
+      }
+    }
+    match brotli_write_context16_lz77_metablock(data, commands, is_last) {
+      Some(candidate) =>
+        if candidate.bit_pos < best.bit_pos {
+          best = candidate
+        }
+      None => ()
+    }
+    return best
+  }
   // Fixed (un-weighted) Huffman and 2-tree context candidates almost never
   // beat the weighted single-tree or richer context candidates on inputs
   // large enough to reach this path: weighted has the same structure with
