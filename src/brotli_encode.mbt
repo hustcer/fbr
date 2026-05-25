@@ -1405,11 +1405,13 @@ fn brotli_commands_copy_bytes(commands : Array[BrotliEncodeCommand]) -> Int {
 }
 
 ///|
-fn brotli_command_uses_distance_symbol(
-  command : BrotliEncodeCommand,
-) -> Bool raise FzipError {
-  command.has_copy &&
-  brotli_command_info(command.command.symbol).distance_code < 0
+fn brotli_command_uses_distance_symbol(command : BrotliEncodeCommand) -> Bool {
+  // Equivalent to: command.has_copy &&
+  //   brotli_command_info(command.command.symbol).distance_code < 0
+  // distance_code is < 0 iff cell_index (symbol >> 6) >= 2, i.e. symbol >= 128.
+  // Avoids the per-command brotli_prefix_offset linear sums when only the
+  // distance-vs-implicit flag is needed.
+  command.has_copy && command.command.symbol >= 128
 }
 
 ///|
@@ -2282,22 +2284,15 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
     }
     if commands[i].has_copy {
       has_copy = true
-      let uses_distance_result : Result[Bool, FzipError] = try? brotli_command_uses_distance_symbol(
-        commands[i],
-      )
-      match uses_distance_result {
-        Ok(true) => {
-          distance_count = brotli_add_unique_symbol(
-            distance_symbols,
-            distance_count,
-            commands[i].distance_prefix.symbol,
-          )
-          if distance_count > distance_symbols.length() {
-            return None
-          }
+      if brotli_command_uses_distance_symbol(commands[i]) {
+        distance_count = brotli_add_unique_symbol(
+          distance_symbols,
+          distance_count,
+          commands[i].distance_prefix.symbol,
+        )
+        if distance_count > distance_symbols.length() {
+          return None
         }
-        Ok(false) => ()
-        Err(_) => return None
       }
     }
   }
