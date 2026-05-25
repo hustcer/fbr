@@ -3436,16 +3436,24 @@ fn brotli_try_compressed_chunk(
     if quality >= 9 {
       let hq_config = brotli_high_quality_hash_config_for_quality(quality)
       if quality >= 10 {
-        return brotli_try_compressed_commands(
-          data,
-          brotli_build_simple_lz77_commands(
-            data,
-            brotli_four_byte_hash_config(hq_config),
-          ),
-          is_last,
-          best,
-          quality,
+        let hq_config = brotli_four_byte_hash_config(hq_config)
+        let mixed_commands = brotli_build_mixed_dictionary_lz77_commands(
+          data, hq_config, base_offset, window_bits,
         )
+        match mixed_commands {
+          Some(_) =>
+            return brotli_try_compressed_commands(
+              data, mixed_commands, is_last, best, quality,
+            )
+          None =>
+            return brotli_try_compressed_commands(
+              data,
+              brotli_build_simple_lz77_commands(data, hq_config),
+              is_last,
+              best,
+              quality,
+            )
+        }
       }
       let best = brotli_try_compressed_commands(
         data,
@@ -3589,16 +3597,31 @@ fn brotli_encode_standard(
           opts.quality,
         )
         if opts.quality >= 10 {
-          best = brotli_try_compressed_commands(
+          let hq_config = brotli_four_byte_hash_config(hq_config)
+          let mixed_commands = brotli_build_mixed_dictionary_lz77_commands(
             data,
-            brotli_build_simple_lz77_commands(
-              data,
-              brotli_four_byte_hash_config(hq_config),
-            ),
-            true,
-            best,
-            opts.quality,
+            hq_config,
+            0,
+            opts.window_bits,
           )
+          match mixed_commands {
+            Some(_) =>
+              best = brotli_try_compressed_commands(
+                data,
+                mixed_commands,
+                true,
+                best,
+                opts.quality,
+              )
+            None =>
+              best = brotli_try_compressed_commands(
+                data,
+                brotli_build_simple_lz77_commands(data, hq_config),
+                true,
+                best,
+                opts.quality,
+              )
+          }
         } else {
           best = brotli_try_compressed_commands(
             data,

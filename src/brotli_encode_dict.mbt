@@ -334,12 +334,29 @@ fn brotli_add_dictionary_encode_entry(
   word_index : Int,
   transform_index : Int,
 ) -> Int {
-  if !brotli_dictionary_transform_allowed(length, word_index, transform_index) {
-    return entry
-  }
+  brotli_add_dictionary_encode_entry_with_min_output(
+    index, entry, length, word_index, transform_index, brotli_dictionary_min_word_length,
+  )
+}
+
+///|
+fn brotli_add_dictionary_encode_entry_with_min_output(
+  index : BrotliDictionaryEncodeIndex,
+  entry : Int,
+  length : Int,
+  word_index : Int,
+  transform_index : Int,
+  min_output_length : Int,
+) -> Int {
   let output_length = brotli_dictionary_transform_output_length(
     length, transform_index,
   )
+  if output_length < min_output_length {
+    return entry
+  }
+  if !brotli_dictionary_transform_allowed(length, word_index, transform_index) {
+    return entry
+  }
   let hash = brotli_dictionary_hash_word(length, word_index, transform_index)
   index.lengths[entry] = length
   index.output_lengths[entry] = output_length
@@ -372,6 +389,35 @@ fn brotli_build_dictionary_encode_index() -> BrotliDictionaryEncodeIndex {
             index, entry, length, word_index, transform_index,
           )
         }
+      }
+    }
+  }
+  ignore(entry)
+  index
+}
+
+///|
+fn brotli_build_dictionary_encode_index_min_output(
+  min_output_length : Int,
+) -> BrotliDictionaryEncodeIndex {
+  let total = brotli_dictionary_encode_entry_capacity()
+  let table = FixedArray::make(brotli_dictionary_encode_hash_size, -1)
+  let next = FixedArray::make(total, -1)
+  let lengths = FixedArray::make(total, 0)
+  let output_lengths = FixedArray::make(total, 0)
+  let word_indices = FixedArray::make(total, 0)
+  let transforms = FixedArray::make(total, 0)
+  let index = { table, next, lengths, output_lengths, word_indices, transforms }
+  let mut entry = 0
+  for
+    length in brotli_dictionary_min_word_length..<=brotli_dictionary_max_word_length {
+    let bits = brotli_dictionary_size_bits_by_length[length]
+    if bits > 0 {
+      let word_count = 1 << bits
+      for word_index in 0..<word_count {
+        entry = brotli_add_dictionary_encode_entry_with_min_output(
+          index, entry, length, word_index, 0, min_output_length,
+        )
       }
     }
   }
@@ -532,6 +578,138 @@ fn brotli_build_identity_dictionary_commands(
       Ok(command) => commands.push(command)
       Err(_) => return None
     }
+  }
+  Some(commands)
+}
+
+///|
+fn brotli_build_mixed_dictionary_lz77_commands(
+  data : FixedArray[Byte],
+  hash_config : BrotliHashConfig,
+  base_offset : Int,
+  window_bits : Int,
+) -> Array[BrotliEncodeCommand]? {
+  if data.length() < 8192 || data.length() > 1048576 {
+    return None
+  }
+  if !brotli_has_compressible_match_density(data, hash_config) {
+    return None
+  }
+  let index = brotli_build_dictionary_encode_index_min_output(8)
+  let commands : Array[BrotliEncodeCommand] = []
+  let previous = brotli_previous_match_positions(data, hash_config)
+  let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
+  let mut literal_start = 0
+  let mut position = 0
+  let mut used_dictionary = false
+  while position < data.length() {
+    let (match_length, distance) = brotli_longest_previous_hash_match_with_cache(
+      data, previous, position, hash_config, distance_cache,
+    )
+    if match_length < 22 &&
+      brotli_dictionary_word_byte(data[position]) &&
+      (position == 0 || !brotli_dictionary_word_byte(data[position - 1])) {
+      match
+        brotli_find_identity_dictionary_match(
+          index,
+          data,
+          position,
+          base_offset + position,
+          window_bits,
+        ) {
+        Some((word_length, output_length, dictionary_distance)) =>
+          if output_length >= 8 && output_length >= match_length + 2 {
+            let insert_length = position - literal_start
+            let command_result : Result[BrotliEncodeCommand, FzipError] = try? brotli_make_dictionary_encode_command(
+              literal_start, insert_length, word_length, output_length, dictionary_distance,
+            )
+            match command_result {
+              Ok(command) => commands.push(command)
+              Err(_) => return None
+            }
+            used_dictionary = true
+            if commands.length() > hash_config.max_commands {
+              return None
+            }
+            position += output_length
+            literal_start = position
+            continue
+          }
+        None => ()
+      }
+    }
+    if match_length >= hash_config.min_match_length {
+      let lookahead = hash_config.lazy_lookahead
+      if lookahead > 0 {
+        let mut k = 1
+        let mut skip = 0
+        while k <= lookahead && position + k < data.length() {
+          let (next_length, _) = brotli_longest_previous_hash_match_with_cache(
+            data,
+            previous,
+            position + k,
+            hash_config,
+            distance_cache,
+          )
+          if next_length > match_length {
+            skip = k
+            break
+          }
+          k += 1
+        }
+        if skip > 0 {
+          position += skip
+          continue
+        }
+      }
+      let insert_length = position - literal_start
+      let distance_code = brotli_compute_distance_code(
+        distance, position, distance_cache,
+      )
+      let command = match
+        brotli_try_make_encode_command_with_distance_code(
+          literal_start, insert_length, match_length, distance, distance_code,
+        ) {
+        Some(command) => command
+        None =>
+          match
+            brotli_try_make_encode_command_with_distance_mode(
+              literal_start, insert_length, match_length, distance, true, true,
+            ) {
+            Some(command) => command
+            None => return None
+          }
+      }
+      commands.push(command)
+      brotli_update_distance_cache(distance_cache, distance, distance_code)
+      if commands.length() > hash_config.max_commands {
+        return None
+      }
+      position += match_length
+      literal_start = position
+    } else {
+      position += hash_config.scan_step
+    }
+  }
+  if !used_dictionary || commands.length() == 0 {
+    return None
+  }
+  if literal_start < data.length() {
+    let final_result : Result[BrotliEncodeCommand, FzipError] = try? brotli_make_encode_command(
+      literal_start,
+      data.length() - literal_start,
+      0,
+      0,
+      false,
+    )
+    match final_result {
+      Ok(command) => commands.push(command)
+      Err(_) => return None
+    }
+  }
+  let copy_bytes = brotli_commands_copy_bytes(commands)
+  if copy_bytes * 100 < data.length() * hash_config.min_copy_ratio_percent {
+    return None
   }
   Some(commands)
 }
