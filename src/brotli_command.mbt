@@ -45,10 +45,7 @@ fn brotli_prefix_offset(
 }
 
 ///|
-fn brotli_command_info(symbol : Int) -> BrotliCommandInfo raise FzipError {
-  if symbol < 0 || symbol >= brotli_num_command_symbols {
-    raise fzip_err(BrotliInvalidMetablock, msg="invalid Brotli command symbol")
-  }
+fn brotli_build_command_info(symbol : Int) -> BrotliCommandInfo {
   let cell_index = symbol >> 6
   let cell_pos = brotli_command_cell_pos[cell_index]
   let copy_code = ((cell_pos << 3) & 0x18) + (symbol & 0x7)
@@ -74,6 +71,26 @@ fn brotli_command_info(symbol : Int) -> BrotliCommandInfo raise FzipError {
     ),
     copy_len_offset,
   }
+}
+
+///|
+let brotli_command_info_table : FixedArray[BrotliCommandInfo] = {
+  let table = FixedArray::make(
+    brotli_num_command_symbols,
+    brotli_build_command_info(0),
+  )
+  for symbol in 0..<brotli_num_command_symbols {
+    table[symbol] = brotli_build_command_info(symbol)
+  }
+  table
+}
+
+///|
+fn brotli_command_info(symbol : Int) -> BrotliCommandInfo raise FzipError {
+  if symbol < 0 || symbol >= brotli_num_command_symbols {
+    raise fzip_err(BrotliInvalidMetablock, msg="invalid Brotli command symbol")
+  }
+  brotli_command_info_table[symbol]
 }
 
 ///|
