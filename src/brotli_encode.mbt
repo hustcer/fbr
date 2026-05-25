@@ -3263,7 +3263,7 @@ fn brotli_write_best_lz77_metablock(
     brotli_count_unique_literals_up_to(data, 16) > 16 {
     return weighted
   }
-  if quality <= 2 && data.length() >= 131072 {
+  if quality <= 2 && data.length() >= 262144 {
     return weighted
   }
   let mut best = weighted
