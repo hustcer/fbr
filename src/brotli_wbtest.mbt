@@ -1574,7 +1574,7 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   )
   inspect(
     brotli_high_quality_hash_config_for_quality(11).max_match_checks,
-    content="128",
+    content="256",
   )
   inspect(
     brotli_high_quality_hash_config_for_quality(11).max_commands,

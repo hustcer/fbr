@@ -72,13 +72,13 @@ fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
 fn brotli_high_quality_hash_config_for_quality(
   quality : Int,
 ) -> BrotliHashConfig {
-  // q11: deeper search (128 checks, 131,072-entry table) to spend the q11 CPU
+  // q11: deeper search (256 checks, 131,072-entry table) to spend the q11 CPU
   // budget on more candidate matches.
   // q9/q10: 32 checks at 32,768-entry table.
   let table_size = if quality >= 11 { 131072 } else { 32768 }
   let table_mask = table_size - 1
   let max_match_checks = if quality >= 11 {
-    128
+    256
   } else if quality >= 9 {
     32
   } else {
@@ -313,6 +313,12 @@ fn brotli_longest_previous_hash_match_with_cache(
   let b3 = data[position + 3]
   let mut best_length = 0
   let mut best_distance = 0
+  let mut best_from_distance_cache = false
+  let distance_cache_replacement_margin = if config.max_match_checks >= 256 {
+    1
+  } else {
+    0
+  }
   // Inlined distance-cache probes
   let max_cache_codes = config.max_distance_cache_codes
   for code in 0..<max_cache_codes {
@@ -332,6 +338,7 @@ fn brotli_longest_previous_hash_match_with_cache(
         if length > best_length {
           best_length = length
           best_distance = distance
+          best_from_distance_cache = true
         }
       }
     }
@@ -355,9 +362,14 @@ fn brotli_longest_previous_hash_match_with_cache(
             data[position + length] == data[candidate + length] {
         length += 1
       }
-      if length > best_length {
+      if length > best_length &&
+        (
+          !best_from_distance_cache ||
+          length > best_length + distance_cache_replacement_margin
+        ) {
         best_length = length
         best_distance = position - candidate
+        best_from_distance_cache = false
       }
     }
     candidate = previous[candidate]
