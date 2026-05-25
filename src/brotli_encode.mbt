@@ -3435,6 +3435,18 @@ fn brotli_try_compressed_chunk(
   if quality >= 2 && data.length() >= 8192 {
     if quality >= 9 {
       let hq_config = brotli_high_quality_hash_config_for_quality(quality)
+      if quality >= 10 {
+        return brotli_try_compressed_commands(
+          data,
+          brotli_build_simple_lz77_commands(
+            data,
+            brotli_four_byte_hash_config(hq_config),
+          ),
+          is_last,
+          best,
+          quality,
+        )
+      }
       let best = brotli_try_compressed_commands(
         data,
         brotli_build_simple_lz77_commands(data, hq_config),
@@ -3576,23 +3588,36 @@ fn brotli_encode_standard(
         let hq_config = brotli_high_quality_hash_config_for_quality(
           opts.quality,
         )
-        best = brotli_try_compressed_commands(
-          data,
-          brotli_build_simple_lz77_commands(data, hq_config),
-          true,
-          best,
-          opts.quality,
-        )
-        best = brotli_try_compressed_commands(
-          data,
-          brotli_build_simple_lz77_commands(
+        if opts.quality >= 10 {
+          best = brotli_try_compressed_commands(
             data,
-            brotli_four_byte_hash_config(hq_config),
-          ),
-          true,
-          best,
-          opts.quality,
-        )
+            brotli_build_simple_lz77_commands(
+              data,
+              brotli_four_byte_hash_config(hq_config),
+            ),
+            true,
+            best,
+            opts.quality,
+          )
+        } else {
+          best = brotli_try_compressed_commands(
+            data,
+            brotli_build_simple_lz77_commands(data, hq_config),
+            true,
+            best,
+            opts.quality,
+          )
+          best = brotli_try_compressed_commands(
+            data,
+            brotli_build_simple_lz77_commands(
+              data,
+              brotli_four_byte_hash_config(hq_config),
+            ),
+            true,
+            best,
+            opts.quality,
+          )
+        }
       } else {
         let natural_config = brotli_natural_hash_config_for_quality(
           opts.quality,
