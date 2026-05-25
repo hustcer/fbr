@@ -109,6 +109,9 @@ let brotli_dictionary_extra_transforms : FixedArray[Int] = [
 let brotli_dictionary_same_length_transforms : FixedArray[Int] = [0, 9, 44]
 
 ///|
+let brotli_dictionary_mixed_extra_transforms : FixedArray[Int] = [1, 4]
+
+///|
 fn brotli_dictionary_same_length_transform(transform_index : Int) -> Bool {
   let transform_type = brotli_dictionary_transform_type(transform_index)
   (
@@ -425,6 +428,16 @@ fn brotli_build_dictionary_encode_index_min_output(
             length,
             word_index,
             brotli_dictionary_same_length_transforms[i],
+            min_output_length,
+          )
+        }
+        for i in 0..<brotli_dictionary_mixed_extra_transforms.length() {
+          entry = brotli_add_dictionary_encode_entry_with_min_output(
+            index,
+            entry,
+            length,
+            word_index,
+            brotli_dictionary_mixed_extra_transforms[i],
             min_output_length,
           )
         }
