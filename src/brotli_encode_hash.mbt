@@ -72,12 +72,12 @@ fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
 fn brotli_high_quality_hash_config_for_quality(
   quality : Int,
 ) -> BrotliHashConfig {
-  // q11: deeper search (256 checks, 131,072-entry table) to spend the q11 CPU
-  // budget on more candidate matches.
-  // q9/q10: 32 checks at 32,768-entry table.
-  let table_size = if quality >= 11 { 131072 } else { 32768 }
+  // q10/q11: deeper search (256 checks, 131,072-entry table) to spend the
+  // high-quality CPU budget on more candidate matches.
+  // q9: 32 checks at 32,768-entry table.
+  let table_size = if quality >= 10 { 131072 } else { 32768 }
   let table_mask = table_size - 1
-  let max_match_checks = if quality >= 11 {
+  let max_match_checks = if quality >= 10 {
     256
   } else if quality >= 9 {
     32
@@ -85,7 +85,7 @@ fn brotli_high_quality_hash_config_for_quality(
     4
   }
   let min_match_length = if quality >= 9 { 5 } else { 6 }
-  let max_commands = if quality >= 11 {
+  let max_commands = if quality >= 10 {
     600000
   } else if quality >= 9 {
     300000
