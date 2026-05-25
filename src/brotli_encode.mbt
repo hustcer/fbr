@@ -1796,10 +1796,6 @@ fn brotli_build_literal_only_command(
   if !brotli_literal_only_may_beat_stored(data) {
     return None
   }
-  match brotli_collect_unique_literals(data, data.length()) {
-    Some(_) => ()
-    None => return None
-  }
   let command_result : Result[BrotliEncodeCommand, FzipError] = try? brotli_make_encode_command(
     0,
     data.length(),
@@ -2179,10 +2175,6 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
   }
   if !brotli_has_compressible_match_density(data, hash_config) {
     return None
-  }
-  match brotli_collect_unique_literals(data, data.length()) {
-    Some(_) => ()
-    None => return None
   }
   let commands : Array[BrotliEncodeCommand] = []
   let previous = brotli_previous_match_positions(data, hash_config)
