@@ -1870,6 +1870,28 @@ test "unbrotli_sync decodes compressed explicit-distance copy" {
 }
 
 ///|
+test "BrotliOutputBuilder copy_from_distance keeps overlap semantics" {
+  let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
+  output.ensure(8)
+  for i in 0..<8 {
+    output.buf[i] = (65 + i).to_byte()
+  }
+  output.len = 8
+  output.copy_from_distance(8, 4)
+  inspect(str_from_u8(trim_buf(output.buf, output.len)), content="ABCDEFGHABCD")
+  output.copy_from_distance(1, 3)
+  inspect(
+    str_from_u8(trim_buf(output.buf, output.len)),
+    content="ABCDEFGHABCDDDD",
+  )
+  output.copy_from_distance(4, 8)
+  inspect(
+    str_from_u8(trim_buf(output.buf, output.len)),
+    content="ABCDEFGHABCDDDDDDDDDDDD",
+  )
+}
+
+///|
 test "unbrotli_sync rejects non-zero final padding" {
   let compressed : FixedArray[Byte] = [0xa1, 0x03]
   let result = try? unbrotli_sync(compressed)

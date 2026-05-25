@@ -158,10 +158,32 @@ fn BrotliOutputBuilder::copy_from_distance(
     )
   }
   self.ensure(length)
-  for _ in 0..<length {
-    self.buf[self.len] = self.buf[self.len - distance]
-    self.len += 1
+  let start = self.len
+  if length == 0 {
+    return
   }
+  if distance == 1 {
+    let value = self.buf[start - 1]
+    for i in 0..<length {
+      self.buf[start + i] = value
+    }
+    self.len = start + length
+    return
+  }
+  if distance >= length {
+    self.buf.blit_to(
+      self.buf,
+      len=length,
+      src_offset=start - distance,
+      dst_offset=start,
+    )
+    self.len = start + length
+    return
+  }
+  for i in 0..<length {
+    self.buf[start + i] = self.buf[start + i - distance]
+  }
+  self.len = start + length
 }
 
 ///|
