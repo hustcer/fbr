@@ -92,6 +92,7 @@ fn brotli_high_quality_hash_config_for_quality(
   } else {
     150000
   }
+  let lazy_lookahead = 3
   {
     table_size,
     table_mask,
@@ -100,7 +101,7 @@ fn brotli_high_quality_hash_config_for_quality(
     max_match_length: 16384,
     min_match_length,
     max_distance_cache_codes: brotli_num_distance_short_codes,
-    lazy_lookahead: 3,
+    lazy_lookahead,
     scan_step: 1,
     max_commands,
     min_copy_ratio_percent: 12,

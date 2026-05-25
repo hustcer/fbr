@@ -1263,22 +1263,11 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context(
 }
 
 ///|
-fn brotli_command_split_literal_saving_bits(
-  data : FixedArray[Byte],
-  commands : Array[BrotliEncodeCommand],
-  split : Int,
-  literal_count : Int,
+fn brotli_two_tree_saving(
+  first_frequencies : FixedArray[Int],
+  second_frequencies : FixedArray[Int],
   single_bits : Int,
 ) -> Int {
-  if split <= 0 || split >= literal_count {
-    return 0
-  }
-  let first_frequencies = brotli_command_literal_frequencies_range(
-    data, commands, 0, split,
-  )
-  let second_frequencies = brotli_command_literal_frequencies_range(
-    data, commands, split, literal_count,
-  )
   let (first_lengths, _) = h_tree(
     first_frequencies, brotli_huffman_max_code_length,
   )
@@ -1296,6 +1285,57 @@ fn brotli_command_split_literal_saving_bits(
 }
 
 ///|
+/// Snapshot literal frequencies at each `split_points` boundary in one
+/// command-stream pass. Returns a flat `(split_count + 1) × alphabet` table:
+/// row `i` is the cumulative frequency up to `split_points[i]`, and the last
+/// row is the total frequency over `0 .. literal_count`. Assumes
+/// `split_points` is sorted ascending with values in `(0, literal_count)`.
+fn brotli_split_literal_freq_snapshots(
+  data : FixedArray[Byte],
+  commands : Array[BrotliEncodeCommand],
+  split_points : FixedArray[Int],
+  literal_count : Int,
+) -> FixedArray[Int] {
+  let alphabet = brotli_num_literal_symbols
+  let rows = split_points.length() + 1
+  let snapshots = FixedArray::make(rows * alphabet, 0)
+  let frequencies = FixedArray::make(alphabet, 0)
+  let mut literal_index = 0
+  let mut next_split_idx = 0
+  for i in 0..<commands.length() {
+    let command = commands[i]
+    let start = command.insert_start
+    let insert_length = command.insert_length
+    for j in 0..<insert_length {
+      while next_split_idx < split_points.length() &&
+            literal_index == split_points[next_split_idx] {
+        let row_offset = next_split_idx * alphabet
+        for k in 0..<alphabet {
+          snapshots[row_offset + k] = frequencies[k]
+        }
+        next_split_idx += 1
+      }
+      frequencies[data[start + j].to_int()] += 1
+      literal_index += 1
+    }
+  }
+  while next_split_idx < split_points.length() &&
+        literal_index >= split_points[next_split_idx] {
+    let row_offset = next_split_idx * alphabet
+    for k in 0..<alphabet {
+      snapshots[row_offset + k] = frequencies[k]
+    }
+    next_split_idx += 1
+  }
+  let total_offset = split_points.length() * alphabet
+  for k in 0..<alphabet {
+    snapshots[total_offset + k] = frequencies[k]
+  }
+  ignore(literal_count)
+  snapshots
+}
+
+///|
 fn brotli_best_command_literal_split_point(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
@@ -1304,32 +1344,49 @@ fn brotli_best_command_literal_split_point(
   if literal_count < 2048 {
     return 0
   }
-  let all_frequencies = brotli_command_literal_frequencies_range(
-    data, commands, 0, literal_count,
+  // Try three evenly spaced split points (1/4, 1/2, 3/4); broader candidate
+  // sets (eighths) did not pay for themselves on Silesia.
+  let split_points : FixedArray[Int] = [
+    literal_count / 4,
+    literal_count / 2,
+    literal_count * 3 / 4,
+  ]
+  // Build cumulative frequency snapshots at each split boundary in a single
+  // pass instead of rescanning literals per candidate.
+  let snapshots = brotli_split_literal_freq_snapshots(
+    data, commands, split_points, literal_count,
   )
+  let alphabet = brotli_num_literal_symbols
+  let total_offset = split_points.length() * alphabet
+  let all_frequencies = FixedArray::make(alphabet, 0)
+  for k in 0..<alphabet {
+    all_frequencies[k] = snapshots[total_offset + k]
+  }
   let (all_lengths, _) = h_tree(all_frequencies, brotli_huffman_max_code_length)
   if all_lengths.length() == 0 {
     return 0
   }
   let single_bits = clen(all_frequencies, all_lengths)
-  let split_points = [
-    literal_count / 4,
-    literal_count / 2,
-    literal_count * 3 / 4,
-  ]
   let mut best_split = 0
   let mut best_saving = 384
+  let first_frequencies = FixedArray::make(alphabet, 0)
+  let second_frequencies = FixedArray::make(alphabet, 0)
   for i in 0..<split_points.length() {
-    let saving = brotli_command_split_literal_saving_bits(
-      data,
-      commands,
-      split_points[i],
-      literal_count,
-      single_bits,
+    let split = split_points[i]
+    if split <= 0 || split >= literal_count {
+      continue
+    }
+    let row_offset = i * alphabet
+    for k in 0..<alphabet {
+      first_frequencies[k] = snapshots[row_offset + k]
+      second_frequencies[k] = all_frequencies[k] - first_frequencies[k]
+    }
+    let saving = brotli_two_tree_saving(
+      first_frequencies, second_frequencies, single_bits,
     )
     if saving > best_saving {
       best_saving = saving
-      best_split = split_points[i]
+      best_split = split
     }
   }
   best_split
@@ -2134,43 +2191,27 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
       data, previous, position, hash_config, distance_cache,
     )
     if match_length >= hash_config.min_match_length {
-      if hash_config.lazy_lookahead > 0 && position + 1 < data.length() {
-        let (next_match_length, _) = brotli_longest_previous_hash_match_with_cache(
-          data,
-          previous,
-          position + 1,
-          hash_config,
-          distance_cache,
-        )
-        if next_match_length > match_length {
-          position += 1
+      let lookahead = hash_config.lazy_lookahead
+      if lookahead > 0 {
+        let mut k = 1
+        let mut skip = 0
+        while k <= lookahead && position + k < data.length() {
+          let (next_length, _) = brotli_longest_previous_hash_match_with_cache(
+            data,
+            previous,
+            position + k,
+            hash_config,
+            distance_cache,
+          )
+          if next_length > match_length {
+            skip = k
+            break
+          }
+          k += 1
+        }
+        if skip > 0 {
+          position += skip
           continue
-        }
-        if hash_config.lazy_lookahead >= 2 && position + 2 < data.length() {
-          let (second_match_length, _) = brotli_longest_previous_hash_match_with_cache(
-            data,
-            previous,
-            position + 2,
-            hash_config,
-            distance_cache,
-          )
-          if second_match_length > match_length {
-            position += 2
-            continue
-          }
-        }
-        if hash_config.lazy_lookahead >= 3 && position + 3 < data.length() {
-          let (third_match_length, _) = brotli_longest_previous_hash_match_with_cache(
-            data,
-            previous,
-            position + 3,
-            hash_config,
-            distance_cache,
-          )
-          if third_match_length > match_length {
-            position += 3
-            continue
-          }
         }
       }
       let insert_length = position - literal_start
