@@ -1771,6 +1771,40 @@ test "brotli_sync q2 compresses high alphabet repetitive chunks" {
 }
 
 ///|
+test "brotli_sync q9 mixed dictionary beats q8 on dictionary text" {
+  // English words from the static dictionary, repeated to give the mixed
+  // dictionary candidate enough input to engage (>= 8192 bytes).
+  let words = str_to_u8(
+    " the time was full of work because they could find new other place over",
+  )
+  let pattern = words
+  let total = 9000
+  let input = FixedArray::make(total, b'\x00')
+  let pattern_len = pattern.length()
+  for i in 0..<total {
+    input[i] = pattern[i % pattern_len]
+  }
+  let q8 = brotli_sync(input, opts={
+    quality: 8,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q9 = brotli_sync(input, opts={
+    quality: 9,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  // q9 enables the mixed-dictionary candidate, so the output is not larger
+  // than q8 for any input we can reach this gate with.
+  assert_true(q9.length() <= q8.length())
+  let decoded_q9 = unbrotli_sync(q9)
+  assert_eq(decoded_q9.length(), input.length())
+  for i in 0..<decoded_q9.length() {
+    assert_eq(decoded_q9[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q0 through q11 round-trip" {
   let input : FixedArray[Byte] = [0, 1, 1, 2, 3, 5, 8, 13]
   for quality in 0..<=11 {

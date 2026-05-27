@@ -10,3 +10,5 @@ skills-lock.json
 bench/node_modules/
 tools/zip64-fixtures/output/
 tools/zip64-fixtures/provenance.md
+tools/brotli/fuzz/corpus/
+tools/brotli/.harness-lock/

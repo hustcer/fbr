@@ -4,8 +4,8 @@
 
 This library provides:
 
-- **Deflate, GZIP, Zlib, and ZIP** compression and decompression
-- **Synchronous APIs plus streaming APIs for DEFLATE/GZIP/Zlib**
+- **Deflate, GZIP, Zlib, ZIP, and Brotli** compression and decompression
+- **Synchronous APIs plus streaming APIs for DEFLATE/GZIP/Zlib/Brotli**
 - **ZIP64 metadata support** for in-memory ZIP archives that still fit the sync API limits
 - **Validation and size limits** for malformed input, zip bombs, path traversal, and corrupted data
 
@@ -16,12 +16,13 @@ Platform: macOS (Apple Silicon), MoonBit wasm-gc target. Full results in [bench.
 ## Features
 
 - Pure MoonBit implementation with no external dependencies (compiled to Wasm-GC)
-- Support for DEFLATE, GZIP, Zlib, and ZIP formats
-- Automatic format detection for decompression
-- Streaming APIs for chunk-based DEFLATE/GZIP/Zlib compression and decompression
+- Support for DEFLATE, GZIP, Zlib, ZIP, and Brotli (RFC 7932) formats
+- Automatic format detection for decompression (GZIP/Zlib/DEFLATE; Brotli is opt-in via `unbrotli_sync`)
+- Streaming APIs for chunk-based DEFLATE/GZIP/Zlib/Brotli compression and decompression
 - In-memory ZIP read/write support, including ZIP64 metadata, data descriptors, listing, and CRC-32 validation
+- Brotli encoder at quality 0–11 with mixed static-dictionary and high-quality hash-chain parsing; Brotli decoder passes the full upstream conformance corpus and a 100 MiB Silesia q=11 acceptance roundtrip
 - Configurable input and output limits
-- 360+ tests covering format correctness, edge cases, security scenarios, and malformed input
+- 457+ tests covering format correctness, edge cases, security scenarios, and malformed input
 
 ## Installation
 
@@ -65,9 +66,10 @@ Detailed API documentation can be explored via `moon ide doc` or in the codebase
 - **ZIP archive support** - Write, list, and extract ZIP archives
 - **ZIP64 metadata support** - Read and write ZIP64 metadata for archives that fit the current in-memory sync API limits
 - **ZIP data descriptors** - Read entries that use central-directory sizes and CRC-32
+- **Brotli support (RFC 7932)** - `brotli_sync` encoder at quality 0–11 (mixed static-dictionary + high-quality hash-chain parser), `unbrotli_sync` decoder for the full upstream conformance corpus, and `BrotliStream` / `UnbrotliStream` chunked wrappers
 - **Streaming compression** - Stream-based handlers for chunk-based data processing
 - **Input validation** - Size limits, path traversal detection, checksum validation, and malformed metadata rejection
-- **Auto-detection** - Decompression that recognizes GZIP, Zlib, or raw DEFLATE
+- **Auto-detection** - Decompression that recognizes GZIP, Zlib, or raw DEFLATE (Brotli is opt-in via `unbrotli_sync`)
 - **Test coverage** - Tests for encoding, decoding, edge cases, and security-related regressions
 
 ### API Compatibility
@@ -142,6 +144,33 @@ let archive = @fzip.zip_sync_checked(files) catch {
 `zip_sync` uses the same builder and aborts if the builder reports a recoverable error. It does not return a partial archive.
 
 True large-file streaming is not implemented yet. See [`docs/zip64.md`](docs/zip64.md) for the ZIP64 plan.
+
+### Brotli
+
+Brotli is a peer format in fzip and is added explicitly via `brotli_sync`/`unbrotli_sync`; it is **not** part of the `decompress_sync` auto-detect path because Brotli streams have no reliable magic header.
+
+```moonbit
+// Compress with Brotli at the default quality.
+let compressed = @fzip.brotli_sync(data)
+
+// Compress at quality 9 with a 22-bit LZ77 window.
+let compressed = @fzip.brotli_sync(
+  data,
+  opts={
+    quality: 9,
+    window_bits: 22,
+    mode: @fzip.Generic,
+    max_input_size: @fzip.default_max_input_size,
+  },
+)
+
+// Decompress a Brotli stream.
+let original = @fzip.unbrotli_sync(compressed)
+```
+
+Streaming wrappers (`BrotliStream` and `UnbrotliStream`) buffer input chunks until `push(chunk, final_=true)`, matching the existing `DeflateStream`/`InflateStream` behaviour.
+
+The encoder supports the full quality range 0..=11. The decoder passes the full upstream Brotli conformance corpus (under `tools/brotli/conformance/`). See [`docs/brotli.md`](docs/brotli.md) for the implementation plan and [`docs/brotli_benchmarks.md`](docs/brotli_benchmarks.md) for the recorded size/time deltas at each level.
 
 ### Automatic Decompression
 

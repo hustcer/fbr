@@ -2059,3 +2059,46 @@ Results:
 `target-perf.nu` now also uses the shared Brotli harness lock so concurrent
 temporary white-box benchmark runs cannot invalidate each other's generated
 `src/*_wbtest.mbt` files during Moon test discovery.
+
+## 2026-05-27 — q9 mixed dictionary candidate
+
+The q9 encoder path now also tries `brotli_build_mixed_dictionary_lz77_commands`
+with the 4-byte high-quality hash config, mirroring the q10/q11 path. Dictionary
+words can replace short copies on natural text, closing part of the q9 ratio
+gap against Google Brotli.
+
+Validation commands:
+
+```nu
+moon check --target all
+moon test --target all
+moon test --target native --filter '*mixed dictionary*'
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin --mode encode --quality 9 --targets wasm-gc,native --repeats 1 --samples 2 --json
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-128k.bin --mode encode --quality 9 --targets wasm-gc,native --repeats 1 --samples 2 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 9 --json
+nu tools/brotli/encode/verify.nu target/brotli-bench/silesia-1m.bin --quality 9
+```
+
+Results:
+
+| Corpus       | Quality | Target  | Previous bytes | New bytes | Google bytes | Previous ms | New ms |
+| ------------ | ------- | ------- | -------------- | --------- | ------------ | ----------- | ------ |
+| silesia-64k  | 9       | wasm-gc | 22,261         | 21,514    | 22,063       | 140.583     | 161.436 |
+| silesia-64k  | 9       | native  | 22,261         | 21,514    | 22,063       | 60.651      | 77.168 |
+| silesia-128k | 9       | wasm-gc | 40,013         | 39,081    | 39,695       | 187.508     | 223.941 |
+| silesia-128k | 9       | native  | 40,013         | 39,081    | 39,695       | 89.278      | 116.025 |
+| silesia-1m   | 9       | legacy  | 273,633        | 271,776   | 263,791      | n/a         | n/a    |
+
+q9 overhead vs Google q9: 3.73% -> 3.03% on silesia-1m. Two smaller fixtures now
+encode smaller than Google q9 (silesia-64k: -2.49%; silesia-128k: -1.55%).
+q10/q11 unchanged because the path was already enabled for them.
+
+Rejected follow-ups:
+
+- Adding the 3-byte hash high-quality candidate at q10/q11: did not change
+  size on silesia-64k.bin q11 (still 21,415 bytes) and silesia-1m.bin q11
+  (still 264,422 bytes), while doubling silesia-1m.bin q11 encode time
+  (63,564 -> 130,114 ms on the ratio harness).
+- Adding the 3-byte hash mixed-dictionary candidate at q9: did not change
+  silesia-1m.bin q9 size (still 271,776 bytes), while raising the ratio
+  harness time from 73,725 to 99,943 ms (about +36%).

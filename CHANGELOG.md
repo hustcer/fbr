@@ -2,6 +2,62 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Brotli compression and decompression support (RFC 7932).
+  - `unbrotli_sync(data, opts?)` and `UnbrotliStream` decode any RFC 7932
+    Brotli stream, including the full upstream conformance corpus (22 fixtures)
+    and 100 MiB Silesia q=11 acceptance.
+  - `brotli_sync(data, opts?)` and `BrotliStream` produce RFC 7932 streams at
+    quality levels 0 through 11. q9 enables the mixed-dictionary candidate
+    alongside hash-chain matches; q10/q11 deepen the high-quality parser and
+    add static dictionary words from the identity, same-length, and trailing
+    space transform sets. Every quality level decodes back through Google's
+    reference `brotli` CLI.
+  - New error codes: `BrotliInvalidWindowBits`, `BrotliInvalidMetablock`,
+    `BrotliInvalidHuffman`, `BrotliInvalidContextMap`, `BrotliInvalidDistance`,
+    `BrotliInvalidTransform`, `BrotliDictionaryNotSupported`,
+    `BrotliLargeWindowNotSupported`, `BrotliReserved`, `BrotliInvalidPadding`.
+  - Options structs `UnbrotliOptions` (with `out`, `max_output_size`,
+    `max_input_size`) and `BrotliOptions` (with `quality`, `window_bits`,
+    `mode`, `max_input_size`), each with `::default()` constructors.
+- Static RFC dictionary embedded as Zlib-compressed payload and inflated lazily
+  on first call (`brotli_static_dictionary`); SHA-256 of the source dictionary
+  is recorded in `src/brotli_dictionary_data.mbt`.
+- Tools under `tools/brotli/`:
+  - `tools/brotli/bench/ratio.nu`, `tools/brotli/bench/chunk-match.nu`, and
+    `tools/brotli/bench/target-perf.nu` for ratio, density, and wasm-gc/native
+    encode/decode benchmarks.
+  - `tools/brotli/conformance/run.nu` for the upstream Google Brotli test
+    corpus.
+  - `tools/brotli/fuzz/gen-corpus.nu` and `tools/brotli/fuzz/run.nu` for
+    short fuzz runs against the decoder.
+  - `tools/brotli/encode/verify.nu` and `tools/brotli/silesia/verify.nu` for
+    Google CLI cross-validation.
+
+### Performance
+
+- Brotli q9 ratio improved by enabling the mixed-dictionary candidate. On
+  Silesia, q9 1 MiB falls from 273,633 to 271,776 bytes (overhead vs Google
+  q9 263,791 reduced from 3.73% to 3.03%), q9 128 KiB falls from 40,013 to
+  39,081 bytes (-1.55% vs Google 39,695), and q9 64 KiB falls from 22,261
+  to 21,514 bytes (-2.49% vs Google 22,063). Encode time on q9 64 KiB rises
+  from 140.583 to 161.436 ms (wasm-gc) and 60.651 to 77.168 ms (native).
+- Brotli decoder back-reference output copying uses fast paths for distance=1
+  and non-overlapping copies; command symbol info is precomputed to remove
+  per-symbol prefix-offset loops from decode and encode command handling.
+
+### Tests and docs
+
+- New `docs/brotli.md` planning document with phased delivery details.
+- New `docs/brotli_benchmarks.md` recording every accepted size/time delta
+  for the Brotli encoder/decoder.
+- 457 in-package tests covering Brotli decoder helpers, transforms, fixtures,
+  roundtrips, q0..q11 end-to-end, stream chunking, and security limits, all
+  passing on `wasm`, `wasm-gc`, `js`, and `native`.
+
 ## v0.8.0 - 2026-05-20
 
 ### Added
