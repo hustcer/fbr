@@ -457,6 +457,36 @@ fn brotli_dictionary_word_byte(value : Byte) -> Bool {
 }
 
 ///|
+fn brotli_mixed_dictionary_may_pay(data : FixedArray[Byte]) -> Bool {
+  if data.length() < 8192 {
+    return false
+  }
+  let required = if data.length() < 65536 { 4 } else { data.length() / 16384 }
+  let mut candidates = 0
+  let mut position = 0
+  while position < data.length() {
+    if brotli_dictionary_word_byte(data[position]) &&
+      (position == 0 || !brotli_dictionary_word_byte(data[position - 1])) {
+      let mut length = 0
+      while position + length < data.length() &&
+            brotli_dictionary_word_byte(data[position + length]) {
+        length += 1
+      }
+      if length >= 7 {
+        candidates += 1
+        if candidates >= required {
+          return true
+        }
+      }
+      position += length
+    } else {
+      position += 1
+    }
+  }
+  false
+}
+
+///|
 fn brotli_dictionary_word_matches(
   data : FixedArray[Byte],
   position : Int,

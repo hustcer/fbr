@@ -3463,22 +3463,40 @@ fn brotli_try_compressed_chunk(
         quality,
       )
       let hq_config_4 = brotli_four_byte_hash_config(hq_config)
-      let best = brotli_try_compressed_commands(
-        data,
-        brotli_build_simple_lz77_commands(data, hq_config_4),
-        is_last,
-        best,
-        quality,
-      )
-      // q9 also tries mixed-dictionary commands with the 4-byte hash config,
-      // matching the q10/q11 path. Dictionary words can replace short copies
-      // on natural text and close part of the q9 ratio gap against Google.
-      let mixed_commands = brotli_build_mixed_dictionary_lz77_commands(
-        data, hq_config_4, base_offset, window_bits,
-      )
-      brotli_try_compressed_commands(
-        data, mixed_commands, is_last, best, quality,
-      )
+      if brotli_mixed_dictionary_may_pay(data) {
+        let mixed = brotli_try_compressed_commands(
+          data,
+          brotli_build_mixed_dictionary_lz77_commands(
+            data, hq_config_4, base_offset, window_bits,
+          ),
+          is_last,
+          best,
+          quality,
+        )
+        match (best, mixed) {
+          (Some(before), Some(after)) =>
+            if after.bit_pos < before.bit_pos {
+              mixed
+            } else {
+              brotli_try_compressed_commands(
+                data,
+                brotli_build_simple_lz77_commands(data, hq_config_4),
+                is_last,
+                mixed,
+                quality,
+              )
+            }
+          (_, _) => mixed
+        }
+      } else {
+        brotli_try_compressed_commands(
+          data,
+          brotli_build_simple_lz77_commands(data, hq_config_4),
+          is_last,
+          best,
+          quality,
+        )
+      }
     } else {
       let natural_config = brotli_natural_hash_config_for_quality(quality)
       let best = brotli_try_compressed_commands(
@@ -3638,28 +3656,43 @@ fn brotli_encode_standard(
             opts.quality,
           )
           let hq_config_4 = brotli_four_byte_hash_config(hq_config)
-          best = brotli_try_compressed_commands(
-            data,
-            brotli_build_simple_lz77_commands(data, hq_config_4),
-            true,
-            best,
-            opts.quality,
-          )
-          // q9 also tries mixed-dictionary commands with the 4-byte hash
-          // config, matching the q10/q11 path.
-          let mixed_commands = brotli_build_mixed_dictionary_lz77_commands(
-            data,
-            hq_config_4,
-            0,
-            opts.window_bits,
-          )
-          best = brotli_try_compressed_commands(
-            data,
-            mixed_commands,
-            true,
-            best,
-            opts.quality,
-          )
+          if brotli_mixed_dictionary_may_pay(data) {
+            let mixed = brotli_try_compressed_commands(
+              data,
+              brotli_build_mixed_dictionary_lz77_commands(
+                data,
+                hq_config_4,
+                0,
+                opts.window_bits,
+              ),
+              true,
+              best,
+              opts.quality,
+            )
+            match (best, mixed) {
+              (Some(before), Some(after)) =>
+                if after.bit_pos < before.bit_pos {
+                  best = mixed
+                } else {
+                  best = brotli_try_compressed_commands(
+                    data,
+                    brotli_build_simple_lz77_commands(data, hq_config_4),
+                    true,
+                    mixed,
+                    opts.quality,
+                  )
+                }
+              (_, _) => best = mixed
+            }
+          } else {
+            best = brotli_try_compressed_commands(
+              data,
+              brotli_build_simple_lz77_commands(data, hq_config_4),
+              true,
+              best,
+              opts.quality,
+            )
+          }
         }
       } else {
         let natural_config = brotli_natural_hash_config_for_quality(
