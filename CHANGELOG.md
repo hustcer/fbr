@@ -45,6 +45,10 @@ All notable changes to this project will be documented in this file.
   q7/q8 to 273,633 bytes, bringing all measured q4..q8 outputs inside the
   5% P3 ratio window. Sampled 64 KiB target-perf: q5 native is 110.135 ms
   versus Google q5 43.496 ms (2.53x), with output 22,336 versus 22,271 bytes.
+- Brotli q6/q7 skip the intermediate 4-byte hash candidate on inputs up to
+  64 KiB while retaining it for larger chunks. Sampled 64 KiB target-perf
+  improves q6 native encode from 143.404 to 126.045 ms and q7 native encode
+  from 153.878 to 139.976 ms while keeping 1 MiB Silesia output unchanged.
 - Brotli q9 ratio improved by enabling the mixed-dictionary candidate. On
   Silesia, q9 1 MiB falls from 273,633 to 271,776 bytes (overhead vs Google
   q9 263,791 reduced from 3.73% to 3.03%), q9 128 KiB falls from 40,013 to

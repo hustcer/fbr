@@ -2294,3 +2294,53 @@ runtime, especially q5 through q7, or broaden the validation corpus before
 claiming phase completion. Broader histogram/block clustering remains useful
 for corpus diversity, but the immediate measured Silesia blocker has moved from
 ratio to performance/validation coverage.
+
+## 2026-05-28 — q6/q7 Small-Input Runtime Tuning
+
+The q6 and q7 intermediate 4-byte hash candidate is now skipped for inputs up
+to 64 KiB. The candidate is still retained for larger chunks, where the 1 MiB
+ratio matrix showed it is required to stay inside the 5% P3 target. q5 keeps
+the 4-byte candidate at all sizes because the skip experiment regressed sampled
+native runtime and worsened size.
+
+Rejected broad skip experiment:
+
+| Quality | Corpus      | Bytes without 4-byte | Google bytes | Overhead | Native ms |
+| ------- | ----------- | -------------------- | ------------ | -------- | --------- |
+| 5       | silesia-64k | 22,542               | 22,271       | 1.22%    | 194.418   |
+| 6       | silesia-1m  | 288,629              | 269,636      | 7.04%    | n/a       |
+| 7       | silesia-1m  | 281,225              | 267,096      | 5.29%    | n/a       |
+
+Accepted conditional skip validation:
+
+```nu
+moon fmt
+moon check --target all
+moon test --target native --filter '*q0 through q11 round-trip*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 6,7 --json
+nu -c 'for q in 6..7 {
+  print $"QUALITY=($q)"
+  nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+    --mode encode \
+    --quality $q \
+    --targets wasm-gc,native \
+    --repeats 1 \
+    --samples 1 \
+    --json
+}'
+```
+
+Results:
+
+| Quality | Corpus      | Previous bytes | New bytes | Google bytes | Previous ms | New ms  | Target  |
+| ------- | ----------- | -------------- | --------- | ------------ | ----------- | ------- | ------- |
+| 6       | silesia-1m  | 278,961        | 278,961   | 269,636      | n/a         | n/a     | ratio   |
+| 7       | silesia-1m  | 273,633        | 273,633   | 267,096      | n/a         | n/a     | ratio   |
+| 6       | silesia-64k | 22,336         | 22,542    | 22,121       | 556.699     | 514.744 | wasm-gc |
+| 6       | silesia-64k | 22,336         | 22,542    | 22,121       | 143.404     | 126.045 | native  |
+| 7       | silesia-64k | 22,261         | 22,373    | 22,101       | 550.708     | 524.353 | wasm-gc |
+| 7       | silesia-64k | 22,261         | 22,373    | 22,101       | 153.878     | 139.976 | native  |
+
+Conclusion: this is a useful small-input runtime tradeoff. It preserves the
+1 MiB q6/q7 ratio results, keeps the 64 KiB ratio inside 5%, and reduces the
+sampled native encode time by 12.1% for q6 and 9.0% for q7.
