@@ -2344,3 +2344,37 @@ Results:
 Conclusion: this is a useful small-input runtime tradeoff. It preserves the
 1 MiB q6/q7 ratio results, keeps the 64 KiB ratio inside 5%, and reduces the
 sampled native encode time by 12.1% for q6 and 9.0% for q7.
+
+## 2026-05-28 — Rejected q5 Lighter Intermediate Config
+
+The q5 runtime follow-up tried the lighter q4-style intermediate hash config:
+8 hash-chain checks, 100,000-command cap, and 6-byte minimum match. This
+reduces the intermediate parser work, but it spends too much of the remaining
+ratio margin and does not improve native encode performance.
+
+Validation commands:
+
+```nu
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 5 --json
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+  --mode encode \
+  --quality 5 \
+  --targets wasm-gc,native \
+  --repeats 1 \
+  --samples 1 \
+  --json
+```
+
+Trial result:
+
+| Corpus      | Target  | Accepted bytes | Trial bytes | Google bytes | Accepted ms | Trial ms | Decision |
+| ----------- | ------- | -------------- | ----------- | ------------ | ----------- | -------- | -------- |
+| silesia-1m  | ratio   | 278,961        | 287,092     | 274,088      | n/a         | n/a      | reject   |
+| silesia-64k | wasm-gc | 22,336         | 22,785      | 22,271       | 541.752     | 535.757  | reject   |
+| silesia-64k | native  | 22,336         | 22,785      | 22,271       | 142.394     | 145.131  | reject   |
+
+Conclusion: q5 keeps the accepted 16-check, 180,000-command, 5-byte-minimum
+intermediate path. The trial moved 1 MiB q5 overhead from 1.78% to 4.74%,
+increased 64 KiB output from 22,336 to 22,785 bytes, and regressed native
+encode time from 142.394 to 145.131 ms/op. The small wasm-gc improvement is
+not enough to justify the size and native-runtime tradeoff.
