@@ -2102,3 +2102,63 @@ Rejected follow-ups:
 - Adding the 3-byte hash mixed-dictionary candidate at q9: did not change
   silesia-1m.bin q9 size (still 271,776 bytes), while raising the ratio
   harness time from 73,725 to 99,943 ms (about +36%).
+
+## 2026-05-28 — q3 through q8 Baseline Matrix
+
+This establishes the missing P3 acceptance baseline for intermediate Brotli
+qualities. The current encoder accepts q3 through q8 and emits valid streams,
+but these qualities still share the same standard compressed candidate output.
+That is good enough for q3 on the measured Silesia slices, but q4 through q8
+miss the documented 5% size target as the Google reference keeps improving
+with higher quality.
+
+Validation commands:
+
+```nu
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 3,4,5,6,7,8 --json
+
+nu -c 'for q in 3..8 {
+  print $"QUALITY=($q)"
+  nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+    --mode encode \
+    --quality $q \
+    --targets wasm-gc,native \
+    --repeats 1 \
+    --samples 1 \
+    --json
+}'
+```
+
+1 MiB ratio results:
+
+| Quality | MoonBit bytes | Google bytes | Size overhead | MoonBit SHA-256 |
+| ------- | ------------- | ------------ | ------------- | --------------- |
+| 3       | 313,577       | 313,727      | -0.05%        | `fde02b28aae84889340c2291e031a45ccbfb5d9534d1711a92cc774d5351d715` |
+| 4       | 313,577       | 292,364      | 7.26%         | `fde02b28aae84889340c2291e031a45ccbfb5d9534d1711a92cc774d5351d715` |
+| 5       | 313,577       | 274,088      | 14.41%        | `fde02b28aae84889340c2291e031a45ccbfb5d9534d1711a92cc774d5351d715` |
+| 6       | 313,577       | 269,636      | 16.30%        | `fde02b28aae84889340c2291e031a45ccbfb5d9534d1711a92cc774d5351d715` |
+| 7       | 313,577       | 267,096      | 17.40%        | `fde02b28aae84889340c2291e031a45ccbfb5d9534d1711a92cc774d5351d715` |
+| 8       | 313,577       | 264,815      | 18.41%        | `fde02b28aae84889340c2291e031a45ccbfb5d9534d1711a92cc774d5351d715` |
+
+64 KiB target-perf results, `samples=1`:
+
+| Quality | Target  | MoonBit bytes | Google bytes | Size overhead | Target ms | Google ms | Slowdown |
+| ------- | ------- | ------------- | ------------ | ------------- | --------- | --------- | -------- |
+| 3       | wasm-gc | 25,127        | 24,059       | 4.44%         | 533.940   | 39.377    | 13.56x   |
+| 3       | native  | 25,127        | 24,059       | 4.44%         | 105.043   | 39.377    | 2.67x    |
+| 4       | wasm-gc | 25,127        | 23,325       | 7.73%         | 510.333   | 43.782    | 11.66x   |
+| 4       | native  | 25,127        | 23,325       | 7.73%         | 120.076   | 43.782    | 2.74x    |
+| 5       | wasm-gc | 25,127        | 22,271       | 12.82%        | 529.914   | 40.805    | 12.99x   |
+| 5       | native  | 25,127        | 22,271       | 12.82%        | 84.142    | 40.805    | 2.06x    |
+| 6       | wasm-gc | 25,127        | 22,121       | 13.59%        | 517.090   | 44.513    | 11.62x   |
+| 6       | native  | 25,127        | 22,121       | 13.59%        | 122.237   | 44.513    | 2.75x    |
+| 7       | wasm-gc | 25,127        | 22,101       | 13.69%        | 510.365   | 41.356    | 12.34x   |
+| 7       | native  | 25,127        | 22,101       | 13.69%        | 121.663   | 41.356    | 2.94x    |
+| 8       | wasm-gc | 25,127        | 22,077       | 13.82%        | 567.508   | 41.281    | 13.75x   |
+| 8       | native  | 25,127        | 22,077       | 13.82%        | 125.608   | 41.281    | 3.04x    |
+
+Conclusion: q3 is inside the documented P3 ratio target on these slices.
+q4 through q8 need distinct quality-aware parsing and/or richer
+histogram/block clustering. Because q3 through q8 currently emit the same
+MoonBit bytes on both measured inputs, the next P3 task should add quality
+separation before spending more time on q2 or q9 tuning.
