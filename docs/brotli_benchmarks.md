@@ -2450,3 +2450,46 @@ size on either Silesia slice, and the native 64 KiB target-perf sample moved
 slightly backward. The experiment was reverted. Future block/histogram work
 should focus on clustering command and distance histograms together with
 literal histograms, rather than adding more literal-only split shapes.
+
+## 2026-05-28 — q10/q11 P4 Baseline Refresh
+
+This refreshes the current q10/q11 evidence after the q5 and P3 exploration
+commits. It is the baseline for the remaining P4 shortest-path/Zopfli work.
+
+Validation commands:
+
+```nu
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 10,11 --json
+nu -c 'for q in [10 11] {
+  print $"QUALITY=($q)"
+  nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+    --mode encode \
+    --quality $q \
+    --targets wasm-gc,native \
+    --repeats 1 \
+    --samples 1 \
+    --json
+}'
+```
+
+1 MiB ratio:
+
+| Quality | MoonBit bytes | Google bytes | Size overhead | MoonBit time ms | Google time ms |
+| ------- | ------------- | ------------ | ------------- | --------------- | -------------- |
+| 10      | 264,422       | 242,485      | 9.05%         | 63,742.891      | 519.757        |
+| 11      | 264,422       | 239,314      | 10.49%        | 63,038.589      | 1,326.529      |
+
+64 KiB target-perf:
+
+| Quality | Target  | MoonBit bytes | Google bytes | Size overhead | Target ms | Google ms | Slowdown |
+| ------- | ------- | ------------- | ------------ | ------------- | --------- | --------- | -------- |
+| 10      | wasm-gc | 21,415        | 19,566       | 9.45%         | 510.253   | 62.649    | 8.14x    |
+| 10      | native  | 21,415        | 19,566       | 9.45%         | 121.332   | 62.649    | 1.94x    |
+| 11      | wasm-gc | 21,415        | 19,258       | 11.20%        | 547.539   | 115.586   | 4.74x    |
+| 11      | native  | 21,415        | 19,258       | 11.20%        | 75.297    | 115.586   | 0.65x    |
+
+Conclusion: P4 is still ratio-bound, not native-runtime-bound, on these
+measured slices. q10/q11 share the same MoonBit stream and remain far outside
+the documented 2% P4 ratio target. The next accepted P4 implementation needs
+to reduce encoded size without reintroducing the rejected multi-second native
+DP cost on 512 KiB to 1 MiB inputs.
