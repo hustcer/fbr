@@ -2493,3 +2493,51 @@ measured slices. q10/q11 share the same MoonBit stream and remain far outside
 the documented 2% P4 ratio target. The next accepted P4 implementation needs
 to reduce encoded size without reintroducing the rejected multi-second native
 DP cost on 512 KiB to 1 MiB inputs.
+
+## 2026-05-28 — Rejected q10-Only Wider Mixed Dictionary Transforms
+
+This P4 trial widened only q10's mixed static-dictionary extra-transform set
+from `[1, 4]` to `[1, 4, 16, 28, 47]`. q11 kept the accepted `[1, 4]` set to
+avoid the large q11 native regression seen in the shared-transform trial.
+
+Validation commands:
+
+```nu
+moon fmt
+moon check --target all
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 10,11 --json
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+  --mode encode \
+  --quality 10 \
+  --targets wasm-gc,native \
+  --repeats 1 \
+  --samples 1 \
+  --json
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-128k.bin \
+  --mode encode \
+  --quality 10 \
+  --targets wasm-gc,native \
+  --repeats 1 \
+  --samples 1 \
+  --json
+```
+
+Trial result:
+
+| Corpus       | Quality | Target  | Baseline bytes | Trial bytes | Google bytes | Baseline ms | Trial ms   | Decision |
+| ------------ | ------- | ------- | -------------- | ----------- | ------------ | ----------- | ---------- | -------- |
+| silesia-1m   | 10      | ratio   | 264,422        | 264,315     | 242,485      | 63,742.891  | 73,885.551 | reject   |
+| silesia-1m   | 11      | ratio   | 264,422        | 264,422     | 239,314      | 63,038.589  | 62,264.133 | reject   |
+| silesia-64k  | 10      | wasm-gc | 21,415         | 21,396      | 19,566       | 510.253     | 495.301    | reject   |
+| silesia-64k  | 10      | native  | 21,415         | 21,396      | 19,566       | 121.332     | 118.007    | reject   |
+| silesia-64k  | 11      | wasm-gc | 21,415         | 21,415      | 19,258       | 547.539     | 498.045    | reject   |
+| silesia-64k  | 11      | native  | 21,415         | 21,415      | 19,258       | 75.297      | 79.021     | reject   |
+| silesia-128k | 10      | wasm-gc | 38,713         | 38,681      | 35,624       | 172.893     | 703.386    | reject   |
+| silesia-128k | 10      | native  | 38,713         | 38,681      | 35,624       | 91.262      | 97.858     | reject   |
+
+Conclusion: the trial saved only 107 bytes on the 1 MiB q10 slice and 32 bytes
+on the 128 KiB q10 slice, while the 1 MiB verifier time and 128 KiB native
+target-perf moved backward. The experiment was reverted. Future q10/q11 ratio
+work should avoid wider dictionary-transform scans unless they are paired with
+a parser change that produces a larger size win and stable wasm-gc/native
+runtime.
