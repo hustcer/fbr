@@ -39,6 +39,12 @@ All notable changes to this project will be documented in this file.
 
 ### Performance
 
+- Brotli q4 through q8 now exact-cost an intermediate hash-chain candidate
+  between the q2/q3 fast path and the q9 high-quality path. On 1 MiB Silesia,
+  q4 improves from 313,577 to 287,092 bytes, q5/q6 to 278,961 bytes, and
+  q7/q8 to 273,633 bytes, bringing all measured q4..q8 outputs inside the
+  5% P3 ratio window. Sampled 64 KiB target-perf: q5 native is 110.135 ms
+  versus Google q5 43.496 ms (2.53x), with output 22,336 versus 22,271 bytes.
 - Brotli q9 ratio improved by enabling the mixed-dictionary candidate. On
   Silesia, q9 1 MiB falls from 273,633 to 271,776 bytes (overhead vs Google
   q9 263,791 reduced from 3.73% to 3.03%), q9 128 KiB falls from 40,013 to

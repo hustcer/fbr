@@ -3506,7 +3506,7 @@ fn brotli_try_compressed_chunk(
         best,
         quality,
       )
-      brotli_try_compressed_commands(
+      let best = brotli_try_compressed_commands(
         data,
         brotli_build_simple_lz77_commands(
           data,
@@ -3516,6 +3516,30 @@ fn brotli_try_compressed_chunk(
         best,
         quality,
       )
+      if quality >= 4 {
+        let intermediate_config = brotli_intermediate_hash_config_for_quality(
+          quality,
+        )
+        let best = brotli_try_compressed_commands(
+          data,
+          brotli_build_simple_lz77_commands(data, intermediate_config),
+          is_last,
+          best,
+          quality,
+        )
+        brotli_try_compressed_commands(
+          data,
+          brotli_build_simple_lz77_commands(
+            data,
+            brotli_four_byte_hash_config(intermediate_config),
+          ),
+          is_last,
+          best,
+          quality,
+        )
+      } else {
+        best
+      }
     }
   } else {
     best
@@ -3715,6 +3739,28 @@ fn brotli_encode_standard(
           best,
           opts.quality,
         )
+        if opts.quality >= 4 {
+          let intermediate_config = brotli_intermediate_hash_config_for_quality(
+            opts.quality,
+          )
+          best = brotli_try_compressed_commands(
+            data,
+            brotli_build_simple_lz77_commands(data, intermediate_config),
+            true,
+            best,
+            opts.quality,
+          )
+          best = brotli_try_compressed_commands(
+            data,
+            brotli_build_simple_lz77_commands(
+              data,
+              brotli_four_byte_hash_config(intermediate_config),
+            ),
+            true,
+            best,
+            opts.quality,
+          )
+        }
       }
     }
     match best {

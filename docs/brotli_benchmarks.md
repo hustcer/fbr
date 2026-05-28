@@ -2162,3 +2162,66 @@ q4 through q8 need distinct quality-aware parsing and/or richer
 histogram/block clustering. Because q3 through q8 currently emit the same
 MoonBit bytes on both measured inputs, the next P3 task should add quality
 separation before spending more time on q2 or q9 tuning.
+
+## 2026-05-28 — q4 through q8 Intermediate Search
+
+The q4 through q8 encoder path now exact-costs an additional intermediate hash
+configuration after the existing natural candidates. The configuration scales
+hash-chain checks and command budget by quality:
+
+- q4: 8 checks, 100,000-command cap, 6-byte minimum match.
+- q5/q6: 16 checks, 180,000-command cap, 5-byte minimum match.
+- q7/q8: 32 checks, 240,000-command cap, 5-byte minimum match.
+
+This gives q4 through q8 a distinct P3 path while preserving q3 as the faster
+baseline profile.
+
+Validation commands:
+
+```nu
+moon fmt
+moon check --target all
+moon test --target native --filter '*alternate hash candidates exact-costed*'
+moon test --target native --filter '*q0 through q11 round-trip*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 3,4,5,6,7,8 --json
+
+nu -c 'for q in [4 5 8] {
+  print $"QUALITY=($q)"
+  nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+    --mode encode \
+    --quality $q \
+    --targets wasm-gc,native \
+    --repeats 1 \
+    --samples 1 \
+    --json
+}'
+```
+
+1 MiB ratio results:
+
+| Quality | Previous bytes | New bytes | Google bytes | Previous overhead | New overhead |
+| ------- | -------------- | --------- | ------------ | ----------------- | ------------ |
+| 3       | 313,577        | 313,577   | 313,727      | -0.05%            | -0.05%       |
+| 4       | 313,577        | 287,092   | 292,364      | 7.26%             | -1.80%       |
+| 5       | 313,577        | 278,961   | 274,088      | 14.41%            | 1.78%        |
+| 6       | 313,577        | 278,961   | 269,636      | 16.30%            | 3.46%        |
+| 7       | 313,577        | 273,633   | 267,096      | 17.40%            | 2.45%        |
+| 8       | 313,577        | 273,633   | 264,815      | 18.41%            | 3.33%        |
+
+64 KiB target-perf results, `samples=1`:
+
+| Quality | Target  | Previous bytes | New bytes | Google bytes | Previous ms | New ms  | New slowdown |
+| ------- | ------- | -------------- | --------- | ------------ | ----------- | ------- | ------------ |
+| 4       | wasm-gc | 25,127         | 22,785    | 23,325       | 510.333     | 559.701 | 14.45x       |
+| 4       | native  | 25,127         | 22,785    | 23,325       | 120.076     | 148.200 | 3.83x        |
+| 5       | wasm-gc | 25,127         | 22,336    | 22,271       | 529.914     | 559.509 | 12.86x       |
+| 5       | native  | 25,127         | 22,336    | 22,271       | 84.142      | 110.135 | 2.53x        |
+| 8       | wasm-gc | 25,127         | 22,261    | 22,077       | 567.508     | 556.979 | 11.32x       |
+| 8       | native  | 25,127         | 22,261    | 22,077       | 125.608     | 105.232 | 2.14x        |
+
+Conclusion: this closes the measured q4 through q8 P3 ratio gap on the 1 MiB
+Silesia slice and sampled 64 KiB target-perf slice. q4 pays the largest native
+runtime cost, but q5 and q8 remain within the native 3x performance target on
+the sampled run. The remaining P3 work is broader histogram/block clustering
+and a fuller q3..q9 release validation matrix, not basic q4..q8 quality
+separation.

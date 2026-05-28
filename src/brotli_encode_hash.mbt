@@ -113,6 +113,47 @@ fn brotli_high_quality_hash_config_for_quality(
 }
 
 ///|
+fn brotli_intermediate_hash_config_for_quality(
+  quality : Int,
+) -> BrotliHashConfig {
+  let max_match_checks = if quality <= 4 {
+    8
+  } else if quality <= 6 {
+    16
+  } else {
+    32
+  }
+  let max_commands = if quality <= 4 {
+    100000
+  } else if quality <= 6 {
+    180000
+  } else {
+    240000
+  }
+  {
+    table_size: 32768,
+    table_mask: 32767,
+    hash_bytes: 3,
+    max_match_checks,
+    max_match_length: 16384,
+    min_match_length: if quality <= 4 {
+      6
+    } else {
+      5
+    },
+    max_distance_cache_codes: brotli_num_distance_short_codes,
+    lazy_lookahead: 3,
+    scan_step: 1,
+    max_commands,
+    min_copy_ratio_percent: 12,
+    require_dense_match_density: false,
+    density_sample_step: 256,
+    density_required_numerator: 9,
+    density_required_denominator: 10,
+  }
+}
+
+///|
 fn brotli_four_byte_hash_config(config : BrotliHashConfig) -> BrotliHashConfig {
   {
     table_size: config.table_size,
