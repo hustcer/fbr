@@ -2541,3 +2541,52 @@ target-perf moved backward. The experiment was reverted. Future q10/q11 ratio
 work should avoid wider dictionary-transform scans unless they are paired with
 a parser change that produces a larger size win and stable wasm-gc/native
 runtime.
+
+## 2026-05-28 — Rejected q10/q11 384-Check Parser Trial
+
+This P4 trial increased q10/q11 high-quality hash-chain checks from 256 to
+384. A follow-up narrowed the change to q10 only after q11 showed a native
+small-input regression, but q10's medium-input target-perf also moved backward.
+
+Validation commands:
+
+```nu
+moon fmt
+moon check --target all
+moon test --target native --filter '*alternate hash candidates exact-costed*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 10,11 --json
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+  --mode encode \
+  --quality 10 \
+  --targets wasm-gc,native \
+  --repeats 1 \
+  --samples 1 \
+  --json
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-128k.bin \
+  --mode encode \
+  --quality 10 \
+  --targets wasm-gc,native \
+  --repeats 1 \
+  --samples 1 \
+  --json
+```
+
+Trial result:
+
+| Corpus       | Quality | Target  | Baseline bytes | Trial bytes | Google bytes | Baseline ms | Trial ms  | Decision |
+| ------------ | ------- | ------- | -------------- | ----------- | ------------ | ----------- | --------- | -------- |
+| silesia-1m   | 10      | ratio   | 264,422        | 263,700     | 242,485      | 63,742.891  | 80,391.065 | reject  |
+| silesia-1m   | 11      | ratio   | 264,422        | 263,700     | 239,314      | 63,038.589  | 74,624.034 | reject  |
+| silesia-64k  | 10      | wasm-gc | 21,415         | 21,408      | 19,566       | 510.253     | 499.135   | reject  |
+| silesia-64k  | 10      | native  | 21,415         | 21,408      | 19,566       | 121.332     | 91.720    | reject  |
+| silesia-64k  | 11      | wasm-gc | 21,415         | 21,408      | 19,258       | 547.539     | 523.260   | reject  |
+| silesia-64k  | 11      | native  | 21,415         | 21,408      | 19,258       | 75.297      | 117.263   | reject  |
+| silesia-128k | 10      | wasm-gc | 38,713         | 38,686      | 35,624       | 172.893     | 660.508   | reject  |
+| silesia-128k | 10      | native  | 38,713         | 38,686      | 35,624       | 91.262      | 143.997   | reject  |
+
+Conclusion: the 384-check parser bought a real but small 1 MiB q10/q11 size
+win, and the 64 KiB q10 sample looked favorable. It was still rejected because
+the same change regressed q11 native on 64 KiB and q10 wasm-gc/native on the
+128 KiB target-perf slice. q10/q11 stay at 256 checks until a stronger
+parser/cost-model change can produce a larger ratio win per unit of encoding
+time.
