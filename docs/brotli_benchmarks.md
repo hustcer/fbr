@@ -2378,3 +2378,37 @@ intermediate path. The trial moved 1 MiB q5 overhead from 1.78% to 4.74%,
 increased 64 KiB output from 22,336 to 22,785 bytes, and regressed native
 encode time from 142.394 to 145.131 ms/op. The small wasm-gc improvement is
 not enough to justify the size and native-runtime tradeoff.
+
+## 2026-05-28 — q5 Natural 4-Byte Candidate Skip
+
+q5 still keeps the intermediate 4-byte hash candidate because it wins the
+accepted q5 stream. The natural 4-byte candidate, however, is redundant on the
+measured Silesia slices: removing only that candidate preserves the q5 output
+while cutting one parser/candidate-writer pass.
+
+Validation commands:
+
+```nu
+moon fmt
+moon check --target all
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 5 --json
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+  --mode encode \
+  --quality 5 \
+  --targets wasm-gc,native \
+  --repeats 1 \
+  --samples 1 \
+  --json
+```
+
+Results:
+
+| Corpus      | Target  | Previous bytes | New bytes | Google bytes | Previous ms | New ms  |
+| ----------- | ------- | -------------- | --------- | ------------ | ----------- | ------- |
+| silesia-1m  | ratio   | 278,961        | 278,961   | 274,088      | n/a         | n/a     |
+| silesia-64k | wasm-gc | 22,336         | 22,336    | 22,271       | 541.752     | 524.160 |
+| silesia-64k | native  | 22,336         | 22,336    | 22,271       | 142.394     | 94.185  |
+
+Conclusion: this is an accepted q5 runtime improvement. The measured 1 MiB
+ratio stays at +1.78% versus Google, the 64 KiB output stays at +0.29%, and
+sampled native encode improves by 33.9% while wasm-gc improves by 3.2%.

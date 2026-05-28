@@ -3365,6 +3365,14 @@ fn brotli_use_intermediate_four_byte_candidate(
 }
 
 ///|
+fn brotli_use_natural_four_byte_candidate(
+  quality : Int,
+  _data_length : Int,
+) -> Bool {
+  quality != 5
+}
+
+///|
 fn brotli_encode_uncompressed(
   data : FixedArray[Byte],
   opts : BrotliOptions,
@@ -3516,10 +3524,14 @@ fn brotli_try_compressed_chunk(
       )
       let best = brotli_try_compressed_commands(
         data,
-        brotli_build_simple_lz77_commands(
-          data,
-          brotli_four_byte_hash_config(natural_config),
-        ),
+        if brotli_use_natural_four_byte_candidate(quality, data.length()) {
+          brotli_build_simple_lz77_commands(
+            data,
+            brotli_four_byte_hash_config(natural_config),
+          )
+        } else {
+          None
+        },
         is_last,
         best,
         quality,
@@ -3743,10 +3755,14 @@ fn brotli_encode_standard(
         )
         best = brotli_try_compressed_commands(
           data,
-          brotli_build_simple_lz77_commands(
-            data,
-            brotli_four_byte_hash_config(natural_config),
-          ),
+          if brotli_use_natural_four_byte_candidate(opts.quality, data.length()) {
+            brotli_build_simple_lz77_commands(
+              data,
+              brotli_four_byte_hash_config(natural_config),
+            )
+          } else {
+            None
+          },
           true,
           best,
           opts.quality,
