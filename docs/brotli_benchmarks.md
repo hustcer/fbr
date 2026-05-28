@@ -2412,3 +2412,41 @@ Results:
 Conclusion: this is an accepted q5 runtime improvement. The measured 1 MiB
 ratio stays at +1.78% versus Google, the 64 KiB output stays at +0.29%, and
 sampled native encode improves by 33.9% while wasm-gc improves by 3.2%.
+
+## 2026-05-28 — Rejected Three-Literal-Block LZ77 Split
+
+The next P3 block-clustering trial added a bounded three-literal-block LZ77
+candidate. The estimator considered split pairs at `(1/4, 1/2)`, `(1/4, 3/4)`,
+and `(1/2, 3/4)` of the command literal stream, then exact-costed a candidate
+with three literal block types when the estimated literal entropy saving could
+cover the extra block/context metadata.
+
+Validation commands:
+
+```nu
+moon fmt
+moon check --target all
+moon test --target native --filter '*splits LZ77 command literal blocks*'
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+  --mode encode \
+  --quality 9 \
+  --targets wasm-gc,native \
+  --repeats 1 \
+  --samples 1 \
+  --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 9 --json
+```
+
+Trial result:
+
+| Corpus      | Target  | Accepted bytes | Trial bytes | Google bytes | Accepted ms | Trial ms   | Decision |
+| ----------- | ------- | -------------- | ----------- | ------------ | ----------- | ---------- | -------- |
+| silesia-1m  | ratio   | 271,776        | 271,776     | 263,791      | 48,703.919  | 52,258.807 | reject   |
+| silesia-64k | wasm-gc | 21,514         | 21,514      | 22,063       | 530.562     | 504.737    | reject   |
+| silesia-64k | native  | 21,514         | 21,514      | 22,063       | 128.080     | 130.972    | reject   |
+
+Conclusion: this richer block-split candidate did not improve measured q9
+size on either Silesia slice, and the native 64 KiB target-perf sample moved
+slightly backward. The experiment was reverted. Future block/histogram work
+should focus on clustering command and distance histograms together with
+literal histograms, rather than adding more literal-only split shapes.
