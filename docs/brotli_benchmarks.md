@@ -2590,3 +2590,39 @@ the same change regressed q11 native on 64 KiB and q10 wasm-gc/native on the
 128 KiB target-perf slice. q10/q11 stay at 256 checks until a stronger
 parser/cost-model change can produce a larger ratio win per unit of encoding
 time.
+
+## 2026-05-28 — Overlapping Back-Reference Decode Copy Fast Path
+
+The decoder output builder already had fast paths for distance-1 runs and
+non-overlapping back-references. This increment adds a general overlapping
+copy fast path: copy the first distance-sized period once, then repeatedly
+double the copied region with non-overlapping `blit_to` calls. This preserves
+Brotli overlap semantics while avoiding one byte assignment per output byte
+for periodic copies.
+
+Validation commands:
+
+```nu
+moon fmt
+moon check --target all
+moon test --target native --filter '*copy_from_distance*'
+moon test --target wasm-gc --filter '*copy_from_distance*'
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-1m.bin.google.q11.br \
+  --mode decode \
+  --expected target/brotli-bench/silesia-1m.bin \
+  --targets wasm-gc,native \
+  --repeats 3 \
+  --samples 1 \
+  --json
+```
+
+Target-perf result:
+
+| Mode   | Corpus         | Target  | Baseline ms | New ms  | Delta  |
+| ------ | -------------- | ------- | ----------- | ------- | ------ |
+| decode | silesia-1m q11 | wasm-gc | 258.079     | 242.629 | -6.0%  |
+| decode | silesia-1m q11 | native  | 40.152      | 27.770  | -30.8% |
+
+Conclusion: this is an accepted decode speed improvement. It does not change
+encoded size or stream semantics; it only accelerates output reconstruction for
+overlapping periodic back-references.

@@ -180,8 +180,23 @@ fn BrotliOutputBuilder::copy_from_distance(
     self.len = start + length
     return
   }
-  for i in 0..<length {
-    self.buf[start + i] = self.buf[start + i - distance]
+  self.buf.blit_to(
+    self.buf,
+    len=distance,
+    src_offset=start - distance,
+    dst_offset=start,
+  )
+  let mut copied = distance
+  while copied < length {
+    let remaining = length - copied
+    let chunk = if copied < remaining { copied } else { remaining }
+    self.buf.blit_to(
+      self.buf,
+      len=chunk,
+      src_offset=start,
+      dst_offset=start + copied,
+    )
+    copied += chunk
   }
   self.len = start + length
 }

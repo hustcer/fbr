@@ -60,8 +60,9 @@ All notable changes to this project will be documented in this file.
   to 21,514 bytes (-2.49% vs Google 22,063). Encode time on q9 64 KiB rises
   from 140.583 to 161.436 ms (wasm-gc) and 60.651 to 77.168 ms (native).
 - Brotli decoder back-reference output copying uses fast paths for distance=1
-  and non-overlapping copies; command symbol info is precomputed to remove
-  per-symbol prefix-offset loops from decode and encode command handling.
+  non-overlapping copies, and overlapping periodic copies; command symbol info
+  is precomputed to remove per-symbol prefix-offset loops from decode and
+  encode command handling.
 
 ### Tests and docs
 
