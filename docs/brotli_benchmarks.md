@@ -2225,3 +2225,72 @@ runtime cost, but q5 and q8 remain within the native 3x performance target on
 the sampled run. The remaining P3 work is broader histogram/block clustering
 and a fuller q3..q9 release validation matrix, not basic q4..q8 quality
 separation.
+
+## 2026-05-28 — q2 through q9 P3 Matrix
+
+This records the first complete q2 through q9 matrix after q4 through q8 gained
+their intermediate search path. It is still a measured matrix, not final P3
+completion: samples are single-run `target-perf.nu` measurements on the 64 KiB
+slice, and larger release validation still needs broader corpora and the long
+fuzz/conformance gates.
+
+Validation commands:
+
+```nu
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,3,4,5,6,7,8,9 --json
+
+nu -c 'for q in 2..9 {
+  print $"QUALITY=($q)"
+  nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+    --mode encode \
+    --quality $q \
+    --targets wasm-gc,native \
+    --repeats 1 \
+    --samples 1 \
+    --json
+}'
+```
+
+1 MiB ratio results:
+
+| Quality | MoonBit bytes | Google bytes | Size overhead | MoonBit time ms |
+| ------- | ------------- | ------------ | ------------- | --------------- |
+| 2       | 329,512       | 320,418      | 2.84%         | 8,109.918       |
+| 3       | 313,577       | 313,727      | -0.05%        | 38,162.565      |
+| 4       | 287,092       | 292,364      | -1.80%        | 69,483.634      |
+| 5       | 278,961       | 274,088      | 1.78%         | 73,548.898      |
+| 6       | 278,961       | 269,636      | 3.46%         | 784,230.003     |
+| 7       | 273,633       | 267,096      | 2.45%         | 84,257.863      |
+| 8       | 273,633       | 264,815      | 3.33%         | 82,696.436      |
+| 9       | 271,776       | 263,791      | 3.03%         | 48,703.919      |
+
+The q6 legacy JS verifier time is an outlier relative to adjacent qualities;
+use the target-specific rows below for performance decisions.
+
+64 KiB target-perf results, `samples=1`:
+
+| Quality | Target  | MoonBit bytes | Google bytes | Size overhead | Target ms | Google ms | Slowdown |
+| ------- | ------- | ------------- | ------------ | ------------- | --------- | --------- | -------- |
+| 2       | wasm-gc | 25,245        | 24,364       | 3.62%         | 500.200   | 38.945    | 12.84x   |
+| 2       | native  | 25,245        | 24,364       | 3.62%         | 73.089    | 38.945    | 1.88x    |
+| 3       | wasm-gc | 25,127        | 24,059       | 4.44%         | 500.487   | 37.938    | 13.19x   |
+| 3       | native  | 25,127        | 24,059       | 4.44%         | 69.511    | 37.938    | 1.83x    |
+| 4       | wasm-gc | 22,785        | 23,325       | -2.32%        | 543.807   | 47.757    | 11.39x   |
+| 4       | native  | 22,785        | 23,325       | -2.32%        | 138.547   | 47.757    | 2.90x    |
+| 5       | wasm-gc | 22,336        | 22,271       | 0.29%         | 541.752   | 42.415    | 12.77x   |
+| 5       | native  | 22,336        | 22,271       | 0.29%         | 142.394   | 42.415    | 3.36x    |
+| 6       | wasm-gc | 22,336        | 22,121       | 0.97%         | 556.699   | 39.738    | 14.01x   |
+| 6       | native  | 22,336        | 22,121       | 0.97%         | 143.404   | 39.738    | 3.61x    |
+| 7       | wasm-gc | 22,261        | 22,101       | 0.72%         | 550.708   | 41.474    | 13.28x   |
+| 7       | native  | 22,261        | 22,101       | 0.72%         | 153.878   | 41.474    | 3.71x    |
+| 8       | wasm-gc | 22,261        | 22,077       | 0.83%         | 545.790   | 43.817    | 12.46x   |
+| 8       | native  | 22,261        | 22,077       | 0.83%         | 112.213   | 43.817    | 2.56x    |
+| 9       | wasm-gc | 21,514        | 22,063       | -2.49%        | 530.562   | 48.346    | 10.97x   |
+| 9       | native  | 21,514        | 22,063       | -2.49%        | 128.080   | 48.346    | 2.65x    |
+
+Conclusion: q2 through q9 are all inside the 5% P3 ratio target on the measured
+1 MiB and 64 KiB Silesia slices. The next P3 optimization should focus on
+runtime, especially q5 through q7, or broaden the validation corpus before
+claiming phase completion. Broader histogram/block clustering remains useful
+for corpus diversity, but the immediate measured Silesia blocker has moved from
+ratio to performance/validation coverage.
