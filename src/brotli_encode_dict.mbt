@@ -37,6 +37,15 @@ fn brotli_dictionary_encode_entry_capacity() -> Int {
 }
 
 ///|
+fn brotli_dictionary_mixed_encode_entry_capacity() -> Int {
+  brotli_dictionary_identity_word_total() *
+  (
+    brotli_dictionary_same_length_transform_count() +
+    brotli_dictionary_mixed_extra_transforms.length()
+  )
+}
+
+///|
 fn brotli_dictionary_hash_update(hash : Int, value : Int) -> Int {
   ((hash << 5) - hash + value) & 0x7fffffff
 }
@@ -406,7 +415,7 @@ fn brotli_build_dictionary_encode_index() -> BrotliDictionaryEncodeIndex {
 fn brotli_build_dictionary_encode_index_min_output(
   min_output_length : Int,
 ) -> BrotliDictionaryEncodeIndex {
-  let total = brotli_dictionary_encode_entry_capacity()
+  let total = brotli_dictionary_mixed_encode_entry_capacity()
   let table = FixedArray::make(brotli_dictionary_encode_hash_size, -1)
   let next = FixedArray::make(total, -1)
   let lengths = FixedArray::make(total, 0)
