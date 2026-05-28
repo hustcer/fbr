@@ -651,6 +651,41 @@ fn brotli_build_mixed_dictionary_lz77_commands(
   base_offset : Int,
   window_bits : Int,
 ) -> Array[BrotliEncodeCommand]? {
+  let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
+  brotli_build_mixed_dictionary_lz77_commands_with_distance_cache(
+    data, hash_config, base_offset, window_bits, distance_cache,
+  )
+}
+
+///|
+fn brotli_build_mixed_dictionary_lz77_command_candidate(
+  data : FixedArray[Byte],
+  hash_config : BrotliHashConfig,
+  base_offset : Int,
+  window_bits : Int,
+  distance_cache : FixedArray[Int],
+) -> BrotliCommandCandidate? {
+  // Dictionary copies do not update Brotli's recent-distance ring, but the
+  // interleaved LZ77 copies do. Preserve that terminal state for the selected
+  // chunk candidate.
+  let chunk_cache = brotli_copy_distance_cache(distance_cache)
+  match
+    brotli_build_mixed_dictionary_lz77_commands_with_distance_cache(
+      data, hash_config, base_offset, window_bits, chunk_cache,
+    ) {
+    Some(commands) => Some({ commands, distance_cache: chunk_cache })
+    None => None
+  }
+}
+
+///|
+fn brotli_build_mixed_dictionary_lz77_commands_with_distance_cache(
+  data : FixedArray[Byte],
+  hash_config : BrotliHashConfig,
+  base_offset : Int,
+  window_bits : Int,
+  distance_cache : FixedArray[Int],
+) -> Array[BrotliEncodeCommand]? {
   if data.length() < 8192 || data.length() > 1048576 {
     return None
   }
@@ -660,7 +695,6 @@ fn brotli_build_mixed_dictionary_lz77_commands(
   let index = brotli_build_dictionary_encode_index_min_output(8)
   let commands : Array[BrotliEncodeCommand] = []
   let previous = brotli_previous_match_positions(data, hash_config)
-  let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
   let mut literal_start = 0
   let mut position = 0
   let mut used_dictionary = false
@@ -728,6 +762,7 @@ fn brotli_build_mixed_dictionary_lz77_commands(
       let distance_code = brotli_compute_distance_code(
         distance, position, distance_cache,
       )
+      let mut emitted_distance_code = distance_code
       let command = match
         brotli_try_make_encode_command_with_distance_code(
           literal_start, insert_length, match_length, distance, distance_code,
@@ -738,12 +773,19 @@ fn brotli_build_mixed_dictionary_lz77_commands(
             brotli_try_make_encode_command_with_distance_mode(
               literal_start, insert_length, match_length, distance, true, true,
             ) {
-            Some(command) => command
+            Some(command) => {
+              // Keep the carried cache aligned with the actual stream when a
+              // short-code attempt has to fall back to an explicit distance.
+              emitted_distance_code = command.distance_prefix.symbol
+              command
+            }
             None => return None
           }
       }
       commands.push(command)
-      brotli_update_distance_cache(distance_cache, distance, distance_code)
+      brotli_update_distance_cache(
+        distance_cache, distance, emitted_distance_code,
+      )
       if commands.length() > hash_config.max_commands {
         return None
       }

@@ -39,6 +39,12 @@ All notable changes to this project will be documented in this file.
 
 ### Performance
 
+- Brotli chunked q3+ encoding now carries the selected candidate's
+  recent-distance cache and the previous two decoded bytes into following
+  meta-blocks. This fixes multi-meta-block compressed streams whose
+  UTF-8 literal-context trees or short-distance codes depended on decoder
+  state from the previous chunk. External Google Brotli validation now passes
+  on `silesia-2m.bin` q3/q5/q9.
 - Brotli q4 through q8 now exact-cost an intermediate hash-chain candidate
   between the q2/q3 fast path and the q9 high-quality path. On 1 MiB Silesia,
   q4 improves from 313,577 to 287,092 bytes, q5/q6 to 278,961 bytes, and

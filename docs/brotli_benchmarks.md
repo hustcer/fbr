@@ -2661,3 +2661,57 @@ Conclusion: this is retained as an equivalent simplification with native
 decode slightly faster in the sampled run and wasm-gc movement within the
 noise range seen in same-day target-perf samples. Encoded size and stream
 semantics are unchanged.
+
+## 2026-05-29 — Chunked Encoder State Carry Fix
+
+Broader validation found that q3/q5 multi-meta-block streams could be corrupt
+even though each 1 MiB chunk encoded and decoded correctly in isolation. The
+root cause was chunk-local encoder state: exact-costed LZ77 candidates started
+from the RFC initial recent-distance cache, and UTF-8 literal-context writers
+assumed the previous two decoded bytes were zero at every meta-block boundary.
+The decoder instead carries both pieces of state across compressed
+meta-blocks.
+
+The encoder now wraps exact-costed command streams with their terminal
+recent-distance cache, commits only the accepted compressed candidate's cache,
+and passes the previous two output bytes into UTF-8 context frequency and
+payload selection. Dictionary copies remain cache-neutral; interleaved LZ77
+copies inside the mixed dictionary path carry cache state normally.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native --filter '*UTF-8 context literal trees*'
+nu tools/brotli/encode/verify.nu target/brotli-bench/silesia-2m.bin --quality 3
+nu tools/brotli/encode/verify.nu target/brotli-bench/silesia-2m.bin --quality 5
+nu tools/brotli/encode/verify.nu target/brotli-bench/silesia-2m.bin --quality 9
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-2m.bin --qualities 2,5,9 --json
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+  --mode encode \
+  --quality 5 \
+  --targets wasm-gc,native \
+  --repeats 1 \
+  --samples 1 \
+  --json
+```
+
+Correctness and ratio result:
+
+| Corpus      | Quality | MoonBit bytes | Google bytes | Overhead | Google decode |
+| ----------- | ------- | ------------- | ------------ | -------- | ------------- |
+| silesia-2m  | 3       | 629,531       | n/a          | n/a      | pass          |
+| silesia-2m  | 5       | 555,326       | 538,906      | +3.05%   | pass          |
+| silesia-2m  | 9       | 542,335       | 511,433      | +6.04%   | pass          |
+
+Target-perf result:
+
+| Mode   | Corpus      | Quality | Target  | MoonBit bytes | Google bytes | MoonBit ms | Google ms |
+| ------ | ----------- | ------- | ------- | ------------- | ------------ | ---------- | --------- |
+| encode | silesia-64k | 5       | wasm-gc | 22,336        | 22,271       | 511.803    | 38.048    |
+| encode | silesia-64k | 5       | native  | 22,336        | 22,271       | 96.357     | 38.048    |
+
+Conclusion: this is an accepted correctness fix. It restores externally
+decodable q3/q5/q9 chunked compressed streams without changing the 64 KiB q5
+target-perf size. P3 remains open because the broader 2 MiB Silesia sweep shows
+q2 at +8.77% and q9 at +6.04%, outside the 5% ratio target.

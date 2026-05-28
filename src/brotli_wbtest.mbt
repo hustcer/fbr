@@ -1282,6 +1282,9 @@ test "brotli_sync q2 splits literal-only blocks" {
     brotli_build_literal_only_command(input).unwrap(),
     true,
     2,
+    true,
+    0,
+    0,
   )
   let split = match brotli_try_split_literal_only_metablock(input, true, None) {
     Some(candidate) => candidate
@@ -1392,13 +1395,13 @@ test "brotli_sync q2 writes UTF-8 context literal trees" {
   )
   brotli_write_simple_lz77_metablock(weighted, input, commands, true, true)
   let context = match
-    brotli_write_context_lz77_metablock(input, commands, true) {
+    brotli_write_context_lz77_metablock(input, commands, true, 0, 0) {
     Some(candidate) => candidate
     None => fail("expected UTF-8 context candidate")
   }
   assert_true(context.bit_pos < weighted.bit_pos)
   let context4 = match
-    brotli_write_context4_lz77_metablock(input, commands, true) {
+    brotli_write_context4_lz77_metablock(input, commands, true, 0, 0) {
     Some(candidate) => candidate
     None => fail("expected four-tree UTF-8 context candidate")
   }
@@ -1410,17 +1413,44 @@ test "brotli_sync q2 writes UTF-8 context literal trees" {
   inspect(brotli_utf8_context_tree16(12), content="3")
   inspect(brotli_utf8_context_tree16(56), content="14")
   let context8 = match
-    brotli_write_context8_lz77_metablock(input, commands, true) {
+    brotli_write_context8_lz77_metablock(input, commands, true, 0, 0) {
     Some(candidate) => candidate
     None => fail("expected eight-tree UTF-8 context candidate")
   }
   assert_true(context8.bit_pos > 0)
   let context16 = match
-    brotli_write_context16_lz77_metablock(input, commands, true) {
+    brotli_write_context16_lz77_metablock(input, commands, true, 0, 0) {
     Some(candidate) => candidate
     None => fail("expected sixteen-tree UTF-8 context candidate")
   }
   assert_true(context16.bit_pos > 0)
+  let best_with_contexts = brotli_write_best_lz77_metablock(
+    input, commands, true, 5, true, 0, 0,
+  )
+  let best_without_contexts = brotli_write_best_lz77_metablock(
+    input, commands, true, 5, false, 0, 0,
+  )
+  assert_true(best_with_contexts.bit_pos > 0)
+  let prefix : FixedArray[Byte] = [0xC3, 0xA9]
+  let combined = BrotliBitWriter::new(
+    32 + prefix.length() + best_without_contexts.buf.length(),
+  )
+  brotli_encode_window_bits(combined, 22)
+  brotli_write_uncompressed_metablock(combined, prefix, 0, prefix.length())
+  // A context-free second meta-block remains valid even when the decoder's
+  // previous literal bytes come from an earlier meta-block.
+  combined.write_from_bits(
+    best_without_contexts.buf,
+    best_without_contexts.bit_pos,
+  )
+  let decoded_combined = unbrotli_sync(combined.finish())
+  assert_eq(decoded_combined.length(), prefix.length() + input.length())
+  for i in 0..<prefix.length() {
+    assert_eq(decoded_combined[i], prefix[i])
+  }
+  for i in 0..<input.length() {
+    assert_eq(decoded_combined[prefix.length() + i], input[i])
+  }
   let encoded = BrotliBitWriter::new(16 + context.buf.length())
   brotli_encode_window_bits(encoded, 22)
   encoded.write_from_bits(context.buf, context.bit_pos)
@@ -1505,6 +1535,25 @@ test "brotli_sync encoder uses distance-cache short codes" {
   brotli_update_distance_cache(distance_cache, 11, 1)
   inspect(distance_cache[0], content="11")
   inspect(distance_cache[1], content="4")
+  let carried_cache : FixedArray[Int] = [8, 4, 11, 15]
+  let repeated : FixedArray[Byte] = [
+    b'a', b'b', b'c', b'd', b'a', b'b', b'c', b'd', b'a', b'b', b'c', b'd',
+  ]
+  match
+    brotli_build_simple_lz77_command_candidate(
+      repeated,
+      brotli_hash_config_for_quality(5),
+      carried_cache,
+    ) {
+    Some(candidate) => {
+      assert_true(candidate.commands.length() > 0)
+      assert_true(brotli_command_uses_distance_symbol(candidate.commands[0]))
+      assert_eq(candidate.commands[0].distance_prefix.symbol, 1)
+      inspect(candidate.distance_cache[0], content="4")
+      inspect(candidate.distance_cache[1], content="8")
+    }
+    None => fail("expected carried distance-cache command")
+  }
 }
 
 ///|
@@ -1620,11 +1669,13 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
     content="131072",
   )
   let best3 = match brotli_build_simple_lz77_commands(input, natural) {
-    Some(commands) => brotli_write_best_lz77_metablock(input, commands, true, 2)
+    Some(commands) =>
+      brotli_write_best_lz77_metablock(input, commands, true, 2, true, 0, 0)
     None => fail("expected three-byte hash candidate")
   }
   let best4 = match brotli_build_simple_lz77_commands(input, four_byte) {
-    Some(commands) => brotli_write_best_lz77_metablock(input, commands, true, 2)
+    Some(commands) =>
+      brotli_write_best_lz77_metablock(input, commands, true, 2, true, 0, 0)
     None => fail("expected four-byte hash candidate")
   }
   assert_true(best3.bit_pos > 0)

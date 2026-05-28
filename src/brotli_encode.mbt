@@ -50,6 +50,18 @@ priv struct BrotliEncodeCommand {
 }
 
 ///|
+priv struct BrotliCommandCandidate {
+  commands : Array[BrotliEncodeCommand]
+  distance_cache : FixedArray[Int]
+}
+
+///|
+priv struct BrotliCompressedChunk {
+  writer : BrotliBitWriter
+  distance_cache : FixedArray[Int]
+}
+
+///|
 fn BrotliBitWriter::new(capacity : Int) -> BrotliBitWriter {
   { buf: FixedArray::make(capacity, b'\x00'), bit_pos: 0 }
 }
@@ -1034,16 +1046,20 @@ fn brotli_command_literal_frequencies_range(
 fn brotli_command_literal_utf8_context_tree(
   data : FixedArray[Byte],
   position : Int,
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
 ) -> Int raise FzipError {
   let previous_byte_1 = if position > 0 {
     data[position - 1].to_int()
   } else {
-    0
+    initial_previous_byte_1
   }
   let previous_byte_2 = if position > 1 {
     data[position - 2].to_int()
+  } else if position == 1 {
+    initial_previous_byte_1
   } else {
-    0
+    initial_previous_byte_2
   }
   brotli_utf8_context_tree(
     brotli_literal_context_id(2, previous_byte_1, previous_byte_2),
@@ -1054,16 +1070,20 @@ fn brotli_command_literal_utf8_context_tree(
 fn brotli_command_literal_utf8_context_tree4(
   data : FixedArray[Byte],
   position : Int,
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
 ) -> Int raise FzipError {
   let previous_byte_1 = if position > 0 {
     data[position - 1].to_int()
   } else {
-    0
+    initial_previous_byte_1
   }
   let previous_byte_2 = if position > 1 {
     data[position - 2].to_int()
+  } else if position == 1 {
+    initial_previous_byte_1
   } else {
-    0
+    initial_previous_byte_2
   }
   brotli_utf8_context_tree4(
     brotli_literal_context_id(2, previous_byte_1, previous_byte_2),
@@ -1074,16 +1094,20 @@ fn brotli_command_literal_utf8_context_tree4(
 fn brotli_command_literal_utf8_context_tree8(
   data : FixedArray[Byte],
   position : Int,
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
 ) -> Int raise FzipError {
   let previous_byte_1 = if position > 0 {
     data[position - 1].to_int()
   } else {
-    0
+    initial_previous_byte_1
   }
   let previous_byte_2 = if position > 1 {
     data[position - 2].to_int()
+  } else if position == 1 {
+    initial_previous_byte_1
   } else {
-    0
+    initial_previous_byte_2
   }
   brotli_utf8_context_tree8(
     brotli_literal_context_id(2, previous_byte_1, previous_byte_2),
@@ -1094,16 +1118,20 @@ fn brotli_command_literal_utf8_context_tree8(
 fn brotli_command_literal_utf8_context_tree16(
   data : FixedArray[Byte],
   position : Int,
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
 ) -> Int raise FzipError {
   let previous_byte_1 = if position > 0 {
     data[position - 1].to_int()
   } else {
-    0
+    initial_previous_byte_1
   }
   let previous_byte_2 = if position > 1 {
     data[position - 2].to_int()
+  } else if position == 1 {
+    initial_previous_byte_1
   } else {
-    0
+    initial_previous_byte_2
   }
   brotli_utf8_context_tree16(
     brotli_literal_context_id(2, previous_byte_1, previous_byte_2),
@@ -1114,6 +1142,8 @@ fn brotli_command_literal_utf8_context_tree16(
 fn brotli_collect_command_literals_and_frequencies_by_utf8_context16(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
 ) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise FzipError {
   let symbols : Array[FixedArray[Int]] = []
   let seen : Array[FixedArray[Bool]] = []
@@ -1128,7 +1158,9 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context16(
     let command = commands[i]
     for j in 0..<command.insert_length {
       let position = command.insert_start + j
-      let tree = brotli_command_literal_utf8_context_tree16(data, position)
+      let tree = brotli_command_literal_utf8_context_tree16(
+        data, position, initial_previous_byte_1, initial_previous_byte_2,
+      )
       let literal = data[position].to_int()
       if !seen[tree][literal] {
         seen[tree][literal] = true
@@ -1152,6 +1184,8 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context16(
 fn brotli_collect_command_literals_and_frequencies_by_utf8_context8(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
 ) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise FzipError {
   let symbols : Array[FixedArray[Int]] = []
   let seen : Array[FixedArray[Bool]] = []
@@ -1166,7 +1200,9 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context8(
     let command = commands[i]
     for j in 0..<command.insert_length {
       let position = command.insert_start + j
-      let tree = brotli_command_literal_utf8_context_tree8(data, position)
+      let tree = brotli_command_literal_utf8_context_tree8(
+        data, position, initial_previous_byte_1, initial_previous_byte_2,
+      )
       let literal = data[position].to_int()
       if !seen[tree][literal] {
         seen[tree][literal] = true
@@ -1190,6 +1226,8 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context8(
 fn brotli_collect_command_literals_and_frequencies_by_utf8_context4(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
 ) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise FzipError {
   let symbols : Array[FixedArray[Int]] = []
   let seen : Array[FixedArray[Bool]] = []
@@ -1204,7 +1242,9 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context4(
     let command = commands[i]
     for j in 0..<command.insert_length {
       let position = command.insert_start + j
-      let tree = brotli_command_literal_utf8_context_tree4(data, position)
+      let tree = brotli_command_literal_utf8_context_tree4(
+        data, position, initial_previous_byte_1, initial_previous_byte_2,
+      )
       let literal = data[position].to_int()
       if !seen[tree][literal] {
         seen[tree][literal] = true
@@ -1228,6 +1268,8 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context4(
 fn brotli_collect_command_literals_and_frequencies_by_utf8_context(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
 ) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise FzipError {
   let symbols : Array[FixedArray[Int]] = []
   let seen : Array[FixedArray[Bool]] = []
@@ -1242,7 +1284,9 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context(
     let command = commands[i]
     for j in 0..<command.insert_length {
       let position = command.insert_start + j
-      let tree = brotli_command_literal_utf8_context_tree(data, position)
+      let tree = brotli_command_literal_utf8_context_tree(
+        data, position, initial_previous_byte_1, initial_previous_byte_2,
+      )
       let literal = data[position].to_int()
       if !seen[tree][literal] {
         seen[tree][literal] = true
@@ -2165,6 +2209,40 @@ fn brotli_build_simple_lz77_commands(
 }
 
 ///|
+fn brotli_build_simple_lz77_command_candidate(
+  data : FixedArray[Byte],
+  hash_config : BrotliHashConfig,
+  distance_cache : FixedArray[Int],
+) -> BrotliCommandCandidate? {
+  // Every exact-costed chunk candidate must start from the decoder state that
+  // exists before this meta-block. Only the winner's terminal cache is later
+  // committed to the outer stream.
+  let chunk_cache = brotli_copy_distance_cache(distance_cache)
+  match
+    brotli_build_simple_lz77_commands_with_distance_cache(
+      data, hash_config, chunk_cache,
+    ) {
+    Some(commands) => Some({ commands, distance_cache: chunk_cache })
+    None => None
+  }
+}
+
+///|
+fn brotli_wrap_command_candidate(
+  commands : Array[BrotliEncodeCommand]?,
+  distance_cache : FixedArray[Int],
+) -> BrotliCommandCandidate? {
+  match commands {
+    Some(commands) =>
+      Some({
+        commands,
+        distance_cache: brotli_copy_distance_cache(distance_cache),
+      })
+    None => None
+  }
+}
+
+///|
 fn brotli_build_simple_lz77_commands_with_distance_cache(
   data : FixedArray[Byte],
   hash_config : BrotliHashConfig,
@@ -2212,6 +2290,7 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
       let distance_code = brotli_compute_distance_code(
         distance, position, distance_cache,
       )
+      let mut emitted_distance_code = distance_code
       let command = match
         brotli_try_make_encode_command_with_distance_code(
           literal_start, insert_length, match_length, distance, distance_code,
@@ -2222,12 +2301,20 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
             brotli_try_make_encode_command_with_distance_mode(
               literal_start, insert_length, match_length, distance, true, true,
             ) {
-            Some(command) => command
+            Some(command) => {
+              // The implicit distance-0 command family cannot represent every
+              // insert/copy length. When we fall back to an explicit distance
+              // symbol, advance the cache as the decoder will see it.
+              emitted_distance_code = command.distance_prefix.symbol
+              command
+            }
             None => return None
           }
       }
       commands.push(command)
-      brotli_update_distance_cache(distance_cache, distance, distance_code)
+      brotli_update_distance_cache(
+        distance_cache, distance, emitted_distance_code,
+      )
       if commands.length() > hash_config.max_commands {
         return None
       }
@@ -2670,10 +2757,12 @@ fn brotli_write_context_lz77_metablock(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
   is_last : Bool,
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
 ) -> BrotliBitWriter? raise FzipError {
   let (literal_sets, literal_frequencies_array) = match
     brotli_collect_command_literals_and_frequencies_by_utf8_context(
-      data, commands,
+      data, commands, initial_previous_byte_1, initial_previous_byte_2,
     ) {
     Some(result) => result
     None => return None
@@ -2777,7 +2866,9 @@ fn brotli_write_context_lz77_metablock(
     for j in 0..<command.insert_length {
       let position = command.insert_start + j
       let literal = data[position].to_int()
-      let tree = brotli_command_literal_utf8_context_tree(data, position)
+      let tree = brotli_command_literal_utf8_context_tree(
+        data, position, initial_previous_byte_1, initial_previous_byte_2,
+      )
       let literal_payload = if tree == 0 {
         first_payloads[literal]
       } else {
@@ -2808,10 +2899,12 @@ fn brotli_write_context4_lz77_metablock(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
   is_last : Bool,
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
 ) -> BrotliBitWriter? raise FzipError {
   let (literal_sets, literal_frequencies_array) = match
     brotli_collect_command_literals_and_frequencies_by_utf8_context4(
-      data, commands,
+      data, commands, initial_previous_byte_1, initial_previous_byte_2,
     ) {
     Some(result) => result
     None => return None
@@ -2937,7 +3030,9 @@ fn brotli_write_context4_lz77_metablock(
     for j in 0..<command.insert_length {
       let position = command.insert_start + j
       let literal = data[position].to_int()
-      let tree = brotli_command_literal_utf8_context_tree4(data, position)
+      let tree = brotli_command_literal_utf8_context_tree4(
+        data, position, initial_previous_byte_1, initial_previous_byte_2,
+      )
       let literal_payload = if tree == 0 {
         first_payloads[literal]
       } else if tree == 1 {
@@ -2972,10 +3067,12 @@ fn brotli_write_context8_lz77_metablock(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
   is_last : Bool,
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
 ) -> BrotliBitWriter? raise FzipError {
   let (literal_sets, literal_frequencies) = match
     brotli_collect_command_literals_and_frequencies_by_utf8_context8(
-      data, commands,
+      data, commands, initial_previous_byte_1, initial_previous_byte_2,
     ) {
     Some(result) => result
     None => return None
@@ -3077,7 +3174,9 @@ fn brotli_write_context8_lz77_metablock(
     for j in 0..<command.insert_length {
       let position = command.insert_start + j
       let literal = data[position].to_int()
-      let tree = brotli_command_literal_utf8_context_tree8(data, position)
+      let tree = brotli_command_literal_utf8_context_tree8(
+        data, position, initial_previous_byte_1, initial_previous_byte_2,
+      )
       let literal_payload = literal_payloads[tree][literal]
       writer.write_bits(
         literal_payload.insert_extra_bits,
@@ -3104,10 +3203,12 @@ fn brotli_write_context16_lz77_metablock(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
   is_last : Bool,
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
 ) -> BrotliBitWriter? raise FzipError {
   let (literal_sets, literal_frequencies) = match
     brotli_collect_command_literals_and_frequencies_by_utf8_context16(
-      data, commands,
+      data, commands, initial_previous_byte_1, initial_previous_byte_2,
     ) {
     Some(result) => result
     None => return None
@@ -3209,7 +3310,9 @@ fn brotli_write_context16_lz77_metablock(
     for j in 0..<command.insert_length {
       let position = command.insert_start + j
       let literal = data[position].to_int()
-      let tree = brotli_command_literal_utf8_context_tree16(data, position)
+      let tree = brotli_command_literal_utf8_context_tree16(
+        data, position, initial_previous_byte_1, initial_previous_byte_2,
+      )
       let literal_payload = literal_payloads[tree][literal]
       writer.write_bits(
         literal_payload.insert_extra_bits,
@@ -3237,10 +3340,16 @@ fn brotli_write_best_lz77_metablock(
   commands : Array[BrotliEncodeCommand],
   is_last : Bool,
   quality : Int,
+  allow_contexts : Bool,
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
 ) -> BrotliBitWriter raise FzipError {
-  if quality <= 2 && data.length() >= 524288 {
+  if allow_contexts && quality <= 2 && data.length() >= 524288 {
     if commands.length() != 1 || commands[0].has_copy {
-      match brotli_write_context16_lz77_metablock(data, commands, is_last) {
+      match
+        brotli_write_context16_lz77_metablock(
+          data, commands, is_last, initial_previous_byte_1, initial_previous_byte_2,
+        ) {
         Some(candidate) => return candidate
         None => ()
       }
@@ -3270,12 +3379,17 @@ fn brotli_write_best_lz77_metablock(
         None => ()
       }
     }
-    match brotli_write_context16_lz77_metablock(data, commands, is_last) {
-      Some(candidate) =>
-        if candidate.bit_pos < best.bit_pos {
-          best = candidate
-        }
-      None => ()
+    if allow_contexts {
+      match
+        brotli_write_context16_lz77_metablock(
+          data, commands, is_last, initial_previous_byte_1, initial_previous_byte_2,
+        ) {
+        Some(candidate) =>
+          if candidate.bit_pos < best.bit_pos {
+            best = candidate
+          }
+        None => ()
+      }
     }
     return best
   }
@@ -3305,8 +3419,11 @@ fn brotli_write_best_lz77_metablock(
       None => ()
     }
   }
-  if quality < 3 {
-    match brotli_write_context_lz77_metablock(data, commands, is_last) {
+  if allow_contexts && quality < 3 {
+    match
+      brotli_write_context_lz77_metablock(
+        data, commands, is_last, initial_previous_byte_1, initial_previous_byte_2,
+      ) {
       Some(candidate) =>
         if candidate.bit_pos < best.bit_pos {
           best = candidate
@@ -3314,17 +3431,37 @@ fn brotli_write_best_lz77_metablock(
       None => ()
     }
   }
-  match brotli_write_context4_lz77_metablock(data, commands, is_last) {
-    Some(candidate) => if candidate.bit_pos < best.bit_pos { best = candidate }
-    None => ()
-  }
-  match brotli_write_context8_lz77_metablock(data, commands, is_last) {
-    Some(candidate) => if candidate.bit_pos < best.bit_pos { best = candidate }
-    None => ()
-  }
-  match brotli_write_context16_lz77_metablock(data, commands, is_last) {
-    Some(candidate) => if candidate.bit_pos < best.bit_pos { best = candidate }
-    None => ()
+  if allow_contexts {
+    match
+      brotli_write_context4_lz77_metablock(
+        data, commands, is_last, initial_previous_byte_1, initial_previous_byte_2,
+      ) {
+      Some(candidate) =>
+        if candidate.bit_pos < best.bit_pos {
+          best = candidate
+        }
+      None => ()
+    }
+    match
+      brotli_write_context8_lz77_metablock(
+        data, commands, is_last, initial_previous_byte_1, initial_previous_byte_2,
+      ) {
+      Some(candidate) =>
+        if candidate.bit_pos < best.bit_pos {
+          best = candidate
+        }
+      None => ()
+    }
+    match
+      brotli_write_context16_lz77_metablock(
+        data, commands, is_last, initial_previous_byte_1, initial_previous_byte_2,
+      ) {
+      Some(candidate) =>
+        if candidate.bit_pos < best.bit_pos {
+          best = candidate
+        }
+      None => ()
+    }
   }
   best
 }
@@ -3340,7 +3477,7 @@ fn brotli_try_compressed_commands(
   match commands {
     Some(commands) => {
       let candidate = brotli_write_best_lz77_metablock(
-        data, commands, is_last, quality,
+        data, commands, is_last, quality, true, 0, 0,
       )
       match best {
         Some(best) =>
@@ -3354,6 +3491,80 @@ fn brotli_try_compressed_commands(
     }
     None => best
   }
+}
+
+///|
+fn brotli_try_compressed_command_candidate(
+  data : FixedArray[Byte],
+  candidate : BrotliCommandCandidate?,
+  is_last : Bool,
+  best : BrotliCompressedChunk?,
+  quality : Int,
+  allow_contexts : Bool,
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
+) -> BrotliCompressedChunk? raise FzipError {
+  match candidate {
+    Some(candidate) => {
+      let writer = brotli_write_best_lz77_metablock(
+        data,
+        candidate.commands,
+        is_last,
+        quality,
+        allow_contexts,
+        initial_previous_byte_1,
+        initial_previous_byte_2,
+      )
+      match best {
+        Some(best) =>
+          if writer.bit_pos < best.writer.bit_pos {
+            Some({ writer, distance_cache: candidate.distance_cache })
+          } else {
+            Some(best)
+          }
+        None => Some({ writer, distance_cache: candidate.distance_cache })
+      }
+    }
+    None => best
+  }
+}
+
+///|
+fn brotli_try_split_literal_only_chunk(
+  data : FixedArray[Byte],
+  is_last : Bool,
+  best : BrotliCompressedChunk?,
+  distance_cache : FixedArray[Int],
+) -> BrotliCompressedChunk? raise FzipError {
+  if data.length() < 2048 || data.length() > 65536 {
+    return best
+  }
+  if !brotli_literal_only_may_beat_stored(data) {
+    return best
+  }
+  let split = brotli_best_split_literal_point(data)
+  let mut best = best
+  if split > 0 {
+    match brotli_write_split_literal_only_metablock(data, split, is_last) {
+      Some(writer) =>
+        match best {
+          Some(current) =>
+            if writer.bit_pos < current.writer.bit_pos {
+              best = Some({
+                writer,
+                distance_cache: brotli_copy_distance_cache(distance_cache),
+              })
+            }
+          None =>
+            best = Some({
+              writer,
+              distance_cache: brotli_copy_distance_cache(distance_cache),
+            })
+        }
+      None => ()
+    }
+  }
+  best
 }
 
 ///|
@@ -3403,50 +3614,69 @@ fn brotli_try_compressed_chunk(
   window_bits : Int,
   quality : Int,
   distance_cache : FixedArray[Int],
-) -> BrotliBitWriter? raise FzipError {
+  initial_previous_byte_1 : Int,
+  initial_previous_byte_2 : Int,
+) -> BrotliCompressedChunk? raise FzipError {
+  // UTF-8 literal contexts depend on the two bytes before this meta-block; for
+  // non-first chunks they come from the previous chunk, not from zero padding.
+  let allow_contexts = true
   if quality <= 2 && data.length() >= 8192 {
     let natural_config = brotli_natural_hash_config_for_quality(quality)
-    let chunk_cache = brotli_copy_distance_cache(distance_cache)
-    let commands = brotli_build_simple_lz77_commands_with_distance_cache(
-      data, natural_config, chunk_cache,
-    )
-    let candidate = brotli_try_compressed_commands(
+    return brotli_try_compressed_command_candidate(
       data,
-      commands,
+      brotli_build_simple_lz77_command_candidate(
+        data, natural_config, distance_cache,
+      ),
       is_last,
       None,
       quality,
+      allow_contexts,
+      initial_previous_byte_1,
+      initial_previous_byte_2,
     )
-    match candidate {
-      Some(_) => brotli_commit_distance_cache(distance_cache, chunk_cache)
-      None => ()
-    }
-    return candidate
   }
-  let match_commands = brotli_build_simple_lz77_commands(data, hash_config)
-  let best = brotli_try_compressed_commands(
+  let best = brotli_try_compressed_command_candidate(
     data,
-    match_commands,
+    brotli_build_simple_lz77_command_candidate(
+      data, hash_config, distance_cache,
+    ),
     is_last,
     None,
     quality,
+    allow_contexts,
+    initial_previous_byte_1,
+    initial_previous_byte_2,
   )
-  let best = brotli_try_compressed_commands(
+  let best = brotli_try_compressed_command_candidate(
     data,
-    brotli_build_literal_only_command(data),
-    is_last,
-    best,
-    quality,
-  )
-  let best = brotli_try_split_literal_only_metablock(data, is_last, best)
-  let best = brotli_try_compressed_commands(
-    data,
-    brotli_build_identity_dictionary_commands(
-      data, hash_config, base_offset, window_bits,
+    brotli_wrap_command_candidate(
+      brotli_build_literal_only_command(data),
+      distance_cache,
     ),
     is_last,
     best,
     quality,
+    allow_contexts,
+    initial_previous_byte_1,
+    initial_previous_byte_2,
+  )
+  let best = brotli_try_split_literal_only_chunk(
+    data, is_last, best, distance_cache,
+  )
+  let best = brotli_try_compressed_command_candidate(
+    data,
+    brotli_wrap_command_candidate(
+      brotli_build_identity_dictionary_commands(
+        data, hash_config, base_offset, window_bits,
+      ),
+      distance_cache,
+    ),
+    is_last,
+    best,
+    quality,
+    allow_contexts,
+    initial_previous_byte_1,
+    initial_previous_byte_2,
   )
   if quality >= 2 && data.length() >= 8192 {
     if quality >= 9 {
@@ -3458,76 +3688,114 @@ fn brotli_try_compressed_chunk(
         )
         match mixed_commands {
           Some(_) =>
-            return brotli_try_compressed_commands(
-              data, mixed_commands, is_last, best, quality,
-            )
-          None =>
-            return brotli_try_compressed_commands(
+            return brotli_try_compressed_command_candidate(
               data,
-              brotli_build_simple_lz77_commands(data, hq_config),
+              brotli_build_mixed_dictionary_lz77_command_candidate(
+                data, hq_config, base_offset, window_bits, distance_cache,
+              ),
               is_last,
               best,
               quality,
+              allow_contexts,
+              initial_previous_byte_1,
+              initial_previous_byte_2,
+            )
+          None =>
+            return brotli_try_compressed_command_candidate(
+              data,
+              brotli_build_simple_lz77_command_candidate(
+                data, hq_config, distance_cache,
+              ),
+              is_last,
+              best,
+              quality,
+              allow_contexts,
+              initial_previous_byte_1,
+              initial_previous_byte_2,
             )
         }
       }
-      let best = brotli_try_compressed_commands(
+      let best = brotli_try_compressed_command_candidate(
         data,
-        brotli_build_simple_lz77_commands(data, hq_config),
+        brotli_build_simple_lz77_command_candidate(
+          data, hq_config, distance_cache,
+        ),
         is_last,
         best,
         quality,
+        allow_contexts,
+        initial_previous_byte_1,
+        initial_previous_byte_2,
       )
       let hq_config_4 = brotli_four_byte_hash_config(hq_config)
       if brotli_mixed_dictionary_may_pay(data) {
-        let mixed = brotli_try_compressed_commands(
+        let mixed = brotli_try_compressed_command_candidate(
           data,
-          brotli_build_mixed_dictionary_lz77_commands(
-            data, hq_config_4, base_offset, window_bits,
+          brotli_build_mixed_dictionary_lz77_command_candidate(
+            data, hq_config_4, base_offset, window_bits, distance_cache,
           ),
           is_last,
           best,
           quality,
+          allow_contexts,
+          initial_previous_byte_1,
+          initial_previous_byte_2,
         )
         match (best, mixed) {
           (Some(before), Some(after)) =>
-            if after.bit_pos < before.bit_pos {
+            if after.writer.bit_pos < before.writer.bit_pos {
               mixed
             } else {
-              brotli_try_compressed_commands(
+              brotli_try_compressed_command_candidate(
                 data,
-                brotli_build_simple_lz77_commands(data, hq_config_4),
+                brotli_build_simple_lz77_command_candidate(
+                  data, hq_config_4, distance_cache,
+                ),
                 is_last,
                 mixed,
                 quality,
+                allow_contexts,
+                initial_previous_byte_1,
+                initial_previous_byte_2,
               )
             }
           (_, _) => mixed
         }
       } else {
-        brotli_try_compressed_commands(
+        brotli_try_compressed_command_candidate(
           data,
-          brotli_build_simple_lz77_commands(data, hq_config_4),
+          brotli_build_simple_lz77_command_candidate(
+            data, hq_config_4, distance_cache,
+          ),
           is_last,
           best,
           quality,
+          allow_contexts,
+          initial_previous_byte_1,
+          initial_previous_byte_2,
         )
       }
     } else {
       let natural_config = brotli_natural_hash_config_for_quality(quality)
-      let best = brotli_try_compressed_commands(
+      let best = brotli_try_compressed_command_candidate(
         data,
-        brotli_build_simple_lz77_commands(data, natural_config),
+        brotli_build_simple_lz77_command_candidate(
+          data, natural_config, distance_cache,
+        ),
         is_last,
         best,
         quality,
+        allow_contexts,
+        initial_previous_byte_1,
+        initial_previous_byte_2,
       )
-      let best = brotli_try_compressed_commands(
+      let best = brotli_try_compressed_command_candidate(
         data,
         if brotli_use_natural_four_byte_candidate(quality, data.length()) {
-          brotli_build_simple_lz77_commands(
+          brotli_build_simple_lz77_command_candidate(
             data,
             brotli_four_byte_hash_config(natural_config),
+            distance_cache,
           )
         } else {
           None
@@ -3535,28 +3803,40 @@ fn brotli_try_compressed_chunk(
         is_last,
         best,
         quality,
+        allow_contexts,
+        initial_previous_byte_1,
+        initial_previous_byte_2,
       )
       if quality >= 4 {
         let intermediate_config = brotli_intermediate_hash_config_for_quality(
           quality,
         )
-        let best = brotli_try_compressed_commands(
+        let best = brotli_try_compressed_command_candidate(
           data,
-          brotli_build_simple_lz77_commands(data, intermediate_config),
+          brotli_build_simple_lz77_command_candidate(
+            data, intermediate_config, distance_cache,
+          ),
           is_last,
           best,
           quality,
+          allow_contexts,
+          initial_previous_byte_1,
+          initial_previous_byte_2,
         )
         if brotli_use_intermediate_four_byte_candidate(quality, data.length()) {
-          brotli_try_compressed_commands(
+          brotli_try_compressed_command_candidate(
             data,
-            brotli_build_simple_lz77_commands(
+            brotli_build_simple_lz77_command_candidate(
               data,
               brotli_four_byte_hash_config(intermediate_config),
+              distance_cache,
             ),
             is_last,
             best,
             quality,
+            allow_contexts,
+            initial_previous_byte_1,
+            initial_previous_byte_2,
           )
         } else {
           best
@@ -3589,6 +3869,16 @@ fn brotli_encode_chunked_standard(
     let chunk = slc(data, offset, e=offset + length)
     let is_last = offset + length == data.length()
     let previous_distance_cache = brotli_copy_distance_cache(distance_cache)
+    let initial_previous_byte_1 = if offset > 0 {
+      data[offset - 1].to_int()
+    } else {
+      0
+    }
+    let initial_previous_byte_2 = if offset > 1 {
+      data[offset - 2].to_int()
+    } else {
+      0
+    }
     match
       brotli_try_compressed_chunk(
         chunk,
@@ -3598,10 +3888,19 @@ fn brotli_encode_chunked_standard(
         opts.window_bits,
         opts.quality,
         distance_cache,
+        initial_previous_byte_1,
+        initial_previous_byte_2,
       ) {
       Some(compressed) =>
-        if shft(compressed.bit_pos) + 1 < length + 16 {
-          writer.write_from_bits(compressed.buf, compressed.bit_pos)
+        if shft(compressed.writer.bit_pos) + 1 < length + 16 {
+          writer.write_from_bits(
+            compressed.writer.buf,
+            compressed.writer.bit_pos,
+          )
+          brotli_commit_distance_cache(
+            distance_cache,
+            compressed.distance_cache,
+          )
           if is_last {
             wrote_last = true
           }
