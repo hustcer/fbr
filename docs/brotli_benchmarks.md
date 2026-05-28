@@ -2626,3 +2626,38 @@ Target-perf result:
 Conclusion: this is an accepted decode speed improvement. It does not change
 encoded size or stream semantics; it only accelerates output reconstruction for
 overlapping periodic back-references.
+
+## 2026-05-28 — Distance Ring Slot Simplification
+
+The decoder distance ring has exactly four slots. Slot selection now uses
+`index & 3` instead of `% 4` plus a negative-index correction branch. A
+white-box test covers negative and positive wraparound, preserving the
+short-distance-code semantics.
+
+Validation commands:
+
+```nu
+moon fmt
+moon check --target all
+moon test --target native --filter '*initial implicit distance*'
+moon test --target wasm-gc --filter '*initial implicit distance*'
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-1m.bin.google.q11.br \
+  --mode decode \
+  --expected target/brotli-bench/silesia-1m.bin \
+  --targets wasm-gc,native \
+  --repeats 3 \
+  --samples 1 \
+  --json
+```
+
+Target-perf result:
+
+| Mode   | Corpus         | Target  | Previous ms | New ms  | Delta |
+| ------ | -------------- | ------- | ----------- | ------- | ----- |
+| decode | silesia-1m q11 | wasm-gc | 242.629     | 245.813 | +1.3% |
+| decode | silesia-1m q11 | native  | 27.770      | 27.139  | -2.3% |
+
+Conclusion: this is retained as an equivalent simplification with native
+decode slightly faster in the sampled run and wasm-gc movement within the
+noise range seen in same-day target-perf samples. Encoded size and stream
+semantics are unchanged.

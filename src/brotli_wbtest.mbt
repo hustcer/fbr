@@ -657,6 +657,9 @@ test "brotli_read_command applies insert and copy extra bits" {
 
 ///|
 test "BrotliDistanceRing resolves initial implicit distance" {
+  inspect(brotli_distance_ring_slot(-1), content="3")
+  inspect(brotli_distance_ring_slot(-2), content="2")
+  inspect(brotli_distance_ring_slot(4), content="0")
   let ring = BrotliDistanceRing::new()
   inspect(ring.take_short_code(0), content="4")
   ring.record(4)

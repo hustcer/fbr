@@ -12,11 +12,9 @@ fn BrotliDistanceRing::new() -> BrotliDistanceRing {
 
 ///|
 fn brotli_distance_ring_slot(index : Int) -> Int {
-  let mut slot = index % 4
-  if slot < 0 {
-    slot += 4
-  }
-  slot
+  // The ring has four slots, so a bit mask gives the same wraparound as
+  // modulo 4, including negative indices used by short-distance codes.
+  index & 3
 }
 
 ///|
