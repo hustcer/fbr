@@ -1702,6 +1702,83 @@ test "brotli_sync q10 bounded shortest-path costs recent distances" {
 }
 
 ///|
+test "brotli_sync q10 bounded shortest-path keeps a two-state beam" {
+  let state_count = 4
+  let costs = FixedArray::make(state_count, 9999)
+  let cache0 = FixedArray::make(state_count, 0)
+  let cache1 = FixedArray::make(state_count, 0)
+  let cache2 = FixedArray::make(state_count, 0)
+  let cache3 = FixedArray::make(state_count, 0)
+  let previous_position = FixedArray::make(state_count, -1)
+  let previous_slot = FixedArray::make(state_count, -1)
+  let copy_length = FixedArray::make(state_count, 0)
+  let copy_distance = FixedArray::make(state_count, 0)
+  brotli_bounded_shortest_path_offer_state(
+    costs,
+    cache0,
+    cache1,
+    cache2,
+    cache3,
+    previous_position,
+    previous_slot,
+    copy_length,
+    copy_distance,
+    1,
+    30,
+    [4, 11, 15, 16],
+    0,
+    0,
+    4,
+    4,
+  )
+  brotli_bounded_shortest_path_offer_state(
+    costs,
+    cache0,
+    cache1,
+    cache2,
+    cache3,
+    previous_position,
+    previous_slot,
+    copy_length,
+    copy_distance,
+    1,
+    10,
+    [7, 11, 15, 16],
+    0,
+    1,
+    5,
+    7,
+  )
+  brotli_bounded_shortest_path_offer_state(
+    costs,
+    cache0,
+    cache1,
+    cache2,
+    cache3,
+    previous_position,
+    previous_slot,
+    copy_length,
+    copy_distance,
+    1,
+    20,
+    [9, 11, 15, 16],
+    0,
+    0,
+    6,
+    9,
+  )
+  let first = brotli_bounded_shortest_path_state_index(1, 0)
+  let second = brotli_bounded_shortest_path_state_index(1, 1)
+  assert_eq(costs[first], 10)
+  assert_eq(costs[second], 20)
+  assert_eq(cache0[first], 7)
+  assert_eq(cache0[second], 9)
+  assert_eq(previous_slot[first], 1)
+  assert_eq(copy_length[second], 6)
+  assert_eq(copy_distance[second], 9)
+}
+
+///|
 test "brotli_sync q2 through q9 allow two-mebibyte chunks" {
   assert_eq(brotli_standard_chunk_size_for_quality(2), 2097152)
   assert_eq(brotli_standard_chunk_size_for_quality(8), 2097152)

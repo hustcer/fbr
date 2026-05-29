@@ -2674,6 +2674,89 @@ fn brotli_bounded_shortest_path_config(
 }
 
 ///|
+let brotli_bounded_shortest_path_beam_width = 2
+
+///|
+fn brotli_bounded_shortest_path_state_index(position : Int, slot : Int) -> Int {
+  position * brotli_bounded_shortest_path_beam_width + slot
+}
+
+///|
+fn brotli_bounded_shortest_path_store_state(
+  costs : FixedArray[Int],
+  state_cache0 : FixedArray[Int],
+  state_cache1 : FixedArray[Int],
+  state_cache2 : FixedArray[Int],
+  state_cache3 : FixedArray[Int],
+  previous_position : FixedArray[Int],
+  previous_slot : FixedArray[Int],
+  choice_copy_length : FixedArray[Int],
+  choice_copy_distance : FixedArray[Int],
+  index : Int,
+  cost : Int,
+  cache : FixedArray[Int],
+  from_position : Int,
+  from_slot : Int,
+  copy_length : Int,
+  copy_distance : Int,
+) -> Unit {
+  costs[index] = cost
+  state_cache0[index] = cache[0]
+  state_cache1[index] = cache[1]
+  state_cache2[index] = cache[2]
+  state_cache3[index] = cache[3]
+  previous_position[index] = from_position
+  previous_slot[index] = from_slot
+  choice_copy_length[index] = copy_length
+  choice_copy_distance[index] = copy_distance
+}
+
+///|
+fn brotli_bounded_shortest_path_offer_state(
+  costs : FixedArray[Int],
+  state_cache0 : FixedArray[Int],
+  state_cache1 : FixedArray[Int],
+  state_cache2 : FixedArray[Int],
+  state_cache3 : FixedArray[Int],
+  previous_position : FixedArray[Int],
+  previous_slot : FixedArray[Int],
+  choice_copy_length : FixedArray[Int],
+  choice_copy_distance : FixedArray[Int],
+  position : Int,
+  cost : Int,
+  cache : FixedArray[Int],
+  from_position : Int,
+  from_slot : Int,
+  copy_length : Int,
+  copy_distance : Int,
+) -> Unit {
+  let first = brotli_bounded_shortest_path_state_index(position, 0)
+  let second = brotli_bounded_shortest_path_state_index(position, 1)
+  if cost < costs[first] {
+    costs[second] = costs[first]
+    state_cache0[second] = state_cache0[first]
+    state_cache1[second] = state_cache1[first]
+    state_cache2[second] = state_cache2[first]
+    state_cache3[second] = state_cache3[first]
+    previous_position[second] = previous_position[first]
+    previous_slot[second] = previous_slot[first]
+    choice_copy_length[second] = choice_copy_length[first]
+    choice_copy_distance[second] = choice_copy_distance[first]
+    brotli_bounded_shortest_path_store_state(
+      costs, state_cache0, state_cache1, state_cache2, state_cache3, previous_position,
+      previous_slot, choice_copy_length, choice_copy_distance, first, cost, cache,
+      from_position, from_slot, copy_length, copy_distance,
+    )
+  } else if cost < costs[second] {
+    brotli_bounded_shortest_path_store_state(
+      costs, state_cache0, state_cache1, state_cache2, state_cache3, previous_position,
+      previous_slot, choice_copy_length, choice_copy_distance, second, cost, cache,
+      from_position, from_slot, copy_length, copy_distance,
+    )
+  }
+}
+
+///|
 fn brotli_build_bounded_shortest_path_command_candidate(
   data : FixedArray[Byte],
   hash_config : BrotliHashConfig,
@@ -2687,65 +2770,77 @@ fn brotli_build_bounded_shortest_path_command_candidate(
   let len = data.length()
   let previous = brotli_previous_match_positions(data, config)
   let unreachable_cost = len * 16 + 1_000_000
-  let costs = FixedArray::make(len + 1, unreachable_cost)
-  let state_cache0 = FixedArray::make(len + 1, distance_cache[0])
-  let state_cache1 = FixedArray::make(len + 1, distance_cache[1])
-  let state_cache2 = FixedArray::make(len + 1, distance_cache[2])
-  let state_cache3 = FixedArray::make(len + 1, distance_cache[3])
-  let choice_copy_length = FixedArray::make(len + 1, 0)
-  let choice_copy_distance = FixedArray::make(len + 1, 0)
-  costs[0] = 0
+  let state_count = (len + 1) * brotli_bounded_shortest_path_beam_width
+  let costs = FixedArray::make(state_count, unreachable_cost)
+  let state_cache0 = FixedArray::make(state_count, distance_cache[0])
+  let state_cache1 = FixedArray::make(state_count, distance_cache[1])
+  let state_cache2 = FixedArray::make(state_count, distance_cache[2])
+  let state_cache3 = FixedArray::make(state_count, distance_cache[3])
+  let previous_position = FixedArray::make(state_count, -1)
+  let previous_slot = FixedArray::make(state_count, -1)
+  let choice_copy_length = FixedArray::make(state_count, 0)
+  let choice_copy_distance = FixedArray::make(state_count, 0)
+  costs[brotli_bounded_shortest_path_state_index(0, 0)] = 0
   for position in 0..<len {
-    let base_cost = costs[position]
-    if base_cost >= unreachable_cost {
-      continue
-    }
-    let current_cache : FixedArray[Int] = [
-      state_cache0[position],
-      state_cache1[position],
-      state_cache2[position],
-      state_cache3[position],
-    ]
-    let literal_cost = base_cost + 8
-    if literal_cost < costs[position + 1] {
-      costs[position + 1] = literal_cost
-      state_cache0[position + 1] = current_cache[0]
-      state_cache1[position + 1] = current_cache[1]
-      state_cache2[position + 1] = current_cache[2]
-      state_cache3[position + 1] = current_cache[3]
-      choice_copy_length[position + 1] = 0
-      choice_copy_distance[position + 1] = 0
-    }
-    let matches = brotli_bounded_previous_hash_matches_with_cache(
-      data, previous, position, config, current_cache,
-    )
-    for match_index in 0..<matches.length() {
-      let match_ = matches[match_index]
-      if match_.length >= config.min_match_length {
-        // Keep the DP bounded: several previous matches per position, and only
-        // a few representative copy lengths for each match. This grows the P4
-        // candidate graph without taking on full Zopfli search cost.
-        let bounded_lengths : FixedArray[Int] = [
-          config.min_match_length,
-          match_.length / 2,
-          match_.length,
-        ]
-        for i in 0..<bounded_lengths.length() {
-          let copy_length = bounded_lengths[i]
-          if copy_length < config.min_match_length ||
-            copy_length > match_.length ||
-            position + copy_length > len {
-            continue
-          }
-          let end = position + copy_length
-          let copy_cost = base_cost +
-            brotli_bounded_shortest_path_copy_cost(
-              copy_length,
-              match_.distance,
-              position,
-              current_cache,
-            )
-          if copy_cost < costs[end] {
+    for slot in 0..<brotli_bounded_shortest_path_beam_width {
+      let state_index = brotli_bounded_shortest_path_state_index(position, slot)
+      let base_cost = costs[state_index]
+      if base_cost >= unreachable_cost {
+        continue
+      }
+      let current_cache : FixedArray[Int] = [
+        state_cache0[state_index],
+        state_cache1[state_index],
+        state_cache2[state_index],
+        state_cache3[state_index],
+      ]
+      brotli_bounded_shortest_path_offer_state(
+        costs,
+        state_cache0,
+        state_cache1,
+        state_cache2,
+        state_cache3,
+        previous_position,
+        previous_slot,
+        choice_copy_length,
+        choice_copy_distance,
+        position + 1,
+        base_cost + 8,
+        current_cache,
+        position,
+        slot,
+        0,
+        0,
+      )
+      let matches = brotli_bounded_previous_hash_matches_with_cache(
+        data, previous, position, config, current_cache,
+      )
+      for match_index in 0..<matches.length() {
+        let match_ = matches[match_index]
+        if match_.length >= config.min_match_length {
+          // Keep the DP bounded: several previous matches per position, and
+          // only a few representative copy lengths for each match. This grows
+          // the P4 candidate graph without taking on full Zopfli search cost.
+          let bounded_lengths : FixedArray[Int] = [
+            config.min_match_length,
+            match_.length / 2,
+            match_.length,
+          ]
+          for i in 0..<bounded_lengths.length() {
+            let copy_length = bounded_lengths[i]
+            if copy_length < config.min_match_length ||
+              copy_length > match_.length ||
+              position + copy_length > len {
+              continue
+            }
+            let end = position + copy_length
+            let copy_cost = base_cost +
+              brotli_bounded_shortest_path_copy_cost(
+                copy_length,
+                match_.distance,
+                position,
+                current_cache,
+              )
             let next_cache = brotli_copy_distance_cache(current_cache)
             let distance_code = brotli_compute_distance_code(
               match_.distance,
@@ -2757,36 +2852,62 @@ fn brotli_build_bounded_shortest_path_command_candidate(
               match_.distance,
               distance_code,
             )
-            costs[end] = copy_cost
-            state_cache0[end] = next_cache[0]
-            state_cache1[end] = next_cache[1]
-            state_cache2[end] = next_cache[2]
-            state_cache3[end] = next_cache[3]
-            choice_copy_length[end] = copy_length
-            choice_copy_distance[end] = match_.distance
+            brotli_bounded_shortest_path_offer_state(
+              costs,
+              state_cache0,
+              state_cache1,
+              state_cache2,
+              state_cache3,
+              previous_position,
+              previous_slot,
+              choice_copy_length,
+              choice_copy_distance,
+              end,
+              copy_cost,
+              next_cache,
+              position,
+              slot,
+              copy_length,
+              match_.distance,
+            )
           }
         }
       }
     }
   }
-  if costs[len] >= unreachable_cost {
+  let mut terminal_slot = 0
+  let terminal0 = brotli_bounded_shortest_path_state_index(len, 0)
+  let terminal1 = brotli_bounded_shortest_path_state_index(len, 1)
+  if costs[terminal1] < costs[terminal0] {
+    terminal_slot = 1
+  }
+  let terminal_index = brotli_bounded_shortest_path_state_index(
+    len, terminal_slot,
+  )
+  if costs[terminal_index] >= unreachable_cost {
     return None
   }
   let segment_starts : Array[Int] = []
   let segment_lengths : Array[Int] = []
   let segment_distances : Array[Int] = []
   let mut position = len
+  let mut slot = terminal_slot
   while position > 0 {
-    let copy_length = choice_copy_length[position]
+    let state_index = brotli_bounded_shortest_path_state_index(position, slot)
+    let copy_length = choice_copy_length[state_index]
+    let from_position = previous_position[state_index]
+    let from_slot = previous_slot[state_index]
+    if from_position < 0 || from_slot < 0 {
+      return None
+    }
     if copy_length > 0 {
-      let start = position - copy_length
+      let start = from_position
       segment_starts.push(start)
       segment_lengths.push(copy_length)
-      segment_distances.push(choice_copy_distance[position])
-      position = start
-    } else {
-      position -= 1
+      segment_distances.push(choice_copy_distance[state_index])
     }
+    position = from_position
+    slot = from_slot
   }
   if segment_lengths.length() == 0 ||
     segment_lengths.length() > config.max_commands {
