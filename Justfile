@@ -65,6 +65,10 @@ brotli-release-package:
 brotli-fuzz-soak duration_minutes='1440':
     nu tools/brotli/fuzz/soak.nu --duration-min {{ duration_minutes }}
 
+# Run bounded full-corpus Brotli fuzz soak iterations
+brotli-fuzz-soak-bounded iterations='3':
+    nu tools/brotli/fuzz/soak.nu --duration-min 1440 --max-iterations {{ iterations }}
+
 # Run one short Brotli fuzz soak iteration
 brotli-fuzz-soak-smoke:
     nu tools/brotli/fuzz/soak.nu --duration-min 0 --max-iterations 1 --decoder-limit 2 --roundtrip-count 1 --roundtrip-max-len 16 --roundtrip-qualities 2

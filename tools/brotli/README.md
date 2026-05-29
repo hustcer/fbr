@@ -66,8 +66,9 @@ automatically recovers if a previous interrupted run left a stale lock behind.
 `soak.nu` repeats the decoder fuzz corpus and encoder roundtrip fuzz loops for
 a duration or iteration limit and writes JSONL progress to
 `target/brotli-fuzz-soak/soak.jsonl`. The default duration is 24 hours for the
-documented long fuzz gate. Use `just brotli-fuzz-soak-smoke` for a one-iteration
-local smoke check.
+documented long fuzz gate. Use `just brotli-fuzz-soak-bounded` for a
+full-corpus finite soak and `just brotli-fuzz-soak-smoke` for a one-iteration
+small-corpus local smoke check.
 
 ## Release Validation
 
@@ -79,6 +80,7 @@ just brotli-release
 just brotli-release-smoke
 just brotli-release-generated-fuzz
 just brotli-release-package
+just brotli-fuzz-soak-bounded
 ```
 
 Runs the practical Brotli release gate from one command: MoonBit all-target
@@ -97,6 +99,8 @@ The Justfile recipes are thin entry points:
   corpus plus encoder roundtrip fuzz.
 - `just brotli-release-package`: packaging and publish dry-run package
   verification only.
+- `just brotli-fuzz-soak-bounded`: finite full-corpus decoder fuzz and encoder
+  roundtrip soak iterations.
 
 ## Silesia q=11 Verification
 

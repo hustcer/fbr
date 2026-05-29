@@ -3217,6 +3217,12 @@ The bounded soak runner also passed a multi-iteration local execution:
 nu tools/brotli/fuzz/soak.nu --duration-min 1440 --max-iterations 3
 ```
 
+The repo Justfile now exposes the same full-corpus bounded soak shape as:
+
+```nu
+just brotli-fuzz-soak-bounded
+```
+
 Result:
 
 | Phase | Iterations | Result |
