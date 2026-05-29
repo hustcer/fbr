@@ -120,6 +120,9 @@ All notable changes to this project will be documented in this file.
 - The q10/q11 bounded seed now also uses a bounded suffix binary-tree match
   source, giving the small-input shortest-path candidate a first suffix-tree
   style match provider alongside the existing hash-chain matches.
+- The q10/q11 bounded seed now shares one bounded-copy transition helper for
+  hash-chain and suffix-tree matches, keeping recent-distance-cache updates and
+  beam insertion behavior aligned for future P4 parser work.
 
 ### Tests and docs
 
