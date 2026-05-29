@@ -1690,6 +1690,18 @@ test "brotli_sync q10 bounded shortest-path enumerates multiple matches" {
 }
 
 ///|
+test "brotli_sync q10 bounded shortest-path costs recent distances" {
+  let cached : FixedArray[Int] = [4, 11, 15, 16]
+  let uncached : FixedArray[Int] = [11, 15, 16, 20]
+  assert_true(
+    brotli_bounded_shortest_path_copy_cost(8, 4, 64, cached) <
+    brotli_bounded_shortest_path_copy_cost(8, 4, 64, uncached),
+  )
+  assert_eq(brotli_compute_distance_code(4, 64, cached), 0)
+  assert_true(brotli_compute_distance_code(4, 64, uncached) >= 16)
+}
+
+///|
 test "brotli_sync q2 through q9 allow two-mebibyte chunks" {
   assert_eq(brotli_standard_chunk_size_for_quality(2), 2097152)
   assert_eq(brotli_standard_chunk_size_for_quality(8), 2097152)

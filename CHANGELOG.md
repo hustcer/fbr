@@ -108,13 +108,16 @@ All notable changes to this project will be documented in this file.
   matches per input position before the bounded DP chooses copy transitions,
   making the candidate graph closer to the planned Zopfli parser while keeping
   the same 32 KiB cap and exact-cost final selection.
+- The same bounded q10/q11 seed now propagates the selected path's
+  recent-distance cache through DP states and uses that cache for match
+  enumeration and short-distance copy-cost estimates.
 
 ### Tests and docs
 
 - New `docs/brotli.md` planning document with phased delivery details.
 - New `docs/brotli_benchmarks.md` recording every accepted size/time delta
   for the Brotli encoder/decoder.
-- 462 in-package tests covering Brotli decoder helpers, transforms, fixtures,
+- 463 in-package tests covering Brotli decoder helpers, transforms, fixtures,
   roundtrips, q0..q11 end-to-end, stream chunking, and security limits, all
   passing on `wasm`, `wasm-gc`, `js`, and `native`.
 - Brotli release-validation checkpoint recorded: q0/q1 2 MiB stored streams

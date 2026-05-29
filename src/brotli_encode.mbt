@@ -2619,12 +2619,20 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
 }
 
 ///|
-fn brotli_bounded_shortest_path_copy_cost(length : Int, distance : Int) -> Int {
+fn brotli_bounded_shortest_path_copy_cost(
+  length : Int,
+  distance : Int,
+  position : Int,
+  distance_cache : FixedArray[Int],
+) -> Int {
   // This is a parser heuristic, not the final cost. The chosen command list is
   // still written and compared by the exact meta-block writer before use.
+  let distance_code = brotli_compute_distance_code(
+    distance, position, distance_cache,
+  )
   let distance_extra_bits = match
     (
-      try? brotli_distance_prefix_for_distance(distance) :
+      try? brotli_distance_prefix_for_code(distance_code) :
       Result[BrotliCommandPrefix, FzipError]) {
     Ok(prefix) => prefix.insert_extra_bits
     Err(_) => 24
@@ -2680,6 +2688,10 @@ fn brotli_build_bounded_shortest_path_command_candidate(
   let previous = brotli_previous_match_positions(data, config)
   let unreachable_cost = len * 16 + 1_000_000
   let costs = FixedArray::make(len + 1, unreachable_cost)
+  let state_cache0 = FixedArray::make(len + 1, distance_cache[0])
+  let state_cache1 = FixedArray::make(len + 1, distance_cache[1])
+  let state_cache2 = FixedArray::make(len + 1, distance_cache[2])
+  let state_cache3 = FixedArray::make(len + 1, distance_cache[3])
   let choice_copy_length = FixedArray::make(len + 1, 0)
   let choice_copy_distance = FixedArray::make(len + 1, 0)
   costs[0] = 0
@@ -2688,14 +2700,24 @@ fn brotli_build_bounded_shortest_path_command_candidate(
     if base_cost >= unreachable_cost {
       continue
     }
+    let current_cache : FixedArray[Int] = [
+      state_cache0[position],
+      state_cache1[position],
+      state_cache2[position],
+      state_cache3[position],
+    ]
     let literal_cost = base_cost + 8
     if literal_cost < costs[position + 1] {
       costs[position + 1] = literal_cost
+      state_cache0[position + 1] = current_cache[0]
+      state_cache1[position + 1] = current_cache[1]
+      state_cache2[position + 1] = current_cache[2]
+      state_cache3[position + 1] = current_cache[3]
       choice_copy_length[position + 1] = 0
       choice_copy_distance[position + 1] = 0
     }
     let matches = brotli_bounded_previous_hash_matches_with_cache(
-      data, previous, position, config, distance_cache,
+      data, previous, position, config, current_cache,
     )
     for match_index in 0..<matches.length() {
       let match_ = matches[match_index]
@@ -2717,9 +2739,29 @@ fn brotli_build_bounded_shortest_path_command_candidate(
           }
           let end = position + copy_length
           let copy_cost = base_cost +
-            brotli_bounded_shortest_path_copy_cost(copy_length, match_.distance)
+            brotli_bounded_shortest_path_copy_cost(
+              copy_length,
+              match_.distance,
+              position,
+              current_cache,
+            )
           if copy_cost < costs[end] {
+            let next_cache = brotli_copy_distance_cache(current_cache)
+            let distance_code = brotli_compute_distance_code(
+              match_.distance,
+              position,
+              next_cache,
+            )
+            brotli_update_distance_cache(
+              next_cache,
+              match_.distance,
+              distance_code,
+            )
             costs[end] = copy_cost
+            state_cache0[end] = next_cache[0]
+            state_cache1[end] = next_cache[1]
+            state_cache2[end] = next_cache[2]
+            state_cache3[end] = next_cache[3]
             choice_copy_length[end] = copy_length
             choice_copy_distance[end] = match_.distance
           }
