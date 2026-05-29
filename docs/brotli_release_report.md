@@ -223,6 +223,7 @@ Current local release coverage:
 - Stale lock recovery for interrupted fuzz runs.
 - Scripted long fuzz soak entry points:
   - `nu tools/brotli/fuzz/soak.nu`
+  - `nu tools/brotli/fuzz/soak.nu --append-log`
   - `just brotli-fuzz-soak`
   - `just brotli-fuzz-soak-smoke`
 - A bounded soak execution has passed 3 full decoder-fuzz iterations and 3
@@ -231,8 +232,9 @@ Current local release coverage:
 Reserved final-release work:
 
 - The original 24-hour fuzz gate is now scriptable through
-  `tools/brotli/fuzz/soak.nu`, but this report does not claim that a 24-hour
-  soak has completed.
+  `tools/brotli/fuzz/soak.nu`; append mode preserves JSONL evidence and
+  iteration numbering for interrupted or segmented runs, but this report does
+  not claim that a 24-hour soak has completed.
 - Any project-required 24-hour soak should still be run before the final public
   release artifact is cut.
 

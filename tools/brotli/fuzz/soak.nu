@@ -11,6 +11,44 @@ def append-log [path: string, row: record]: nothing -> nothing {
   ($row | to json --raw) + (char newline) | save --append $path
 }
 
+def logged-max-iteration [path: string]: nothing -> int {
+  if not ($path | path exists) {
+    return 0
+  }
+  # Long soaks may be resumed from a partially written JSONL log. Ignore
+  # malformed or unrelated rows so one bad line does not discard useful
+  # progress evidence.
+  let iterations = (
+    open --raw $path
+    | lines
+    | where {|line| ($line | str trim | str length) > 0 }
+    | each {|line|
+      try {
+        $line | from json
+      } catch {
+        null
+      }
+    }
+    | each {|row|
+      if $row == null or ($row.iteration? | default null) == null {
+        null
+      } else {
+        try {
+          $row.iteration | into int
+        } catch {
+          null
+        }
+      }
+    }
+    | where {|iteration| $iteration != null }
+  )
+  if ($iterations | length) == 0 {
+    0
+  } else {
+    $iterations | math max
+  }
+}
+
 def run-phase [name: string, iteration: int, args: list<string>, log_path: string]: nothing -> record {
   print $"==> iteration ($iteration) ($name)"
   let started = date now
@@ -57,6 +95,7 @@ def main [
   --roundtrip-qualities: string = "0,1,2,9,11"
   --roundtrip-target: string = "native"
   --log: string = $default_log
+  --append-log
 ]: nothing -> nothing {
   if $duration_min < 0 {
     print --stderr "Duration minutes must be zero or greater."
@@ -74,9 +113,17 @@ def main [
   let started = date now
   let log_path = ($log | path expand)
   mkdir ($log_path | path dirname)
-  rm --force $log_path
+  # Default runs start with a clean evidence log. Append mode is explicit so
+  # segmented long soaks can continue iteration numbering without hiding stale
+  # rows in ordinary local validation.
+  let start_iteration = if $append_log {
+    logged-max-iteration $log_path
+  } else {
+    rm --force $log_path
+    0
+  }
 
-  mut iteration = 0
+  mut iteration = $start_iteration
   mut results = []
   loop {
     $iteration += 1

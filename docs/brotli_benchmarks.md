@@ -3267,3 +3267,28 @@ soak log contained 6 successful rows and left no temporary harness files.
 
 This is release-validation tooling only; it does not change Brotli
 encode/decode behavior or the recorded codec target-perf baseline.
+
+## 2026-05-29 — Soak Log Append Mode
+
+`tools/brotli/fuzz/soak.nu` now accepts:
+
+```nu
+nu tools/brotli/fuzz/soak.nu --append-log
+```
+
+Normal runs still start with a clean JSONL log. With `--append-log`, the runner
+keeps the existing log, ignores empty or malformed rows while scanning it, and
+continues from the largest recorded `iteration` value. This makes interrupted
+or deliberately segmented long soaks usable as one continuous evidence log
+without weakening the default local-validation behavior.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `nu --ide-check 0 tools/brotli/fuzz/soak.nu` | parsed successfully |
+| `nu tools/brotli/fuzz/soak.nu --log target/brotli-fuzz-soak-append-test/soak.jsonl --duration-min 0 --max-iterations 1 --decoder-limit 1 --roundtrip-count 1 --roundtrip-max-len 8 --roundtrip-qualities 2` | clean run wrote two iteration-1 rows |
+| same command with `--append-log --max-iterations 2` | appended two iteration-2 rows, leaving four total rows |
+
+This is release-validation tooling only; it does not change Brotli
+encode/decode behavior or the recorded codec target-perf baseline.

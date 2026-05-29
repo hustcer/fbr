@@ -37,6 +37,7 @@ nu tools/brotli/fuzz/run.nu --limit 25 --target all
 nu tools/brotli/fuzz/roundtrip.nu
 nu tools/brotli/fuzz/roundtrip.nu --count 25 --qualities 2,9,11 --target wasm-gc
 nu tools/brotli/fuzz/soak.nu
+nu tools/brotli/fuzz/soak.nu --append-log
 just brotli-fuzz-soak
 just brotli-fuzz-soak-smoke
 ```
@@ -66,9 +67,12 @@ automatically recovers if a previous interrupted run left a stale lock behind.
 `soak.nu` repeats the decoder fuzz corpus and encoder roundtrip fuzz loops for
 a duration or iteration limit and writes JSONL progress to
 `target/brotli-fuzz-soak/soak.jsonl`. The default duration is 24 hours for the
-documented long fuzz gate. Use `just brotli-fuzz-soak-bounded` for a
-full-corpus finite soak and `just brotli-fuzz-soak-smoke` for a one-iteration
-small-corpus local smoke check.
+documented long fuzz gate. Each normal run starts with a clean log; pass
+`--append-log` when resuming an interrupted or segmented long soak so existing
+JSONL rows are preserved and iteration numbering continues from the largest
+recorded iteration. Use `just brotli-fuzz-soak-bounded` for a full-corpus
+finite soak and `just brotli-fuzz-soak-smoke` for a one-iteration small-corpus
+local smoke check.
 
 ## Release Validation
 

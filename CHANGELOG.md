@@ -139,6 +139,9 @@ All notable changes to this project will be documented in this file.
   release-validation gate sets.
 - Recorded a full `just brotli-release-candidate` pass covering the practical
   release gate, generated corpus gate, and bounded full-corpus soak.
+- Brotli soak runner now accepts `--append-log` so interrupted or segmented
+  long fuzz soaks can preserve existing JSONL evidence and continue iteration
+  numbering.
 
 ## v0.8.0 - 2026-05-20
 
