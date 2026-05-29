@@ -3362,6 +3362,28 @@ Validation:
 
 `target-perf.nu` was not rerun for this increment per maintainer instruction.
 
+## 2026-05-30 — q10/q11 Greedy-Seeded Cost Model
+
+The q10/q11 bounded shortest-path seed now initializes its lightweight parser
+cost model from the current greedy LZ77 command stream. Literal and explicit
+distance symbol frequencies are converted to Huffman code-length estimates, so
+literal transitions and copy-distance transitions are guided by the same kind
+of preliminary histogram information required by the P4 Zopfli plan. The
+resulting command list still goes through exact meta-block costing before it
+can win chunk selection.
+
+This remains a bounded seed, not the full suffix-tree/Zopfli backend.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `moon test --target native --filter '*bounded shortest-path*'` | passed; 5/5 tests cover bounded command roundtrip, multiple-match enumeration, recent-distance costs, cost-model histograms, and two-state beam retention |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged |
+
+`target-perf.nu` was not rerun for this increment per maintainer instruction.
+
 ## 2026-05-29 — Command-Block Histogram Split Candidate
 
 The q4+ LZ77 meta-block writer now estimates command-symbol histograms at the

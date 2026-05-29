@@ -114,13 +114,16 @@ All notable changes to this project will be documented in this file.
 - The q10/q11 bounded seed now keeps a two-state beam at each input position,
   retaining a second low-cost parser state with its own recent-distance cache
   and traceback.
+- The q10/q11 bounded seed initializes its lightweight parser cost model from
+  the current greedy LZ77 command stream, using observed literal and distance
+  histograms to estimate transition costs before exact-cost selection.
 
 ### Tests and docs
 
 - New `docs/brotli.md` planning document with phased delivery details.
 - New `docs/brotli_benchmarks.md` recording every accepted size/time delta
   for the Brotli encoder/decoder.
-- 464 in-package tests covering Brotli decoder helpers, transforms, fixtures,
+- 465 in-package tests covering Brotli decoder helpers, transforms, fixtures,
   roundtrips, q0..q11 end-to-end, stream chunking, and security limits, all
   passing on `wasm`, `wasm-gc`, `js`, and `native`.
 - Brotli release-validation checkpoint recorded: q0/q1 2 MiB stored streams

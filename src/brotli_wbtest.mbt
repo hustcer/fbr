@@ -1693,12 +1693,28 @@ test "brotli_sync q10 bounded shortest-path enumerates multiple matches" {
 test "brotli_sync q10 bounded shortest-path costs recent distances" {
   let cached : FixedArray[Int] = [4, 11, 15, 16]
   let uncached : FixedArray[Int] = [11, 15, 16, 20]
+  let model = brotli_bounded_shortest_path_default_cost_model()
   assert_true(
-    brotli_bounded_shortest_path_copy_cost(8, 4, 64, cached) <
-    brotli_bounded_shortest_path_copy_cost(8, 4, 64, uncached),
+    brotli_bounded_shortest_path_copy_cost(8, 4, 64, cached, model) <
+    brotli_bounded_shortest_path_copy_cost(8, 4, 64, uncached, model),
   )
   assert_eq(brotli_compute_distance_code(4, 64, cached), 0)
   assert_true(brotli_compute_distance_code(4, 64, uncached) >= 16)
+}
+
+///|
+test "brotli_sync q10 bounded shortest-path cost model follows histograms" {
+  let input : FixedArray[Byte] = [
+    b'a', b'a', b'a', b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h', b'i',
+  ]
+  let commands : Array[BrotliEncodeCommand] = []
+  commands.push(brotli_make_encode_command(0, input.length(), 0, 0, false))
+  let model = brotli_bounded_shortest_path_cost_model_from_commands(
+    input, commands,
+  )
+  assert_true(
+    model.literal_bits[b'a'.to_int()] <= model.literal_bits[b'i'.to_int()],
+  )
 }
 
 ///|

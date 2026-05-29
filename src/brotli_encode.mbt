@@ -2619,26 +2619,125 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
 }
 
 ///|
+priv struct BrotliBoundedShortestPathCostModel {
+  literal_bits : FixedArray[Int]
+  distance_bits : FixedArray[Int]
+}
+
+///|
+fn brotli_bounded_shortest_path_bits_from_frequencies(
+  frequencies : FixedArray[Int],
+  default_bits : Int,
+) -> FixedArray[Int] {
+  let bits = FixedArray::make(frequencies.length(), default_bits)
+  let mut nonzero = 0
+  let mut only_symbol = 0
+  for i in 0..<frequencies.length() {
+    if frequencies[i] > 0 {
+      nonzero += 1
+      only_symbol = i
+    }
+  }
+  if nonzero == 0 {
+    return bits
+  }
+  if nonzero == 1 {
+    bits[only_symbol] = 0
+    return bits
+  }
+  let (lengths, _) = h_tree(frequencies, brotli_huffman_max_code_length)
+  if lengths.length() == 0 {
+    return bits
+  }
+  for i in 0..<lengths.length() {
+    if lengths[i].to_int() > 0 {
+      bits[i] = lengths[i].to_int()
+    }
+  }
+  bits
+}
+
+///|
+fn brotli_bounded_shortest_path_default_cost_model() -> BrotliBoundedShortestPathCostModel {
+  {
+    literal_bits: FixedArray::make(brotli_num_literal_symbols, 8),
+    distance_bits: FixedArray::make(brotli_distance_alphabet_size(0, 0, 24), 6),
+  }
+}
+
+///|
+fn brotli_bounded_shortest_path_cost_model_from_commands(
+  data : FixedArray[Byte],
+  commands : Array[BrotliEncodeCommand],
+) -> BrotliBoundedShortestPathCostModel {
+  let literal_frequencies = FixedArray::make(brotli_num_literal_symbols, 0)
+  let distance_frequencies = FixedArray::make(
+    brotli_distance_alphabet_size(0, 0, 24),
+    0,
+  )
+  for i in 0..<commands.length() {
+    let command = commands[i]
+    for j in 0..<command.insert_length {
+      literal_frequencies[data[command.insert_start + j].to_int()] += 1
+    }
+    if brotli_command_uses_distance_symbol(command) {
+      distance_frequencies[command.distance_prefix.symbol] += 1
+    }
+  }
+  {
+    literal_bits: brotli_bounded_shortest_path_bits_from_frequencies(
+      literal_frequencies, 8,
+    ),
+    distance_bits: brotli_bounded_shortest_path_bits_from_frequencies(
+      distance_frequencies, 6,
+    ),
+  }
+}
+
+///|
+fn brotli_bounded_shortest_path_cost_model(
+  data : FixedArray[Byte],
+  config : BrotliHashConfig,
+  distance_cache : FixedArray[Int],
+) -> BrotliBoundedShortestPathCostModel {
+  let greedy_cache = brotli_copy_distance_cache(distance_cache)
+  match
+    brotli_build_simple_lz77_commands_with_distance_cache(
+      data, config, greedy_cache,
+    ) {
+    Some(commands) =>
+      brotli_bounded_shortest_path_cost_model_from_commands(data, commands)
+    None => brotli_bounded_shortest_path_default_cost_model()
+  }
+}
+
+///|
 fn brotli_bounded_shortest_path_copy_cost(
   length : Int,
   distance : Int,
   position : Int,
   distance_cache : FixedArray[Int],
+  model : BrotliBoundedShortestPathCostModel,
 ) -> Int {
   // This is a parser heuristic, not the final cost. The chosen command list is
   // still written and compared by the exact meta-block writer before use.
   let distance_code = brotli_compute_distance_code(
     distance, position, distance_cache,
   )
-  let distance_extra_bits = match
-    (
-      try? brotli_distance_prefix_for_code(distance_code) :
-      Result[BrotliCommandPrefix, FzipError]) {
-    Ok(prefix) => prefix.insert_extra_bits
-    Err(_) => 24
+  let distance_bits = if distance_code == 0 {
+    0
+  } else {
+    match
+      (
+        try? brotli_distance_prefix_for_code(distance_code) :
+        Result[BrotliCommandPrefix, FzipError]) {
+      Ok(prefix) =>
+        model.distance_bits[prefix.symbol] + prefix.insert_extra_bits
+      Err(_) => 24
+    }
   }
   let length_bits = if length < 16 { 4 } else if length < 64 { 8 } else { 12 }
-  16 + length_bits + distance_extra_bits
+  16 + length_bits + distance_bits
 }
 
 ///|
@@ -2769,6 +2868,9 @@ fn brotli_build_bounded_shortest_path_command_candidate(
   }
   let len = data.length()
   let previous = brotli_previous_match_positions(data, config)
+  let cost_model = brotli_bounded_shortest_path_cost_model(
+    data, config, distance_cache,
+  )
   let unreachable_cost = len * 16 + 1_000_000
   let state_count = (len + 1) * brotli_bounded_shortest_path_beam_width
   let costs = FixedArray::make(state_count, unreachable_cost)
@@ -2805,7 +2907,7 @@ fn brotli_build_bounded_shortest_path_command_candidate(
         choice_copy_length,
         choice_copy_distance,
         position + 1,
-        base_cost + 8,
+        base_cost + cost_model.literal_bits[data[position].to_int()],
         current_cache,
         position,
         slot,
@@ -2840,6 +2942,7 @@ fn brotli_build_bounded_shortest_path_command_candidate(
                 match_.distance,
                 position,
                 current_cache,
+                cost_model,
               )
             let next_cache = brotli_copy_distance_cache(current_cache)
             let distance_code = brotli_compute_distance_code(
