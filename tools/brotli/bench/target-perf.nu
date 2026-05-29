@@ -2,12 +2,55 @@
 
 const bench_dir = "target/brotli-bench"
 const harness_lock_dir = "tools/brotli/.harness-lock"
+const temp_test = "src/brotli_target_perf_wbtest.mbt"
+
+def process-alive [pid: int]: nothing -> bool {
+  let probe = (^ps -p ($pid | into string) | complete)
+  $probe.exit_code == 0
+}
+
+def lock-pid-path []: nothing -> string {
+  $harness_lock_dir | path join "pid"
+}
+
+def stale-harness-lock []: nothing -> bool {
+  let pid_path = (lock-pid-path)
+  if not ($pid_path | path exists) {
+    true
+  } else {
+    try {
+      let pid = (open --raw $pid_path | str trim | into int)
+      not (process-alive $pid)
+    } catch {
+      true
+    }
+  }
+}
+
+def write-lock-pid []: nothing -> nothing {
+  $nu.pid | into string | save --force (lock-pid-path)
+}
 
 def acquire-harness-lock []: nothing -> nothing {
   let made = (^mkdir $harness_lock_dir | complete)
   if $made.exit_code != 0 {
-    print --stderr "Another Brotli harness is running; retry after it finishes."
-    exit 1
+    if (stale-harness-lock) {
+      rm --force --recursive $harness_lock_dir
+      let retry = (^mkdir $harness_lock_dir | complete)
+      if $retry.exit_code == 0 {
+        write-lock-pid
+      } else {
+        print --stderr "Another Brotli harness is running; retry after it finishes."
+        exit 1
+      }
+    } else {
+      let pid_path = (lock-pid-path)
+      let owner = if ($pid_path | path exists) { open --raw $pid_path | str trim } else { "unknown" }
+      print --stderr $"Another Brotli harness is running \(pid: ($owner)\); retry after it finishes."
+      exit 1
+    }
+  } else {
+    write-lock-pid
   }
 }
 
@@ -21,6 +64,14 @@ def parse-csv-ints [text: string]: nothing -> list<int> {
 
 def parse-csv-strings [text: string]: nothing -> list<string> {
   $text | split row "," | each {|value| $value | str trim }
+}
+
+def write-placeholder-temp-test [path: string]: nothing -> nothing {
+  [
+    "// Placeholder for tools/brotli/bench/target-perf.nu."
+    "// The harness rewrites this ignored file during a target-perf run."
+    ""
+  ] | str join (char newline) | save --force $path
 }
 
 def parse-size-marker [text: string]: nothing -> int {
@@ -242,7 +293,6 @@ def main [
   let input_size = (ls $input | get size.0 | into int)
   let run_id = $"((date now | into int))-((random int 0..1000000000))"
   let test_name = $"brotli target perf generated ($run_id)"
-  let temp_test = $"src/brotli_target_perf_($run_id)_wbtest.mbt"
   mut rows = []
   acquire-harness-lock
 
@@ -293,7 +343,7 @@ def main [
     }
   }
 
-  rm --force $temp_test
+  write-placeholder-temp-test $temp_test
   release-harness-lock
   if $json {
     print ($rows | to json --raw)

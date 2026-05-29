@@ -179,6 +179,9 @@ All notable changes to this project will be documented in this file.
   restore ignored placeholder white-box test files instead of deleting the
   generated source path, avoiding stale `_build` missing-input failures in
   subsequent incremental MoonBit commands.
+- Brotli conformance and target-perf harnesses now use the same owner-PID
+  stale-lock recovery as the fuzz runners; target-perf also uses a stable
+  ignored placeholder white-box test path.
 
 ## v0.8.0 - 2026-05-20
 

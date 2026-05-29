@@ -66,9 +66,10 @@ through `unbrotli_sync`, and asserts byte-for-byte equality. The defaults cover
 q0, q1, q2, q9, and q11 on the native backend; use `--qualities` and `--target`
 to broaden release validation.
 
-Both fuzz runners use `tools/brotli/.harness-lock` to avoid overlapping
-temporary white-box test files. The lock records the owning process ID and
-automatically recovers if a previous interrupted run left a stale lock behind.
+Conformance and fuzz runners use `tools/brotli/.harness-lock` to avoid
+overlapping temporary white-box test files. The lock records the owning process
+ID and automatically recovers if a previous interrupted run left a stale lock
+behind.
 
 `soak.nu` repeats the decoder fuzz corpus and encoder roundtrip fuzz loops for
 a duration or iteration limit and writes JSONL progress to
@@ -197,6 +198,11 @@ JavaScript harness remains useful for file-based verification but is not a good
 default performance signal. Encode mode reports both target encode time and
 MoonBit-vs-Google output size from the same target run, so ratio work cannot
 hide unacceptable runtime regressions.
+
+`target-perf.nu` shares the Brotli harness lock with conformance and fuzz
+runners, including owner-PID stale-lock recovery. Its generated white-box test
+uses an ignored stable placeholder path so incremental `moon` commands do not
+retain missing generated-test inputs after a benchmark run.
 
 ## Chunk Match Diagnostics
 

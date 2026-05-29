@@ -52,6 +52,8 @@ Additional reproducible release-validation coverage has also passed:
 - Decoder fuzz harness with batching and target selection.
 - Encoder roundtrip fuzz harness.
 - Shared Brotli harness locking with stale-lock recovery.
+- Stable ignored generated-test placeholders for conformance, fuzz, and
+  target-perf harnesses, avoiding stale incremental MoonBit inputs.
 - Practical release validation runner.
 - Justfile entry points for full, smoke, and package-only Brotli release
   validation.
