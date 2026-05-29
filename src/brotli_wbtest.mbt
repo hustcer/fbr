@@ -1603,6 +1603,63 @@ test "brotli_sync q9 admits shorter high-quality matches" {
 }
 
 ///|
+test "brotli_sync q10 bounded shortest-path candidate roundtrips" {
+  let input = FixedArray::make(12000, b'\x00')
+  let pattern : FixedArray[Byte] = [
+    b'm', b'o', b'o', b'n', b'b', b'i', b't', b'-', b'b', b'r', b'o', b't', b'l',
+    b'i', b'-', b'q', b'1', b'0', b'-', b'p', b'a', b'r', b's', b'e',
+  ]
+  for block in 0..<500 {
+    let offset = block * pattern.length()
+    for i in 0..<pattern.length() {
+      input[offset + i] = pattern[i]
+    }
+    input[offset + pattern.length() - 1] = (block & 0xff).to_byte()
+  }
+  let config = brotli_four_byte_hash_config(
+    brotli_high_quality_hash_config_for_quality(10),
+  )
+  let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
+  match
+    brotli_build_bounded_shortest_path_command_candidate(
+      input, config, distance_cache,
+    ) {
+    Some(candidate) => {
+      assert_true(candidate.commands.length() > 0)
+      assert_true(brotli_commands_copy_bytes(candidate.commands) > 0)
+      let body = brotli_write_best_lz77_metablock(
+        input,
+        candidate.commands,
+        true,
+        10,
+        true,
+        0,
+        0,
+      )
+      let encoded = BrotliBitWriter::new(16 + body.buf.length())
+      brotli_encode_window_bits(encoded, 22)
+      encoded.write_from_bits(body.buf, body.bit_pos)
+      let decoded = unbrotli_sync(encoded.finish())
+      assert_eq(decoded.length(), input.length())
+      for i in 0..<decoded.length() {
+        assert_eq(decoded[i], input[i])
+      }
+    }
+    None => fail("expected bounded shortest-path candidate")
+  }
+  let encoded = brotli_sync(input, opts={
+    quality: 10,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let decoded = unbrotli_sync(encoded)
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q2 through q9 allow two-mebibyte chunks" {
   assert_eq(brotli_standard_chunk_size_for_quality(2), 2097152)
   assert_eq(brotli_standard_chunk_size_for_quality(8), 2097152)

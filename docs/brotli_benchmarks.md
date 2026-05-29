@@ -3268,6 +3268,32 @@ soak log contained 6 successful rows and left no temporary harness files.
 This is release-validation tooling only; it does not change Brotli
 encode/decode behavior or the recorded codec target-perf baseline.
 
+## 2026-05-29 — q10/q11 Bounded Shortest-Path Seed
+
+The q10/q11 encoder now tries a small-input bounded shortest-path command
+candidate before the existing high-quality mixed-dictionary candidate. The
+parser uses one longest hash-chain match per position and a bounded set of
+copy lengths, then hands the generated command list to the exact meta-block
+writer. The outer chunk selector still chooses by final bit count, so this
+cannot replace a smaller existing candidate.
+
+This is a conservative P4 seed, not the full `docs/brotli.md` Zopfli/suffix-tree
+backend. It is capped at 32 KiB inputs and leaves the q10/q11 release ratio
+exception in place.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `moon test --target native --filter '*bounded shortest-path*'` | passed; the bounded candidate writes a decodable final meta-block and q10 public roundtrip passes |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged |
+| `moon check --target all && moon test --target all` | all-target check passed; 461 tests passed on wasm, wasm-gc, js, and native |
+
+`target-perf.nu` was not rerun for this increment per the latest maintainer
+instruction; the 128 KiB Silesia sample is larger than the 32 KiB candidate
+cap and shows no size change.
+
 ## 2026-05-29 — Command-Block Histogram Split Candidate
 
 The q4+ LZ77 meta-block writer now estimates command-symbol histograms at the

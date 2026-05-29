@@ -100,13 +100,17 @@ All notable changes to this project will be documented in this file.
   checkpoint. The current streams are valid and externally decodable, but the
   documented 2% P4 ratio target still requires a real bounded
   shortest-path/Zopfli backend or an explicit release exception.
+- Brotli q10/q11 now exact-cost a bounded small-input shortest-path seed
+  candidate for inputs up to 32 KiB. The candidate uses a bounded DP over
+  hash-chain matches and is selected only when the final written meta-block is
+  smaller than the existing high-quality and mixed-dictionary candidates.
 
 ### Tests and docs
 
 - New `docs/brotli.md` planning document with phased delivery details.
 - New `docs/brotli_benchmarks.md` recording every accepted size/time delta
   for the Brotli encoder/decoder.
-- 460 in-package tests covering Brotli decoder helpers, transforms, fixtures,
+- 461 in-package tests covering Brotli decoder helpers, transforms, fixtures,
   roundtrips, q0..q11 end-to-end, stream chunking, and security limits, all
   passing on `wasm`, `wasm-gc`, `js`, and `native`.
 - Brotli release-validation checkpoint recorded: q0/q1 2 MiB stored streams

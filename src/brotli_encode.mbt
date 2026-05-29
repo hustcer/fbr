@@ -2619,6 +2619,193 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
 }
 
 ///|
+fn brotli_bounded_shortest_path_copy_cost(length : Int, distance : Int) -> Int {
+  // This is a parser heuristic, not the final cost. The chosen command list is
+  // still written and compared by the exact meta-block writer before use.
+  let distance_extra_bits = match
+    (
+      try? brotli_distance_prefix_for_distance(distance) :
+      Result[BrotliCommandPrefix, FzipError]) {
+    Ok(prefix) => prefix.insert_extra_bits
+    Err(_) => 24
+  }
+  let length_bits = if length < 16 { 4 } else if length < 64 { 8 } else { 12 }
+  16 + length_bits + distance_extra_bits
+}
+
+///|
+fn brotli_bounded_shortest_path_config(
+  config : BrotliHashConfig,
+) -> BrotliHashConfig {
+  {
+    table_size: config.table_size,
+    table_mask: config.table_mask,
+    hash_bytes: config.hash_bytes,
+    max_match_checks: if config.max_match_checks > 32 {
+      32
+    } else {
+      config.max_match_checks
+    },
+    max_match_length: if config.max_match_length > 4096 {
+      4096
+    } else {
+      config.max_match_length
+    },
+    min_match_length: config.min_match_length,
+    max_distance_cache_codes: 0,
+    lazy_lookahead: 0,
+    scan_step: 1,
+    max_commands: 12000,
+    max_input_length: 32768,
+    min_copy_ratio_percent: 8,
+    require_dense_match_density: false,
+    density_sample_step: config.density_sample_step,
+    density_required_numerator: config.density_required_numerator,
+    density_required_denominator: config.density_required_denominator,
+  }
+}
+
+///|
+fn brotli_build_bounded_shortest_path_command_candidate(
+  data : FixedArray[Byte],
+  hash_config : BrotliHashConfig,
+  distance_cache : FixedArray[Int],
+) -> BrotliCommandCandidate? {
+  let config = brotli_bounded_shortest_path_config(hash_config)
+  if data.length() < config.min_match_length ||
+    data.length() > config.max_input_length {
+    return None
+  }
+  let len = data.length()
+  let previous = brotli_previous_match_positions(data, config)
+  let unreachable_cost = len * 16 + 1_000_000
+  let costs = FixedArray::make(len + 1, unreachable_cost)
+  let choice_copy_length = FixedArray::make(len + 1, 0)
+  let choice_copy_distance = FixedArray::make(len + 1, 0)
+  costs[0] = 0
+  for position in 0..<len {
+    let base_cost = costs[position]
+    if base_cost >= unreachable_cost {
+      continue
+    }
+    let literal_cost = base_cost + 8
+    if literal_cost < costs[position + 1] {
+      costs[position + 1] = literal_cost
+      choice_copy_length[position + 1] = 0
+      choice_copy_distance[position + 1] = 0
+    }
+    let (match_length, distance) = brotli_longest_previous_hash_match_with_cache(
+      data, previous, position, config, distance_cache,
+    )
+    if match_length >= config.min_match_length {
+      // Keep the DP bounded: one longest match per position, and only a few
+      // representative copy lengths. This seeds a q10/q11 candidate without
+      // taking on the full P4 Zopfli search cost.
+      let bounded_lengths : FixedArray[Int] = [
+        config.min_match_length,
+        match_length / 2,
+        match_length,
+      ]
+      for i in 0..<bounded_lengths.length() {
+        let copy_length = bounded_lengths[i]
+        if copy_length < config.min_match_length ||
+          copy_length > match_length ||
+          position + copy_length > len {
+          continue
+        }
+        let end = position + copy_length
+        let copy_cost = base_cost +
+          brotli_bounded_shortest_path_copy_cost(copy_length, distance)
+        if copy_cost < costs[end] {
+          costs[end] = copy_cost
+          choice_copy_length[end] = copy_length
+          choice_copy_distance[end] = distance
+        }
+      }
+    }
+  }
+  if costs[len] >= unreachable_cost {
+    return None
+  }
+  let segment_starts : Array[Int] = []
+  let segment_lengths : Array[Int] = []
+  let segment_distances : Array[Int] = []
+  let mut position = len
+  while position > 0 {
+    let copy_length = choice_copy_length[position]
+    if copy_length > 0 {
+      let start = position - copy_length
+      segment_starts.push(start)
+      segment_lengths.push(copy_length)
+      segment_distances.push(choice_copy_distance[position])
+      position = start
+    } else {
+      position -= 1
+    }
+  }
+  if segment_lengths.length() == 0 ||
+    segment_lengths.length() > config.max_commands {
+    return None
+  }
+  let commands : Array[BrotliEncodeCommand] = []
+  let candidate_cache = brotli_copy_distance_cache(distance_cache)
+  let mut literal_start = 0
+  let mut copy_bytes = 0
+  let mut index = segment_lengths.length()
+  while index > 0 {
+    index -= 1
+    let copy_start = segment_starts[index]
+    let copy_length = segment_lengths[index]
+    let distance = segment_distances[index]
+    let insert_length = copy_start - literal_start
+    let distance_code = brotli_compute_distance_code(
+      distance, copy_start, candidate_cache,
+    )
+    let mut emitted_distance_code = distance_code
+    let command = match
+      brotli_try_make_encode_command_with_distance_code(
+        literal_start, insert_length, copy_length, distance, distance_code,
+      ) {
+      Some(command) => command
+      None =>
+        match
+          brotli_try_make_encode_command_with_distance_mode(
+            literal_start, insert_length, copy_length, distance, true, true,
+          ) {
+          Some(command) => {
+            emitted_distance_code = command.distance_prefix.symbol
+            command
+          }
+          None => return None
+        }
+    }
+    commands.push(command)
+    copy_bytes += copy_length
+    brotli_update_distance_cache(
+      candidate_cache, distance, emitted_distance_code,
+    )
+    literal_start = copy_start + copy_length
+  }
+  if literal_start < len {
+    let final_result : Result[BrotliEncodeCommand, FzipError] = try? brotli_make_encode_command(
+      literal_start,
+      len - literal_start,
+      0,
+      0,
+      false,
+    )
+    match final_result {
+      Ok(command) => commands.push(command)
+      Err(_) => return None
+    }
+  }
+  if copy_bytes * 100 < len * config.min_copy_ratio_percent {
+    return None
+  }
+  Some({ commands, distance_cache: candidate_cache })
+}
+
+///|
 fn brotli_encode_single_copy_match(
   data : FixedArray[Byte],
   opts : BrotliOptions,
@@ -4327,6 +4514,18 @@ fn brotli_try_compressed_chunk(
       let hq_config = brotli_high_quality_hash_config_for_quality(quality)
       if quality >= 10 {
         let hq_config = brotli_four_byte_hash_config(hq_config)
+        let best = brotli_try_compressed_command_candidate(
+          data,
+          brotli_build_bounded_shortest_path_command_candidate(
+            data, hq_config, distance_cache,
+          ),
+          is_last,
+          best,
+          quality,
+          allow_contexts,
+          initial_previous_byte_1,
+          initial_previous_byte_2,
+        )
         let mixed_commands = brotli_build_mixed_dictionary_lz77_commands(
           data, hq_config, base_offset, window_bits,
         )
