@@ -3253,5 +3253,17 @@ deterministic decoder fuzz gate, and the bounded full-corpus soak. The smoke
 variant runs the corresponding quick gates so the aggregate wiring can be
 validated without rerunning the full ratio matrix.
 
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `just brotli-release-candidate-smoke` | release smoke, generated-corpus smoke, and soak smoke passed |
+| `just brotli-release-candidate` | full practical gate, generated deterministic corpus gate, and bounded full-corpus soak passed |
+
+The full candidate run passed the q2..q9 2 MiB ratio/decode matrix, q10/q11
+ratio-exception decode, package verification, 1,000-mutation generated decoder
+fuzz, default encoder roundtrip fuzz, and 3 bounded soak iterations. The final
+soak log contained 6 successful rows and left no temporary harness files.
+
 This is release-validation tooling only; it does not change Brotli
 encode/decode behavior or the recorded codec target-perf baseline.

@@ -115,8 +115,8 @@ Interpretation:
 
 - q2..q9 satisfy the measured P3 5% size window on the current 2 MiB slice.
 - q10/q11 do not satisfy the documented P4 2% size target.
-- q10/q11 are acceptable for release only if the project accepts the explicit
-  P4 ratio exception recorded in `docs/brotli_benchmarks.md`.
+- q10/q11 are accepted for this Brotli-capable release candidate under the
+  explicit P4 ratio exception recorded in `docs/brotli_benchmarks.md`.
 
 ## Performance Evidence
 
@@ -183,6 +183,27 @@ just brotli-release-package
 
 The `moon test --target all` step reported 458 passed and 0 failed on each of
 `wasm`, `wasm-gc`, `js`, and `native`.
+
+## Aggregate Release Candidate Gate
+
+Command:
+
+```nu
+just brotli-release-candidate
+```
+
+Result:
+
+| Gate | Result | Key timing |
+| ---- | ------ | ---------- |
+| full practical release gate | pass | q2..q9 ratio/decode 922,378.64 ms; q10..q11 ratio-exception decode 242,288.91 ms |
+| generated deterministic corpus gate | pass | 1,000 mutations; decoder fuzz 98,481.68 ms; encoder roundtrip 13,945.08 ms |
+| bounded full-corpus soak | pass | 3 decoder-fuzz iterations and 3 encoder-roundtrip iterations |
+
+The full practical gate also passed `moon package` and `moon publish
+--dry-run` package verification. The bounded soak wrote 6 successful JSONL
+rows to `target/brotli-fuzz-soak/soak.jsonl`, and no temporary harness lock or
+generated white-box test file remained afterward.
 
 ## Fuzz and Conformance Coverage
 

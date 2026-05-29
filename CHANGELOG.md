@@ -137,6 +137,8 @@ All notable changes to this project will be documented in this file.
   Brotli-capable release candidate while keeping P4 marked incomplete.
 - Added aggregate Brotli release-candidate Justfile entries for full and smoke
   release-validation gate sets.
+- Recorded a full `just brotli-release-candidate` pass covering the practical
+  release gate, generated corpus gate, and bounded full-corpus soak.
 
 ## v0.8.0 - 2026-05-20
 
