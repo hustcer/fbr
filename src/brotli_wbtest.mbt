@@ -1402,6 +1402,49 @@ test "brotli_sync splits LZ77 command blocks by command histograms" {
 }
 
 ///|
+test "brotli_sync splits LZ77 distance blocks by distance histograms" {
+  let input = FixedArray::make(2112, b'\x00')
+  for i in 0..<input.length() {
+    input[i] = (97 + i % 4).to_byte()
+  }
+  let commands : Array[BrotliEncodeCommand] = []
+  let mut offset = 0
+  for i in 0..<256 {
+    let insert_length = if i == 0 { 64 } else { 0 }
+    commands.push(brotli_make_encode_command(offset, insert_length, 4, 4, true))
+    offset += insert_length + 4
+  }
+  for _ in 0..<256 {
+    commands.push(brotli_make_encode_command(offset, 0, 4, 64, true))
+    offset += 4
+  }
+  assert_eq(offset, input.length())
+  assert_eq(brotli_best_distance_block_split_point(commands), 256)
+  let weighted = BrotliBitWriter::new(
+    128 + input.length() * 4 + commands.length() * 8,
+  )
+  brotli_write_simple_lz77_metablock(weighted, input, commands, true, true)
+  let split = match
+    brotli_write_distance_split_lz77_metablock(input, commands, 256, true) {
+    Some(candidate) => candidate
+    None => fail("expected distance block split candidate")
+  }
+  assert_true(split.bit_pos < weighted.bit_pos)
+  let best = brotli_write_best_lz77_metablock(
+    input, commands, true, 5, false, 0, 0,
+  )
+  assert_eq(best.bit_pos, split.bit_pos)
+  let encoded = BrotliBitWriter::new(16 + split.buf.length())
+  brotli_encode_window_bits(encoded, 22)
+  encoded.write_from_bits(split.buf, split.bit_pos)
+  let decoded = unbrotli_sync(encoded.finish())
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q2 writes UTF-8 context literal trees" {
   let input = FixedArray::make(4096, b'e')
   let previous_1 = FixedArray::make(16, 0)

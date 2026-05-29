@@ -3294,6 +3294,30 @@ The Silesia 64 KiB and 128 KiB outputs are unchanged for the measured q5/q9
 samples; the accepted value is structural coverage for command-block histogram
 splitting with no measured size regression on these release samples.
 
+## 2026-05-29 — Distance-Block Histogram Split Candidate
+
+The q4+ LZ77 meta-block writer now also estimates explicit-distance histograms
+at the 1/4, 1/2, and 3/4 distance-event boundaries. Distance block lengths
+count only commands that read an explicit distance symbol, so recent-distance
+short-code commands are skipped while collecting split candidates and while
+emitting the block switch. The writer exact-costs a two-distance-block
+candidate only when the estimated distance-tree payload saving clears the same
+overhead guard used by the command-block split.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `moon test --target native --filter 'brotli_sync splits LZ77 distance blocks by distance histograms'` | passed; synthetic distance-skew candidate beats the weighted single-distance-tree writer and round-trips through `unbrotli_sync` |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json` | q5 40,328 bytes vs Google 40,515 (-0.46%); q9 39,081 bytes vs Google 39,695 (-1.55%) |
+| `nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin --mode encode --quality 5 --targets wasm-gc,native --repeats 3 --samples 3 --json` | q5 output 22,336 bytes vs Google 22,271; wasm-gc/native min encode 82.182/53.730 ms |
+| `nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin --mode encode --quality 9 --targets wasm-gc,native --repeats 3 --samples 3 --json` | q9 output 21,514 bytes vs Google 22,063; wasm-gc/native min encode 79.780/47.608 ms |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native` | 12/12 encoder roundtrips passed |
+| `moon check --target all && moon test --target all && moon info` | all-target check passed; 460 tests passed on wasm, wasm-gc, js, and native; public interface generation unchanged |
+
+The measured Silesia q5/q9 outputs remain unchanged; this increment extends P3
+block clustering to the distance tree dimension with bounded extra search cost.
+
 ## 2026-05-29 — Soak Log Append Mode
 
 `tools/brotli/fuzz/soak.nu` now accepts:
