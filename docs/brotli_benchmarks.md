@@ -2900,3 +2900,75 @@ implementation work must be a real bounded shortest-path/Zopfli backend with
 recent-distance-cache state and explicit memory caps, or the release must carry
 an explicit P4 ratio exception. Release validation can proceed against the
 current q10/q11 implementation with this limitation documented.
+
+## 2026-05-29 — Release Validation Checkpoint
+
+This checkpoint validates the current Brotli implementation after the q2..q9
+2 MiB chunk promotion and the q10/q11 heuristic stop decision. It is a practical
+local release-validation gate, not the 24-hour fuzz gate.
+
+MoonBit all-target gate:
+
+```bash
+moon fmt
+moon check --target all
+moon test --target all
+moon info
+git diff --check
+```
+
+Result: passed. The test matrix reported 458 passed / 0 failed on each of
+`wasm`, `wasm-gc`, `js`, and `native`.
+
+External Google Brotli decode validation:
+
+| Corpus      | Quality | MoonBit bytes | Google bytes | Size overhead | Google decode |
+| ----------- | ------- | ------------- | ------------ | ------------- | ------------- |
+| silesia-2m  | 0       | 2,097,157     | n/a          | n/a           | pass          |
+| silesia-2m  | 1       | 2,097,157     | n/a          | n/a           | pass          |
+| silesia-2m  | 2       | 652,695       | 637,343      | +2.41%        | pass          |
+| silesia-2m  | 3       | 617,687       | 623,577      | -0.94%        | pass          |
+| silesia-2m  | 4       | 566,718       | 569,163      | -0.43%        | pass          |
+| silesia-2m  | 5       | 549,625       | 538,906      | +1.99%        | pass          |
+| silesia-2m  | 6       | 549,625       | 527,485      | +4.20%        | pass          |
+| silesia-2m  | 7       | 537,621       | 520,020      | +3.38%        | pass          |
+| silesia-2m  | 8       | 537,621       | 514,598      | +4.47%        | pass          |
+| silesia-2m  | 9       | 535,421       | 511,433      | +4.69%        | pass          |
+| silesia-1m  | 10      | 264,422       | 242,485      | +9.05%        | pass          |
+| silesia-1m  | 11      | 264,422       | 239,314      | +10.49%       | pass          |
+
+Representative 64 KiB encode target-perf:
+
+| Quality | Target  | MoonBit bytes | Google bytes | Size overhead | MoonBit ms | Google ms | Slowdown |
+| ------- | ------- | ------------- | ------------ | ------------- | ---------- | --------- | -------- |
+| 2       | wasm-gc | 25,245        | 24,364       | +3.62%        | 498.394    | 39.787    | 12.53x   |
+| 2       | native  | 25,245        | 24,364       | +3.62%        | 114.186    | 39.787    | 2.87x    |
+| 8       | wasm-gc | 22,261        | 22,077       | +0.83%        | 525.977    | 42.859    | 12.27x   |
+| 8       | native  | 22,261        | 22,077       | +0.83%        | 110.541    | 42.859    | 2.58x    |
+| 9       | wasm-gc | 21,514        | 22,063       | -2.49%        | 513.957    | 44.435    | 11.57x   |
+| 9       | native  | 21,514        | 22,063       | -2.49%        | 87.947     | 44.435    | 1.98x    |
+| 10      | wasm-gc | 21,415        | 19,566       | +9.45%        | 497.344    | 62.929    | 7.90x    |
+| 10      | native  | 21,415        | 19,566       | +9.45%        | 117.832    | 62.929    | 1.87x    |
+| 11      | wasm-gc | 21,415        | 19,258       | +11.20%       | 518.946    | 107.217   | 4.84x    |
+| 11      | native  | 21,415        | 19,258       | +11.20%       | 122.539    | 107.217   | 1.14x    |
+
+Representative decode target-perf:
+
+| Input stream              | Target  | Encoded bytes | Decoded bytes | MoonBit ms | Google ms | Slowdown |
+| ------------------------- | ------- | ------------- | ------------- | ---------- | --------- | -------- |
+| silesia-1m Google q11 `.br` | wasm-gc | 239,314       | 1,048,576     | 709.926    | 80.475    | 8.82x    |
+| silesia-1m Google q11 `.br` | native  | 239,314       | 1,048,576     | 142.882    | 80.475    | 1.78x    |
+
+Decoder robustness gates:
+
+- `nu tools/brotli/conformance/run.nu`: all 22 upstream Google Brotli fixtures
+  passed through `unbrotli_sync`.
+- `nu tools/brotli/fuzz/run.nu --limit 25`: all 25 local fuzz inputs passed
+  without native panic or unchecked bounds failure.
+
+Conclusion: the current q0..q11 streams are externally decodable, and the
+measured q2..q9 2 MiB Silesia matrix is inside the P3 5% target window. q10/q11
+remain valid but outside the P4 2% ratio target, so this release checkpoint
+requires the documented P4 ratio exception. Local heuristic optimization can
+stop here; remaining release work should focus on broader corpus validation,
+the long fuzz gate, and packaging/release checks.

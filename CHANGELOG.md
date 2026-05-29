@@ -99,6 +99,11 @@ All notable changes to this project will be documented in this file.
 - 458 in-package tests covering Brotli decoder helpers, transforms, fixtures,
   roundtrips, q0..q11 end-to-end, stream chunking, and security limits, all
   passing on `wasm`, `wasm-gc`, `js`, and `native`.
+- Brotli release-validation checkpoint recorded: q0/q1 2 MiB stored streams
+  pass external Google Brotli decode, q2..q9 2 MiB Silesia outputs stay within
+  the 5% P3 window, q10/q11 remain valid with a documented P4 ratio exception,
+  22 upstream conformance fixtures pass, and the 25-input local fuzz gate
+  passes.
 
 ## v0.8.0 - 2026-05-20
 
