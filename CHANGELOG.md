@@ -127,6 +127,8 @@ All notable changes to this project will be documented in this file.
   `--corpus-dir` options for reproducible release-validation corpora.
 - Added a generated deterministic Brotli fuzz corpus path to the practical
   release validation runner and Justfile.
+- Recorded broader Brotli release fuzz validation evidence for the generated
+  corpus gate and bounded soak runner.
 
 ## v0.8.0 - 2026-05-20
 

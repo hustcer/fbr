@@ -29,6 +29,15 @@ This gate intentionally does not run `tools/brotli/bench/target-perf.nu`.
 Target-perf remains the required decision harness for codec or performance
 changes; the latest release-validation work is tooling and documentation only.
 
+Additional reproducible release-validation coverage has also passed:
+
+- `just brotli-release-generated-fuzz`: generated 1,000 deterministic
+  mutations plus the 8 checked-in `.br` fixtures, passed decoder fuzz, then
+  passed the default encoder roundtrip fuzz quality set.
+- `nu tools/brotli/fuzz/soak.nu --duration-min 1440 --max-iterations 3`:
+  passed 3 decoder-fuzz iterations and 3 encoder-roundtrip iterations, with 6
+  successful JSONL status rows written to `target/brotli-fuzz-soak/soak.jsonl`.
+
 ## Implemented Surface
 
 - `unbrotli_sync` and `UnbrotliStream`.
@@ -159,6 +168,8 @@ Current local release coverage:
   `tools/brotli/fuzz/gen-corpus.nu --seed ... --corpus-dir ...`.
 - Generated deterministic corpus release gate via
   `tools/brotli/release/validate.nu --generated-fuzz-count ...`.
+- The generated-corpus release gate has passed with 1,000 deterministic
+  mutations and seed `1`.
 - Encoder roundtrip fuzz across the default q0, q1, q2, q9, and q11 quality
   set.
 - Configurable fuzz targets: `native`, `wasm-gc`, `js`, or `all`.
@@ -167,14 +178,16 @@ Current local release coverage:
   - `nu tools/brotli/fuzz/soak.nu`
   - `just brotli-fuzz-soak`
   - `just brotli-fuzz-soak-smoke`
+- A bounded soak execution has passed 3 full decoder-fuzz iterations and 3
+  default encoder-roundtrip iterations.
 
 Reserved final-release work:
 
 - The original 24-hour fuzz gate is now scriptable through
   `tools/brotli/fuzz/soak.nu`, but this report does not claim that a 24-hour
   soak has completed.
-- A broader corpus can now be run through `tools/brotli/release/validate.nu`
-  and the fuzz scripts before the final release artifact is cut.
+- Any project-required 24-hour soak should still be run before the final public
+  release artifact is cut.
 
 ## Accepted Exceptions
 

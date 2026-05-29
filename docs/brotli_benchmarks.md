@@ -3188,3 +3188,46 @@ Validation:
 This wires the reproducible corpus generator into release validation without
 changing Brotli encode/decode behavior or the recorded codec target-perf
 baseline.
+
+## 2026-05-29 — Broader Release Fuzz Validation
+
+The generated-corpus release gate now has a broader local release-validation
+run using the default Justfile entry:
+
+```nu
+just brotli-release-generated-fuzz
+```
+
+Result:
+
+| Step | Result | Elapsed ms |
+| ---- | ------ | ---------- |
+| generate deterministic decoder fuzz corpus | pass | 210.55 |
+| decoder fuzz corpus | pass | 90,822.64 |
+| encoder roundtrip fuzz | pass | 14,357.89 |
+
+This generated 1,000 deterministic mutations with seed `1`, copied the 8
+checked-in `.br` seed fixtures into `target/brotli-release-fuzz-corpus`, ran
+the decoder fuzz harness over the generated corpus, and then ran the default
+encoder roundtrip fuzz quality set.
+
+The bounded soak runner also passed a multi-iteration local execution:
+
+```nu
+nu tools/brotli/fuzz/soak.nu --duration-min 1440 --max-iterations 3
+```
+
+Result:
+
+| Phase | Iterations | Result |
+| ----- | ---------- | ------ |
+| decoder fuzz | 3 | pass |
+| encoder roundtrip fuzz | 3 | pass |
+
+The soak log contained 6 successful JSONL rows in
+`target/brotli-fuzz-soak/soak.jsonl`, and no temporary harness lock or
+generated white-box test file remained afterward.
+
+This strengthens release-validation evidence without changing Brotli
+encode/decode behavior or the recorded codec target-perf baseline. It is not a
+claim that the reserved 24-hour soak gate has completed.
