@@ -175,6 +175,10 @@ All notable changes to this project will be documented in this file.
 - Added direct Justfile recipes for Brotli conformance, decoder fuzz, encoder
   roundtrip fuzz, ratio checks, and wasm-gc/native target-perf, and simplified
   generated-test batch runners with Nushell `generate` pipelines.
+- Brotli conformance, decoder fuzz, and encoder roundtrip fuzz harnesses now
+  restore ignored placeholder white-box test files instead of deleting the
+  generated source path, avoiding stale `_build` missing-input failures in
+  subsequent incremental MoonBit commands.
 
 ## v0.8.0 - 2026-05-20
 

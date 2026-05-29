@@ -164,6 +164,14 @@ def write-temp-tests [cases: list<record> batch_index: int]: nothing -> string {
   $"brotli roundtrip fuzz batch ($batch_index) *"
 }
 
+def write-placeholder-temp-tests []: nothing -> nothing {
+  [
+    "// Placeholder for tools/brotli/fuzz/roundtrip.nu."
+    "// The harness rewrites this ignored file during an encoder fuzz run."
+    ""
+  ] | str join (char newline) | save --force $temp_file
+}
+
 def run-batch [batch: record, target: string]: nothing -> list<record> {
   let filter = write-temp-tests $batch.item $batch.index
   let run = (moon test --target $target --filter $filter | complete)
@@ -234,7 +242,7 @@ def main [
 
   let results = run-batches $cases $batch_size $target
 
-  rm --force $temp_file
+  write-placeholder-temp-tests
   print ($results | table)
   if ($results | any {|row| not $row.ok }) {
     release-harness-lock

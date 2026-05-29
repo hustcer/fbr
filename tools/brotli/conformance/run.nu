@@ -113,6 +113,14 @@ def write-temp-test [fixture: record]: nothing -> string {
   $test_name
 }
 
+def write-placeholder-temp-test []: nothing -> nothing {
+  [
+    "// Placeholder for tools/brotli/conformance/run.nu."
+    "// The harness rewrites this ignored file during a conformance run."
+    ""
+  ] | str join (char newline) | save --force $temp_file
+}
+
 def run-fixture [fixture: record]: nothing -> record {
   let test_name = write-temp-test $fixture
   let run = (moon test --target native --filter $test_name | complete)
@@ -157,7 +165,7 @@ def main [
     }
   )
 
-  rm --force $temp_file
+  write-placeholder-temp-test
   print ($results | table)
   if ($results | any {|row| not $row.ok }) {
     release-harness-lock

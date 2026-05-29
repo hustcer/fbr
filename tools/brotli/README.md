@@ -24,7 +24,8 @@ just brotli-conformance-fixture monkey
 Runs the upstream corpus at `/Users/hustcer/iWork/refs/brotli/tests/testdata`
 through `unbrotli_sync`. The harness writes a temporary
 `src/brotli_conformance_wbtest.mbt`, runs one native MoonBit test per fixture,
-then removes the temporary file.
+then restores an ignored placeholder file so later incremental `moon` commands
+do not retain a stale generated-test input path.
 
 ## Decoder Fuzz Harness
 
@@ -56,7 +57,8 @@ unchecked bounds failures fail the run. The default batch size is 25 inputs to
 keep full-corpus local runs fast while still reporting the batch that failed.
 The default MoonBit test target is `native`; pass `--target wasm-gc`, `--target
 js`, or `--target all` when validating backend-specific release behavior. The
-temporary file is removed after the run.
+temporary generated test is replaced with an ignored placeholder after the run
+so later incremental `moon` commands can rebuild without requiring `moon clean`.
 
 `roundtrip.nu` is the encoder fuzz companion. It generates deterministic byte
 inputs, encodes them with selected Brotli quality levels, decodes the result
