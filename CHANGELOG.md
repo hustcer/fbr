@@ -107,6 +107,9 @@ All notable changes to this project will be documented in this file.
 - Brotli fuzz runner now batches generated white-box tests. The 25-input local
   gate drops from 54.73s to 2.19s on this machine, and the current 58-input
   corpus completes in 7.00s, making broader release validation practical.
+- Brotli fuzz runner accepts `--target`, so the same generated corpus can now
+  be checked on `native`, `wasm-gc`, `js`, or `all` targets during release
+  validation.
 
 ## v0.8.0 - 2026-05-20
 

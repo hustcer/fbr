@@ -112,6 +112,7 @@ def main [
   --corpus-dir (-c): string = $default_corpus_dir
   --limit (-n): int = 0
   --batch-size (-b): int = $default_batch_size
+  --target (-t): string = "native"
 ]: nothing -> nothing {
   acquire-harness-lock
   let files = corpus-files $corpus_dir
@@ -136,7 +137,7 @@ def main [
   mut results = []
   for batch in ($selected | chunks $batch_size | enumerate) {
     let filter = write-temp-tests $batch.item $batch.index
-    let run = (moon test --target native --filter $filter | complete)
+    let run = (moon test --target $target --filter $filter | complete)
     let ok = $run.exit_code == 0
     if not $ok {
       print --stderr $run.stdout
@@ -148,6 +149,7 @@ def main [
         {
           input: ($path | path basename)
           batch: $batch.index
+          target: $target
           ok: $ok
           exit_code: $run.exit_code
         }

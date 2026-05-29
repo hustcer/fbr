@@ -2994,3 +2994,21 @@ corpus now runs comfortably as a local release gate. This does not replace the
 documented 24-hour fuzz requirement for final release readiness; it removes the
 per-input `moon test` overhead that made broader local fuzz sweeps needlessly
 expensive.
+
+## 2026-05-29 — Cross-Target Fuzz Runner Gate
+
+The fuzz runner now accepts `--target`, forwarding it to `moon test --target`.
+This keeps the default `native` behavior for local decoder robustness sweeps
+while allowing release validation to run the same generated fuzz tests on
+`wasm-gc`, `js`, or `all` without editing the script.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `nu tools/brotli/fuzz/run.nu --limit 2 --batch-size 1 --target native` | 2/2 passed |
+| `nu tools/brotli/fuzz/run.nu --limit 5 --target wasm-gc` | 5/5 passed |
+| `nu tools/brotli/fuzz/run.nu --limit 3 --target all` | 3/3 passed |
+
+This is a release-readiness tooling change only. It does not change Brotli
+encode/decode behavior or the recorded codec target-perf baseline.
