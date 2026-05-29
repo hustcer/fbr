@@ -2652,7 +2652,7 @@ fn brotli_bounded_shortest_path_config(
       config.max_match_length
     },
     min_match_length: config.min_match_length,
-    max_distance_cache_codes: 0,
+    max_distance_cache_codes: config.max_distance_cache_codes,
     lazy_lookahead: 0,
     scan_step: 1,
     max_commands: 12000,
@@ -2694,32 +2694,35 @@ fn brotli_build_bounded_shortest_path_command_candidate(
       choice_copy_length[position + 1] = 0
       choice_copy_distance[position + 1] = 0
     }
-    let (match_length, distance) = brotli_longest_previous_hash_match_with_cache(
+    let matches = brotli_bounded_previous_hash_matches_with_cache(
       data, previous, position, config, distance_cache,
     )
-    if match_length >= config.min_match_length {
-      // Keep the DP bounded: one longest match per position, and only a few
-      // representative copy lengths. This seeds a q10/q11 candidate without
-      // taking on the full P4 Zopfli search cost.
-      let bounded_lengths : FixedArray[Int] = [
-        config.min_match_length,
-        match_length / 2,
-        match_length,
-      ]
-      for i in 0..<bounded_lengths.length() {
-        let copy_length = bounded_lengths[i]
-        if copy_length < config.min_match_length ||
-          copy_length > match_length ||
-          position + copy_length > len {
-          continue
-        }
-        let end = position + copy_length
-        let copy_cost = base_cost +
-          brotli_bounded_shortest_path_copy_cost(copy_length, distance)
-        if copy_cost < costs[end] {
-          costs[end] = copy_cost
-          choice_copy_length[end] = copy_length
-          choice_copy_distance[end] = distance
+    for match_index in 0..<matches.length() {
+      let match_ = matches[match_index]
+      if match_.length >= config.min_match_length {
+        // Keep the DP bounded: several previous matches per position, and only
+        // a few representative copy lengths for each match. This grows the P4
+        // candidate graph without taking on full Zopfli search cost.
+        let bounded_lengths : FixedArray[Int] = [
+          config.min_match_length,
+          match_.length / 2,
+          match_.length,
+        ]
+        for i in 0..<bounded_lengths.length() {
+          let copy_length = bounded_lengths[i]
+          if copy_length < config.min_match_length ||
+            copy_length > match_.length ||
+            position + copy_length > len {
+            continue
+          }
+          let end = position + copy_length
+          let copy_cost = base_cost +
+            brotli_bounded_shortest_path_copy_cost(copy_length, match_.distance)
+          if copy_cost < costs[end] {
+            costs[end] = copy_cost
+            choice_copy_length[end] = copy_length
+            choice_copy_distance[end] = match_.distance
+          }
         }
       }
     }

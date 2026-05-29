@@ -19,6 +19,12 @@ priv struct BrotliHashConfig {
 }
 
 ///|
+priv struct BrotliHashMatchCandidate {
+  length : Int
+  distance : Int
+}
+
+///|
 fn brotli_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
   {
     table_size: 32768,
@@ -370,6 +376,100 @@ fn brotli_distance_cache_candidate(
   let base_index = brotli_distance_cache_lookup[code * 2]
   let delta = brotli_distance_cache_lookup[code * 2 + 1]
   distance_cache[base_index] + delta
+}
+
+///|
+fn brotli_record_bounded_hash_match(
+  matches : Array[BrotliHashMatchCandidate],
+  length : Int,
+  distance : Int,
+  min_match_length : Int,
+) -> Unit {
+  if length < min_match_length || distance <= 0 {
+    return
+  }
+  for i in 0..<matches.length() {
+    if matches[i].distance == distance {
+      if length > matches[i].length {
+        matches[i] = { length, distance }
+      }
+      return
+    }
+  }
+  matches.push({ length, distance })
+}
+
+///|
+fn brotli_bounded_previous_hash_matches_with_cache(
+  data : FixedArray[Byte],
+  previous : FixedArray[Int],
+  position : Int,
+  config : BrotliHashConfig,
+  distance_cache : FixedArray[Int],
+) -> Array[BrotliHashMatchCandidate] {
+  let matches : Array[BrotliHashMatchCandidate] = []
+  let len = data.length()
+  if position + 3 >= len {
+    return matches
+  }
+  let max_match_length = config.max_match_length
+  let b0 = data[position]
+  let b1 = data[position + 1]
+  let b2 = data[position + 2]
+  let b3 = data[position + 3]
+  let max_cache_codes = config.max_distance_cache_codes
+  for code in 0..<max_cache_codes {
+    let distance = brotli_distance_cache_candidate(distance_cache, code)
+    if distance > 0 && distance <= position {
+      let candidate = position - distance
+      if data[candidate] == b0 &&
+        data[candidate + 1] == b1 &&
+        data[candidate + 2] == b2 &&
+        data[candidate + 3] == b3 {
+        let mut length = 4
+        while length < max_match_length &&
+              position + length < len &&
+              data[position + length] == data[candidate + length] {
+          length += 1
+        }
+        brotli_record_bounded_hash_match(
+          matches,
+          length,
+          distance,
+          config.min_match_length,
+        )
+      }
+    }
+  }
+  let max_match_checks = config.max_match_checks
+  let mut candidate = if position < previous.length() {
+    previous[position]
+  } else {
+    -1
+  }
+  let mut checked = 0
+  while candidate >= 0 && checked < max_match_checks {
+    if data[candidate] == b0 &&
+      data[candidate + 1] == b1 &&
+      data[candidate + 2] == b2 &&
+      data[candidate + 3] == b3 {
+      let mut length = 4
+      while length < max_match_length &&
+            position + length < len &&
+            data[position + length] == data[candidate + length] {
+        length += 1
+      }
+      brotli_record_bounded_hash_match(
+        matches,
+        length,
+        position - candidate,
+        config.min_match_length,
+      )
+    }
+    candidate = previous[candidate]
+    checked += 1
+  }
+  matches
 }
 
 ///|

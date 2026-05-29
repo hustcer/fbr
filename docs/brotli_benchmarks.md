@@ -3294,6 +3294,29 @@ Validation:
 instruction; the 128 KiB Silesia sample is larger than the 32 KiB candidate
 cap and shows no size change.
 
+## 2026-05-29 — q10/q11 Bounded Multi-Match Seed
+
+The bounded q10/q11 shortest-path seed now enumerates multiple previous
+hash-chain matches per position instead of considering only the single longest
+match. Each match still contributes only a bounded set of representative copy
+lengths, and the resulting command list still goes through exact meta-block
+costing before it can win chunk selection.
+
+This moves the small-input seed closer to the planned P4 Zopfli candidate graph
+without lifting the 32 KiB input cap or claiming completion of the full
+suffix-tree/Zopfli backend.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `moon test --target native --filter '*bounded shortest-path*'` | passed; 2/2 tests cover bounded command roundtrip and multiple previous-match enumeration |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged |
+| `moon check --target all` | passed |
+
+`target-perf.nu` was not rerun for this increment per maintainer instruction.
+
 ## 2026-05-29 — Command-Block Histogram Split Candidate
 
 The q4+ LZ77 meta-block writer now estimates command-symbol histograms at the
