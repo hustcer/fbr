@@ -5,11 +5,53 @@ const temp_file = "src/brotli_fuzz_wbtest.mbt"
 const harness_lock_dir = "tools/brotli/.harness-lock"
 const default_batch_size = 25
 
+def process-alive [pid: int]: nothing -> bool {
+  let probe = (^ps -p ($pid | into string) | complete)
+  $probe.exit_code == 0
+}
+
+def lock-pid-path []: nothing -> string {
+  $harness_lock_dir | path join "pid"
+}
+
+def stale-harness-lock []: nothing -> bool {
+  let pid_path = (lock-pid-path)
+  if not ($pid_path | path exists) {
+    true
+  } else {
+    try {
+      let pid = (open --raw $pid_path | str trim | into int)
+      not (process-alive $pid)
+    } catch {
+      true
+    }
+  }
+}
+
+def write-lock-pid []: nothing -> nothing {
+  $nu.pid | into string | save --force (lock-pid-path)
+}
+
 def acquire-harness-lock []: nothing -> nothing {
   let made = (^mkdir $harness_lock_dir | complete)
   if $made.exit_code != 0 {
-    print --stderr "Another Brotli harness is running; retry after it finishes."
-    exit 1
+    if (stale-harness-lock) {
+      rm --force --recursive $harness_lock_dir
+      let retry = (^mkdir $harness_lock_dir | complete)
+      if $retry.exit_code == 0 {
+        write-lock-pid
+      } else {
+        print --stderr "Another Brotli harness is running; retry after it finishes."
+        exit 1
+      }
+    } else {
+      let pid_path = (lock-pid-path)
+      let owner = if ($pid_path | path exists) { open --raw $pid_path | str trim } else { "unknown" }
+      print --stderr $"Another Brotli harness is running \(pid: ($owner)\); retry after it finishes."
+      exit 1
+    }
+  } else {
+    write-lock-pid
   }
 }
 

@@ -52,6 +52,10 @@ through `unbrotli_sync`, and asserts byte-for-byte equality. The defaults cover
 q0, q1, q2, q9, and q11 on the native backend; use `--qualities` and `--target`
 to broaden release validation.
 
+Both fuzz runners use `tools/brotli/.harness-lock` to avoid overlapping
+temporary white-box test files. The lock records the owning process ID and
+automatically recovers if a previous interrupted run left a stale lock behind.
+
 ## Silesia q=11 Verification
 
 ```nu

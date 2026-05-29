@@ -3038,3 +3038,22 @@ Validation:
 
 This expands release-readiness coverage without changing Brotli encode/decode
 implementation or the recorded codec target-perf baseline.
+
+## 2026-05-29 — Fuzz Harness Stale-Lock Recovery
+
+The decoder and encoder roundtrip fuzz runners now record the owner PID in
+`tools/brotli/.harness-lock/pid`. A second active harness is still rejected,
+but a lock left behind by an interrupted or crashed run is detected as stale,
+removed, and reacquired.
+
+Validation:
+
+| Scenario | Command | Result |
+| -------- | ------- | ------ |
+| Stale lock recovery | create `.harness-lock/pid` with dead PID `999999`, then run `nu tools/brotli/fuzz/run.nu --limit 1 --target native` | 1/1 passed |
+| Active lock protection | create `.harness-lock/pid` from a live `sleep` process, then run `nu tools/brotli/fuzz/run.nu --limit 1 --target native` | rejected with owner PID |
+| Roundtrip harness normal lock path | `nu tools/brotli/fuzz/roundtrip.nu --count 2 --qualities 2,11 --target native --batch-size 2` | 4/4 passed |
+
+This makes local release validation more robust after intentional interrupts
+without weakening the mutual exclusion around temporary generated MoonBit
+white-box test files.
