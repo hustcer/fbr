@@ -1517,6 +1517,21 @@ test "brotli_sync q9 admits shorter high-quality matches" {
 }
 
 ///|
+test "brotli_sync q9 allows two-mebibyte high-quality chunks" {
+  assert_eq(brotli_standard_chunk_size_for_quality(8), 1048576)
+  assert_eq(brotli_standard_chunk_size_for_quality(9), 2097152)
+  assert_eq(brotli_standard_chunk_size_for_quality(10), 1048576)
+  assert_eq(
+    brotli_hash_max_input_length(brotli_intermediate_hash_config_for_quality(8)),
+    1048576,
+  )
+  assert_eq(
+    brotli_hash_max_input_length(brotli_high_quality_hash_config_for_quality(9)),
+    2097152,
+  )
+}
+
+///|
 test "brotli_sync encoder uses distance-cache short codes" {
   let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
   inspect(brotli_compute_distance_code(4, 64, distance_cache), content="0")

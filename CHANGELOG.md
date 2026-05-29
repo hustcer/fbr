@@ -45,6 +45,12 @@ All notable changes to this project will be documented in this file.
   UTF-8 literal-context trees or short-distance codes depended on decoder
   state from the previous chunk. External Google Brotli validation now passes
   on `silesia-2m.bin` q3/q5/q9.
+- Brotli q9 now uses a 2 MiB standard chunk, letting high-quality LZ77 and
+  mixed-dictionary candidates cost matches and literal contexts across the
+  previous 1 MiB boundary. On 2 MiB Silesia, q9 improves from 542,335 to
+  535,421 bytes versus Google q9's 511,433 bytes, reducing overhead from
+  6.04% to 4.69%. Sampled 64 KiB target-perf remains 21,514 bytes versus
+  Google q9's 22,063 bytes, with wasm-gc/native encode at 523.417/89.076 ms.
 - Brotli q4 through q8 now exact-cost an intermediate hash-chain candidate
   between the q2/q3 fast path and the q9 high-quality path. On 1 MiB Silesia,
   q4 improves from 313,577 to 287,092 bytes, q5/q6 to 278,961 bytes, and
@@ -75,7 +81,7 @@ All notable changes to this project will be documented in this file.
 - New `docs/brotli.md` planning document with phased delivery details.
 - New `docs/brotli_benchmarks.md` recording every accepted size/time delta
   for the Brotli encoder/decoder.
-- 457 in-package tests covering Brotli decoder helpers, transforms, fixtures,
+- 458 in-package tests covering Brotli decoder helpers, transforms, fixtures,
   roundtrips, q0..q11 end-to-end, stream chunking, and security limits, all
   passing on `wasm`, `wasm-gc`, `js`, and `native`.
 

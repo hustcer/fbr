@@ -2248,7 +2248,8 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
   hash_config : BrotliHashConfig,
   distance_cache : FixedArray[Int],
 ) -> Array[BrotliEncodeCommand]? {
-  if data.length() < 8 || data.length() > 1048576 {
+  if data.length() < 8 ||
+    data.length() > brotli_hash_max_input_length(hash_config) {
     return None
   }
   if !brotli_has_compressible_match_density(data, hash_config) {
@@ -3606,6 +3607,18 @@ fn brotli_encode_uncompressed(
 }
 
 ///|
+fn brotli_standard_chunk_size_for_quality(quality : Int) -> Int {
+  // q9 needs a larger P3 chunk so matches and literal-context statistics can
+  // cross the previous 1 MiB boundary. Keep other standard modes unchanged
+  // until their target-perf tradeoff has separate evidence.
+  if quality == 9 {
+    2097152
+  } else {
+    1048576
+  }
+}
+
+///|
 fn brotli_try_compressed_chunk(
   data : FixedArray[Byte],
   hash_config : BrotliHashConfig,
@@ -3855,7 +3868,7 @@ fn brotli_encode_chunked_standard(
   data : FixedArray[Byte],
   opts : BrotliOptions,
 ) -> FixedArray[Byte] raise FzipError {
-  let chunk_size = 1048576
+  let chunk_size = brotli_standard_chunk_size_for_quality(opts.quality)
   let chunk_count = (data.length() + chunk_size - 1) / chunk_size
   let writer = BrotliBitWriter::new(data.length() + 8 + chunk_count * 16)
   brotli_encode_window_bits(writer, opts.window_bits)

@@ -2715,3 +2715,50 @@ Conclusion: this is an accepted correctness fix. It restores externally
 decodable q3/q5/q9 chunked compressed streams without changing the 64 KiB q5
 target-perf size. P3 remains open because the broader 2 MiB Silesia sweep shows
 q2 at +8.77% and q9 at +6.04%, outside the 5% ratio target.
+
+## 2026-05-29 — q9 Two-Mebibyte Standard Chunk
+
+The q9 2 MiB ratio gap was caused in part by forcing high-quality parsing
+through two independent 1 MiB meta-block chunks. This increment lets q9 use a
+2 MiB standard chunk while keeping q2..q8 and q10/q11 at the existing 1 MiB
+chunk size until they have separate target-perf evidence. High-quality LZ77 and
+mixed-dictionary candidates now admit 2 MiB inputs; fast and intermediate
+profiles keep the 1 MiB input bound.
+
+A q9 64K hash-table trial was rejected before this change: increasing the q9
+high-quality table from 32K to 64K produced the same 271,776-byte
+`silesia-1m.bin` output and did not address the chunk boundary.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native --filter '*two-mebibyte high-quality chunks*'
+nu tools/brotli/encode/verify.nu target/brotli-bench/silesia-2m.bin --quality 9
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-2m.bin --qualities 9 --json
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+  --mode encode \
+  --quality 9 \
+  --targets wasm-gc,native \
+  --repeats 1 \
+  --samples 1 \
+  --json
+```
+
+Correctness and ratio result:
+
+| Corpus     | Quality | Previous bytes | New bytes | Google bytes | Previous overhead | New overhead | Google decode |
+| ---------- | ------- | -------------- | --------- | ------------ | ----------------- | ------------ | ------------- |
+| silesia-2m | 9       | 542,335        | 535,421   | 511,433      | +6.04%            | +4.69%       | pass          |
+
+Target-perf result:
+
+| Mode   | Corpus      | Quality | Target  | MoonBit bytes | Google bytes | MoonBit ms | Google ms |
+| ------ | ----------- | ------- | ------- | ------------- | ------------ | ---------- | --------- |
+| encode | silesia-64k | 9       | wasm-gc | 21,514        | 22,063       | 523.417    | 42.139    |
+| encode | silesia-64k | 9       | native  | 21,514        | 22,063       | 89.076     | 42.139    |
+
+Conclusion: this is an accepted P3 ratio improvement. q9 now meets the 5%
+target on the measured 2 MiB Silesia slice. P3 remains open because q2 is still
+outside the 2 MiB ratio target and broader block/histogram clustering remains
+unfinished.

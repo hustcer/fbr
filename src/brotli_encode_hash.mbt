@@ -175,6 +175,18 @@ fn brotli_four_byte_hash_config(config : BrotliHashConfig) -> BrotliHashConfig {
 }
 
 ///|
+fn brotli_hash_max_input_length(config : BrotliHashConfig) -> Int {
+  // High-quality parsing is the only path that is allowed to spend enough work
+  // to encode a 2 MiB chunk. Fast and intermediate modes keep the existing
+  // 1 MiB bound so their target-perf profile stays predictable.
+  if config.max_commands >= 300000 {
+    2097152
+  } else {
+    1048576
+  }
+}
+
+///|
 fn brotli_count_unique_literals_up_to(
   data : FixedArray[Byte],
   limit : Int,

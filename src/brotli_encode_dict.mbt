@@ -686,7 +686,8 @@ fn brotli_build_mixed_dictionary_lz77_commands_with_distance_cache(
   window_bits : Int,
   distance_cache : FixedArray[Int],
 ) -> Array[BrotliEncodeCommand]? {
-  if data.length() < 8192 || data.length() > 1048576 {
+  if data.length() < 8192 ||
+    data.length() > brotli_hash_max_input_length(hash_config) {
     return None
   }
   if !brotli_has_compressible_match_density(data, hash_config) {
