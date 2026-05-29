@@ -55,6 +55,8 @@ Additional reproducible release-validation coverage has also passed:
 - Practical release validation runner.
 - Justfile entry points for full, smoke, and package-only Brotli release
   validation.
+- Aggregate Justfile release-candidate entry points for the accepted full and
+  smoke release-validation gate sets.
 
 ## Current Encoder Behavior
 

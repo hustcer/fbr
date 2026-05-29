@@ -61,6 +61,18 @@ brotli-release-generated-fuzz count='1000' seed='1':
 brotli-release-package:
     nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-fuzz
 
+# Run the accepted Brotli release-candidate gate set
+brotli-release-candidate generated_count='1000' seed='1' soak_iterations='3':
+    just brotli-release
+    just brotli-release-generated-fuzz {{ generated_count }} {{ seed }}
+    just brotli-fuzz-soak-bounded {{ soak_iterations }}
+
+# Run a quick smoke version of the Brotli release-candidate gate set
+brotli-release-candidate-smoke:
+    just brotli-release-smoke
+    just brotli-release-generated-fuzz 12 12345
+    just brotli-fuzz-soak-smoke
+
 # Run the Brotli long fuzz soak gate
 brotli-fuzz-soak duration_minutes='1440':
     nu tools/brotli/fuzz/soak.nu --duration-min {{ duration_minutes }}

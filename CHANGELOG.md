@@ -135,6 +135,8 @@ All notable changes to this project will be documented in this file.
   finite release-validation runs.
 - Accepted the q10/q11 Brotli P4 ratio exception for the current
   Brotli-capable release candidate while keeping P4 marked incomplete.
+- Added aggregate Brotli release-candidate Justfile entries for full and smoke
+  release-validation gate sets.
 
 ## v0.8.0 - 2026-05-20
 

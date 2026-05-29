@@ -80,6 +80,8 @@ just brotli-release
 just brotli-release-smoke
 just brotli-release-generated-fuzz
 just brotli-release-package
+just brotli-release-candidate
+just brotli-release-candidate-smoke
 just brotli-fuzz-soak-bounded
 ```
 
@@ -99,6 +101,10 @@ The Justfile recipes are thin entry points:
   corpus plus encoder roundtrip fuzz.
 - `just brotli-release-package`: packaging and publish dry-run package
   verification only.
+- `just brotli-release-candidate`: full practical gate, generated deterministic
+  corpus gate, and bounded full-corpus soak.
+- `just brotli-release-candidate-smoke`: quick aggregate smoke for the same
+  release-candidate gate families.
 - `just brotli-fuzz-soak-bounded`: finite full-corpus decoder fuzz and encoder
   roundtrip soak iterations.
 

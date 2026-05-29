@@ -3237,3 +3237,21 @@ generated white-box test file remained afterward.
 This strengthens release-validation evidence without changing Brotli
 encode/decode behavior or the recorded codec target-perf baseline. It is not a
 claim that the reserved 24-hour soak gate has completed.
+
+## 2026-05-29 — Release Candidate Aggregate Recipes
+
+The repo `Justfile` now exposes aggregate release-candidate entries that chain
+the accepted local release gates:
+
+```nu
+just brotli-release-candidate
+just brotli-release-candidate-smoke
+```
+
+`brotli-release-candidate` runs the full practical release gate, the generated
+deterministic decoder fuzz gate, and the bounded full-corpus soak. The smoke
+variant runs the corresponding quick gates so the aggregate wiring can be
+validated without rerunning the full ratio matrix.
+
+This is release-validation tooling only; it does not change Brotli
+encode/decode behavior or the recorded codec target-perf baseline.
