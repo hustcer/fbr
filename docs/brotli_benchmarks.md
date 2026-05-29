@@ -2852,3 +2852,51 @@ Conclusion: this is an accepted P3 ratio improvement. The measured 2 MiB
 Silesia q2..q9 matrix is now inside the 5% target window. P3 still needs the
 planned broader block/histogram clustering and release validation corpus before
 being treated as fully complete.
+
+## 2026-05-29 — P4 Heuristic Optimization Stop Point
+
+This is the stop point for local q10/q11 heuristic optimization before release
+validation. The current q10/q11 encoder is valid and externally decodable, but
+it is still a high-quality greedy/hash-chain implementation rather than the
+documented Zopfli/shortest-path backend. The measured gap is too large to close
+with the small knobs tried so far, and the rejected trials show an unfavorable
+size-per-runtime tradeoff.
+
+Current P4 baseline kept for release validation:
+
+| Corpus      | Quality | MoonBit bytes | Google bytes | Size overhead |
+| ----------- | ------- | ------------- | ------------ | ------------- |
+| silesia-1m  | 10      | 264,422       | 242,485      | +9.05%        |
+| silesia-1m  | 11      | 264,422       | 239,314      | +10.49%       |
+| silesia-64k | 10      | 21,415        | 19,566       | +9.45%        |
+| silesia-64k | 11      | 21,415        | 19,258       | +11.20%       |
+
+Current 64 KiB target-perf baseline:
+
+| Mode   | Corpus      | Quality | Target  | MoonBit ms | Google ms | Slowdown |
+| ------ | ----------- | ------- | ------- | ---------- | --------- | -------- |
+| encode | silesia-64k | 10      | wasm-gc | 510.253    | 62.649    | 8.14x    |
+| encode | silesia-64k | 10      | native  | 121.332    | 62.649    | 1.94x    |
+| encode | silesia-64k | 11      | wasm-gc | 547.539    | 115.586   | 4.74x    |
+| encode | silesia-64k | 11      | native  | 75.297     | 115.586   | 0.65x    |
+
+Rejected q10/q11 heuristic work remains the governing evidence:
+
+- Wider q10 mixed-dictionary transforms saved only 107 bytes on
+  `silesia-1m.bin` q10 and 32 bytes on `silesia-128k.bin` q10, while the
+  128 KiB native target-perf sample moved from 91.262 to 97.858 ms/op and the
+  1 MiB verifier time increased.
+- A 384-check parser improved q10/q11 1 MiB output from 264,422 to 263,700
+  bytes, but q10 128 KiB target-perf regressed from 91.262/172.893 ms/op
+  native/wasm-gc to 143.997/660.508 ms/op, and q11 64 KiB native regressed
+  from 75.297 to 117.263 ms/op.
+- A bounded shortest-path DP prototype improved 1 MiB q10/q11 output from
+  266,056 to 263,496 bytes, but native debug encode target-perf regressed from
+  4,275.087 to 18,179.669 ms and the prototype lacked recent-distance-cache
+  state, so it was not commit-ready.
+
+Conclusion: stop speculative q10/q11 heuristic optimization here. The next P4
+implementation work must be a real bounded shortest-path/Zopfli backend with
+recent-distance-cache state and explicit memory caps, or the release must carry
+an explicit P4 ratio exception. Release validation can proceed against the
+current q10/q11 implementation with this limitation documented.

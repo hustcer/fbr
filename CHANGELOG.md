@@ -86,6 +86,10 @@ All notable changes to this project will be documented in this file.
   non-overlapping copies, and overlapping periodic copies; command symbol info
   is precomputed to remove per-symbol prefix-offset loops from decode and
   encode command handling.
+- Brotli q10/q11 heuristic optimization is paused at a documented release
+  checkpoint. The current streams are valid and externally decodable, but the
+  documented 2% P4 ratio target still requires a real bounded
+  shortest-path/Zopfli backend or an explicit release exception.
 
 ### Tests and docs
 
