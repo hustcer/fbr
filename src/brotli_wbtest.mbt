@@ -1402,6 +1402,71 @@ test "brotli_sync splits LZ77 command blocks by command histograms" {
 }
 
 ///|
+test "brotli_sync splits LZ77 literal and command blocks together" {
+  let input = FixedArray::make(7168, b'\x00')
+  let commands : Array[BrotliEncodeCommand] = []
+  let first_pattern : FixedArray[Byte] = [b'a', b'b', b'c', b'd']
+  let second_pattern : FixedArray[Byte] = [b'w', b'x', b'y', b'z']
+  let mut offset = 0
+  for _ in 0..<256 {
+    for i in 0..<4 {
+      input[offset + i] = first_pattern[i]
+      input[offset + 4 + i] = first_pattern[i]
+    }
+    commands.push(brotli_make_encode_command(offset, 4, 4, 4, true))
+    offset += 8
+  }
+  for _ in 0..<256 {
+    for repeat in 0..<5 {
+      for i in 0..<4 {
+        input[offset + repeat * 4 + i] = second_pattern[i]
+      }
+    }
+    commands.push(brotli_make_encode_command(offset, 4, 16, 4, true))
+    offset += 20
+  }
+  assert_eq(offset, input.length())
+  assert_eq(brotli_best_command_literal_split_point(input, commands), 1024)
+  assert_eq(brotli_best_command_block_split_point(commands), 256)
+  let weighted = BrotliBitWriter::new(
+    128 + input.length() * 4 + commands.length() * 8,
+  )
+  brotli_write_simple_lz77_metablock(weighted, input, commands, true, true)
+  let literal_split = match
+    brotli_write_split_lz77_metablock(input, commands, 1024, true) {
+    Some(candidate) => candidate
+    None => fail("expected literal block split candidate")
+  }
+  let command_split = match
+    brotli_write_command_split_lz77_metablock(input, commands, 256, true) {
+    Some(candidate) => candidate
+    None => fail("expected command block split candidate")
+  }
+  let joint_split = match
+    brotli_write_literal_command_split_lz77_metablock(
+      input, commands, 1024, 256, true,
+    ) {
+    Some(candidate) => candidate
+    None => fail("expected joint literal/command block split candidate")
+  }
+  assert_true(joint_split.bit_pos < weighted.bit_pos)
+  assert_true(joint_split.bit_pos < literal_split.bit_pos)
+  assert_true(joint_split.bit_pos < command_split.bit_pos)
+  let best = brotli_write_best_lz77_metablock(
+    input, commands, true, 5, false, 0, 0,
+  )
+  assert_eq(best.bit_pos, joint_split.bit_pos)
+  let encoded = BrotliBitWriter::new(16 + joint_split.buf.length())
+  brotli_encode_window_bits(encoded, 22)
+  encoded.write_from_bits(joint_split.buf, joint_split.bit_pos)
+  let decoded = unbrotli_sync(encoded.finish())
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync splits LZ77 distance blocks by distance histograms" {
   let input = FixedArray::make(2112, b'\x00')
   for i in 0..<input.length() {

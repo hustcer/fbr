@@ -3494,6 +3494,27 @@ Validation:
 `target-perf.nu` was not rerun for this structural block-layout increment per
 maintainer instruction.
 
+## 2026-05-30 — Literal+Command Block Split Candidate
+
+The q4+ LZ77 meta-block writer now also exact-costs a combined literal-block
+plus command-block split candidate. The candidate reuses the accepted literal
+and command histogram estimators, but keeps independent boundaries: the
+literal block switch is counted in inserted-literal events, and the command
+block switch is counted in command events. It leaves distance blocks
+single-tree, so this does not reintroduce the rejected binary
+literal/command/distance joint split or the rejected three-literal-block trial.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `moon test --target native --filter '*splits LZ77*blocks*'` | passed; 5/5 tests cover literal, command, distance, literal+command, and command+distance block split writers |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native` | 12/12 encoder roundtrips passed |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json` | q5 remains 40,328 bytes versus Google 40,515; q9 remains 39,081 bytes versus Google 39,695 |
+
+`target-perf.nu` was not rerun for this structural block-layout increment per
+maintainer instruction.
+
 ## 2026-05-29 — Soak Log Append Mode
 
 `tools/brotli/fuzz/soak.nu` now accepts:

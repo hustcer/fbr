@@ -127,6 +127,10 @@ All notable changes to this project will be documented in this file.
   distance-block split candidate when both histogram estimators find useful
   independent boundaries, extending P3 block-clustering coverage beyond
   single-dimension split candidates.
+- The q4+ writer also exact-costs a combined literal-block plus command-block
+  split candidate with independent literal-event and command-event boundaries,
+  giving the P3 block-layout search a second accepted multi-stream clustering
+  shape.
 
 ### Tests and docs
 
