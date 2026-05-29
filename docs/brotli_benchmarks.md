@@ -3515,6 +3515,27 @@ Validation:
 `target-perf.nu` was not rerun for this structural block-layout increment per
 maintainer instruction.
 
+## 2026-05-30 — Literal+Distance Block Split Candidate
+
+The q4+ LZ77 meta-block writer now exact-costs the remaining pairwise
+block-layout candidate: literal-block plus distance-block splitting. Literal
+block lengths count inserted-literal events, explicit-distance block lengths
+count only commands that read a distance symbol, and the command stream stays
+single-tree. Together with the literal+command and command+distance candidates,
+this completes pairwise literal/command/distance block-layout coverage while
+still avoiding the rejected three-stream joint split.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `moon test --target native --filter '*splits LZ77*blocks*'` | passed; 6/6 tests cover literal, command, distance, literal+command, literal+distance, and command+distance block split writers |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native` | 12/12 encoder roundtrips passed |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json` | q5 remains 40,328 bytes versus Google 40,515; q9 remains 39,081 bytes versus Google 39,695 |
+
+`target-perf.nu` was not rerun for this structural block-layout increment per
+maintainer instruction.
+
 ## 2026-05-29 — Soak Log Append Mode
 
 `tools/brotli/fuzz/soak.nu` now accepts:

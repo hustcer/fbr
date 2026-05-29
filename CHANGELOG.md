@@ -131,6 +131,10 @@ All notable changes to this project will be documented in this file.
   split candidate with independent literal-event and command-event boundaries,
   giving the P3 block-layout search a second accepted multi-stream clustering
   shape.
+- The q4+ writer now has the remaining combined literal-block plus
+  distance-block split candidate as well, completing pairwise literal,
+  command, and distance block-layout coverage without enabling the rejected
+  three-stream joint split.
 
 ### Tests and docs
 

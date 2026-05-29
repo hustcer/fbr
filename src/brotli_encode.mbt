@@ -4099,6 +4099,257 @@ fn brotli_write_distance_split_lz77_metablock(
 }
 
 ///|
+fn brotli_write_literal_distance_split_lz77_metablock(
+  data : FixedArray[Byte],
+  commands : Array[BrotliEncodeCommand],
+  literal_split : Int,
+  distance_split : Int,
+  is_last : Bool,
+) -> BrotliBitWriter? raise FzipError {
+  let literal_total = brotli_command_literal_count(commands)
+  let total_distance_count = brotli_command_distance_symbol_count(commands)
+  if literal_split <= 0 ||
+    literal_split >= literal_total ||
+    distance_split <= 0 ||
+    distance_split >= total_distance_count {
+    return None
+  }
+  let mut has_copy = false
+  for i in 0..<commands.length() {
+    if commands[i].has_copy {
+      has_copy = true
+      break
+    }
+  }
+  if !has_copy {
+    return None
+  }
+  let first_literals = match
+    brotli_collect_command_literals_range(data, commands, 0, literal_split) {
+    Some(literals) => literals
+    None => return None
+  }
+  let second_literals = match
+    brotli_collect_command_literals_range(
+      data, commands, literal_split, literal_total,
+    ) {
+    Some(literals) => literals
+    None => return None
+  }
+  let first_literal_frequencies = brotli_command_literal_frequencies_range(
+    data, commands, 0, literal_split,
+  )
+  let second_literal_frequencies = brotli_command_literal_frequencies_range(
+    data, commands, literal_split, literal_total,
+  )
+  let command_symbols = FixedArray::make(brotli_num_command_symbols, 0)
+  let first_distance_symbols = FixedArray::make(
+    brotli_distance_alphabet_size(0, 0, 24),
+    0,
+  )
+  let second_distance_symbols = FixedArray::make(
+    brotli_distance_alphabet_size(0, 0, 24),
+    0,
+  )
+  let command_frequencies = FixedArray::make(brotli_num_command_symbols, 0)
+  let first_distance_frequencies = FixedArray::make(
+    brotli_distance_alphabet_size(0, 0, 24),
+    0,
+  )
+  let second_distance_frequencies = FixedArray::make(
+    brotli_distance_alphabet_size(0, 0, 24),
+    0,
+  )
+  let mut command_count = 0
+  let mut first_distance_count = 0
+  let mut second_distance_count = 0
+  let mut distance_index = 0
+  for i in 0..<commands.length() {
+    let command = commands[i]
+    command_frequencies[command.command.symbol] += 1
+    command_count = brotli_add_unique_symbol(
+      command_symbols,
+      command_count,
+      command.command.symbol,
+    )
+    if brotli_command_uses_distance_symbol(command) {
+      let distance_symbol = command.distance_prefix.symbol
+      if distance_index < distance_split {
+        first_distance_frequencies[distance_symbol] += 1
+        first_distance_count = brotli_add_unique_symbol(
+          first_distance_symbols, first_distance_count, distance_symbol,
+        )
+      } else {
+        second_distance_frequencies[distance_symbol] += 1
+        second_distance_count = brotli_add_unique_symbol(
+          second_distance_symbols, second_distance_count, distance_symbol,
+        )
+      }
+      distance_index += 1
+    }
+  }
+  if first_distance_count == 0 || second_distance_count == 0 {
+    return None
+  }
+  let first_literal_spec = brotli_make_weighted_huffman_spec(
+    first_literals.symbols,
+    first_literals.count,
+    first_literal_frequencies,
+    brotli_num_literal_symbols,
+    brotli_num_literal_symbols,
+  )
+  let second_literal_spec = brotli_make_weighted_huffman_spec(
+    second_literals.symbols,
+    second_literals.count,
+    second_literal_frequencies,
+    brotli_num_literal_symbols,
+    brotli_num_literal_symbols,
+  )
+  let command_spec = brotli_make_weighted_huffman_spec(
+    command_symbols, command_count, command_frequencies, brotli_num_command_symbols,
+    brotli_num_command_symbols,
+  )
+  let first_distance_spec = brotli_make_weighted_huffman_spec(
+    first_distance_symbols,
+    first_distance_count,
+    first_distance_frequencies,
+    brotli_distance_alphabet_size(0, 0, 24),
+    brotli_distance_alphabet_size(0, 0, 24),
+  )
+  let second_distance_spec = brotli_make_weighted_huffman_spec(
+    second_distance_symbols,
+    second_distance_count,
+    second_distance_frequencies,
+    brotli_distance_alphabet_size(0, 0, 24),
+    brotli_distance_alphabet_size(0, 0, 24),
+  )
+  let writer = BrotliBitWriter::new(
+    256 + data.length() * 4 + commands.length() * 8,
+  )
+  brotli_write_metablock_header(writer, data.length(), is_last, false)
+  let (literal_length_spec, _, literal_second_prefix) = brotli_write_two_block_header(
+    writer,
+    literal_split,
+    literal_total - literal_split,
+  )
+  writer.write_bits(1, 0) // one command block type
+  let (distance_length_spec, _, distance_second_prefix) = brotli_write_two_block_header(
+    writer,
+    distance_split,
+    total_distance_count - distance_split,
+  )
+  writer.write_bits(6, 0) // NPOSTFIX = 0, NDIRECT = 0
+  writer.write_bits(2, 0) // LSB6 context mode for literal block 0
+  writer.write_bits(2, 0) // LSB6 context mode for literal block 1
+  brotli_write_trivial_two_tree_context_map(writer)
+  brotli_write_trivial_two_distance_context_map(writer)
+  brotli_write_huffman_spec(writer, first_literal_spec)
+  brotli_write_huffman_spec(writer, second_literal_spec)
+  brotli_write_huffman_spec(writer, command_spec)
+  brotli_write_huffman_spec(writer, first_distance_spec)
+  brotli_write_huffman_spec(writer, second_distance_spec)
+  let first_literal_payloads = brotli_huffman_payload_table(first_literal_spec)
+  let second_literal_payloads = brotli_huffman_payload_table(
+    second_literal_spec,
+  )
+  let command_payloads = brotli_huffman_payload_table(command_spec)
+  let first_distance_payloads = brotli_huffman_payload_table(
+    first_distance_spec,
+  )
+  let second_distance_payloads = brotli_huffman_payload_table(
+    second_distance_spec,
+  )
+  let literal_length_payloads = brotli_huffman_payload_table(
+    literal_length_spec,
+  )
+  let distance_length_payloads = brotli_huffman_payload_table(
+    distance_length_spec,
+  )
+  let type_symbols : FixedArray[Int] = [1]
+  let type_payload = brotli_simple_huffman_payload(type_symbols, 1, 1)
+  let literal_second_length_payload = literal_length_payloads[literal_second_prefix.symbol]
+  let distance_second_length_payload = distance_length_payloads[distance_second_prefix.symbol]
+  let mut literal_index = 0
+  let mut literal_switched = false
+  distance_index = 0
+  for i in 0..<commands.length() {
+    let command = commands[i]
+    let command_payload = command_payloads[command.command.symbol]
+    writer.write_bits(
+      command_payload.insert_extra_bits,
+      command_payload.insert_extra,
+    )
+    writer.write_bits(
+      command.command.insert_extra_bits,
+      command.command.insert_extra,
+    )
+    writer.write_bits(
+      command.command.copy_extra_bits,
+      command.command.copy_extra,
+    )
+    for j in 0..<command.insert_length {
+      if !literal_switched && literal_index == literal_split {
+        writer.write_bits(
+          type_payload.insert_extra_bits,
+          type_payload.insert_extra,
+        )
+        writer.write_bits(
+          literal_second_length_payload.insert_extra_bits,
+          literal_second_length_payload.insert_extra,
+        )
+        writer.write_bits(
+          literal_second_prefix.insert_extra_bits,
+          literal_second_prefix.insert_extra,
+        )
+        literal_switched = true
+      }
+      let literal = data[command.insert_start + j].to_int()
+      let literal_payload = if literal_index < literal_split {
+        first_literal_payloads[literal]
+      } else {
+        second_literal_payloads[literal]
+      }
+      writer.write_bits(
+        literal_payload.insert_extra_bits,
+        literal_payload.insert_extra,
+      )
+      literal_index += 1
+    }
+    if brotli_command_uses_distance_symbol(command) {
+      if distance_index == distance_split {
+        writer.write_bits(
+          type_payload.insert_extra_bits,
+          type_payload.insert_extra,
+        )
+        writer.write_bits(
+          distance_second_length_payload.insert_extra_bits,
+          distance_second_length_payload.insert_extra,
+        )
+        writer.write_bits(
+          distance_second_prefix.insert_extra_bits,
+          distance_second_prefix.insert_extra,
+        )
+      }
+      let distance_payload = if distance_index < distance_split {
+        first_distance_payloads[command.distance_prefix.symbol]
+      } else {
+        second_distance_payloads[command.distance_prefix.symbol]
+      }
+      writer.write_bits(
+        distance_payload.insert_extra_bits,
+        distance_payload.insert_extra,
+      )
+      writer.write_bits(
+        command.distance_prefix.insert_extra_bits,
+        command.distance_prefix.insert_extra,
+      )
+      distance_index += 1
+    }
+  }
+  Some(writer)
+}
+
+///|
 fn brotli_write_command_distance_split_lz77_metablock(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand],
@@ -5040,6 +5291,18 @@ fn brotli_write_best_lz77_metablock(
       match
         brotli_write_distance_split_lz77_metablock(
           data, commands, distance_split, is_last,
+        ) {
+        Some(candidate) =>
+          if candidate.bit_pos < best.bit_pos {
+            best = candidate
+          }
+        None => ()
+      }
+    }
+    if split > 0 && distance_split > 0 {
+      match
+        brotli_write_literal_distance_split_lz77_metablock(
+          data, commands, split, distance_split, is_last,
         ) {
         Some(candidate) =>
           if candidate.bit_pos < best.bit_pos {
