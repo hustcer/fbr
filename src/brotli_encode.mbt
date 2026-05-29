@@ -2256,6 +2256,7 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
     return None
   }
   let commands : Array[BrotliEncodeCommand] = []
+  let max_commands = brotli_effective_max_commands(hash_config, data.length())
   let previous = brotli_previous_match_positions(data, hash_config)
   let mut literal_start = 0
   let mut position = 0
@@ -2316,7 +2317,7 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
       brotli_update_distance_cache(
         distance_cache, distance, emitted_distance_code,
       )
-      if commands.length() > hash_config.max_commands {
+      if commands.length() > max_commands {
         return None
       }
       position += match_length
@@ -3608,10 +3609,10 @@ fn brotli_encode_uncompressed(
 
 ///|
 fn brotli_standard_chunk_size_for_quality(quality : Int) -> Int {
-  // q2 and q9 need larger P3 chunks so matches and literal-context statistics
+  // q2..q9 need larger P3 chunks so matches and literal-context statistics
   // can cross the previous 1 MiB boundary. Keep other standard modes unchanged
   // until their target-perf tradeoff has separate evidence.
-  if quality == 2 || quality == 9 {
+  if quality >= 2 && quality <= 9 {
     2097152
   } else {
     1048576

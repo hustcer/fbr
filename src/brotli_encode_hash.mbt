@@ -61,12 +61,8 @@ fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
       3
     },
     scan_step: 1,
-    max_commands: if quality <= 2 {
-      104000
-    } else {
-      52000
-    },
-    max_input_length: if quality <= 2 {
+    max_commands: 52000,
+    max_input_length: if quality <= 9 {
       2097152
     } else {
       1048576
@@ -161,7 +157,7 @@ fn brotli_intermediate_hash_config_for_quality(
     lazy_lookahead: 3,
     scan_step: 1,
     max_commands,
-    max_input_length: 1048576,
+    max_input_length: 2097152,
     min_copy_ratio_percent: 12,
     require_dense_match_density: false,
     density_sample_step: 256,
@@ -195,6 +191,24 @@ fn brotli_four_byte_hash_config(config : BrotliHashConfig) -> BrotliHashConfig {
 ///|
 fn brotli_hash_max_input_length(config : BrotliHashConfig) -> Int {
   config.max_input_length
+}
+
+///|
+fn brotli_effective_max_commands(
+  config : BrotliHashConfig,
+  data_length : Int,
+) -> Int {
+  // q2..q8 keep their historical command budgets for <=1 MiB chunks. Larger
+  // P3 chunks scale the budget with input length so the candidate does not
+  // fall back to stored output just because two formerly separate chunks are
+  // costed together.
+  if config.max_input_length > 1048576 &&
+    config.max_commands < 300000 &&
+    data_length > 1048576 {
+    config.max_commands * ((data_length + 1048575) / 1048576)
+  } else {
+    config.max_commands
+  }
 }
 
 ///|

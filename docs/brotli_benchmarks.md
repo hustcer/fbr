@@ -2804,3 +2804,51 @@ Conclusion: this is an accepted P3 ratio improvement. q2 now meets the 5%
 target on the measured 2 MiB Silesia slice without changing the 64 KiB encoded
 size. P3's remaining ratio work is no longer the q2/q9 2 MiB gap; it is the
 broader block/histogram clustering and release validation matrix.
+
+## 2026-05-29 — q3 through q8 Two-Mebibyte Standard Chunks
+
+The q2/q9 2 MiB chunk strategy also pays for the remaining P3 qualities. This
+increment lets q3..q8 use 2 MiB standard chunks and extends the natural and
+intermediate parser input bounds to 2 MiB. Command budgets remain unchanged for
+chunks up to 1 MiB; only larger chunks scale the budget by chunk length. This
+preserves the small-input profile while avoiding stored fallbacks when two
+formerly separate chunks are costed together.
+
+Validation commands:
+
+```nu
+moon check --target native
+moon test --target native --filter '*two-mebibyte chunks*'
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-2m.bin --qualities 3,5,8 --json
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-2m.bin --qualities 4,6,7 --json
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+  --mode encode \
+  --quality 8 \
+  --targets wasm-gc,native \
+  --repeats 1 \
+  --samples 1 \
+  --json
+```
+
+2 MiB ratio results:
+
+| Quality | MoonBit bytes | Google bytes | Size overhead | Google decode |
+| ------- | ------------- | ------------ | ------------- | ------------- |
+| 3       | 617,687       | 623,577      | -0.94%        | pass          |
+| 4       | 566,718       | 569,163      | -0.43%        | pass          |
+| 5       | 549,625       | 538,906      | 1.99%         | pass          |
+| 6       | 549,625       | 527,485      | 4.20%         | pass          |
+| 7       | 537,621       | 520,020      | 3.38%         | pass          |
+| 8       | 537,621       | 514,598      | 4.47%         | pass          |
+
+Representative 64 KiB target-perf result:
+
+| Mode   | Corpus      | Quality | Target  | MoonBit bytes | Google bytes | MoonBit ms | Google ms |
+| ------ | ----------- | ------- | ------- | ------------- | ------------ | ---------- | --------- |
+| encode | silesia-64k | 8       | wasm-gc | 22,261        | 22,077       | 524.749    | 42.872    |
+| encode | silesia-64k | 8       | native  | 22,261        | 22,077       | 112.349    | 42.872    |
+
+Conclusion: this is an accepted P3 ratio improvement. The measured 2 MiB
+Silesia q2..q9 matrix is now inside the 5% target window. P3 still needs the
+planned broader block/histogram clustering and release validation corpus before
+being treated as fully complete.

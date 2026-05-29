@@ -695,6 +695,7 @@ fn brotli_build_mixed_dictionary_lz77_commands_with_distance_cache(
   }
   let index = brotli_build_dictionary_encode_index_min_output(8)
   let commands : Array[BrotliEncodeCommand] = []
+  let max_commands = brotli_effective_max_commands(hash_config, data.length())
   let previous = brotli_previous_match_positions(data, hash_config)
   let mut literal_start = 0
   let mut position = 0
@@ -725,7 +726,7 @@ fn brotli_build_mixed_dictionary_lz77_commands_with_distance_cache(
               Err(_) => return None
             }
             used_dictionary = true
-            if commands.length() > hash_config.max_commands {
+            if commands.length() > max_commands {
               return None
             }
             position += output_length
@@ -787,7 +788,7 @@ fn brotli_build_mixed_dictionary_lz77_commands_with_distance_cache(
       brotli_update_distance_cache(
         distance_cache, distance, emitted_distance_code,
       )
-      if commands.length() > hash_config.max_commands {
+      if commands.length() > max_commands {
         return None
       }
       position += match_length
