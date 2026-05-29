@@ -115,6 +115,8 @@ All notable changes to this project will be documented in this file.
   selected quality levels and MoonBit backends.
 - Brotli fuzz harness locks now record an owner PID and automatically recover
   stale locks left by interrupted local validation runs.
+- Added `tools/brotli/release/validate.nu` to run the practical Brotli release
+  validation gate from one Nushell command.
 
 ## v0.8.0 - 2026-05-20
 

@@ -3057,3 +3057,29 @@ Validation:
 This makes local release validation more robust after intentional interrupts
 without weakening the mutual exclusion around temporary generated MoonBit
 white-box test files.
+
+## 2026-05-29 — Release Validation Runner
+
+Added `tools/brotli/release/validate.nu` as the practical Brotli release gate.
+The script runs the same categories currently used for the release checkpoint:
+
+- `moon fmt`, `moon check --target all`, `moon test --target all`,
+  `moon info`, and `git diff --check`.
+- Upstream Google Brotli conformance fixtures.
+- q0/q1 external decode validation on the 2 MiB Silesia slice.
+- q2..q9 2 MiB ratio validation plus external decode validation.
+- q10/q11 1 MiB external decode validation with the documented P4 ratio
+  exception.
+- Decoder fuzz corpus and encoder roundtrip fuzz.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `nu --ide-check 0 tools/brotli/release/validate.nu` | parsed successfully |
+| `nu tools/brotli/release/validate.nu --skip-moon --skip-ratio --decoder-fuzz-limit 2 --roundtrip-count 1 --roundtrip-max-len 16 --roundtrip-qualities 2 --roundtrip-target native` | conformance, decoder fuzz, and encoder roundtrip fuzz passed |
+
+The release runner intentionally does not call `target-perf.nu` by default.
+Target-perf remains the decision harness for codec changes, while this script
+keeps release validation reproducible for correctness and documented ratio
+coverage.
