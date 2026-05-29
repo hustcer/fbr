@@ -121,6 +121,8 @@ All notable changes to this project will be documented in this file.
   readiness summary, validation evidence, and accepted P4 ratio exception.
 - Added Justfile entries for the full, smoke, and package-only Brotli release
   validation gates, and added package verification to the release runner.
+- Added `tools/brotli/fuzz/soak.nu` plus Justfile entries for the scripted
+  Brotli long fuzz soak gate.
 
 ## v0.8.0 - 2026-05-20
 

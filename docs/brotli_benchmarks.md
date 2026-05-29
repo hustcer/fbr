@@ -3111,3 +3111,28 @@ Validation:
 
 This is release-readiness tooling only; it does not change Brotli encode/decode
 behavior or the recorded codec target-perf baseline.
+
+## 2026-05-29 — Long Fuzz Soak Runner
+
+Added `tools/brotli/fuzz/soak.nu` as a repeatable runner for the long Brotli
+fuzz gate. Each iteration runs the decoder fuzz corpus and encoder roundtrip
+fuzz harness, appends a JSONL status row to
+`target/brotli-fuzz-soak/soak.jsonl`, and stops at the configured duration or
+iteration limit. The default duration is 1,440 minutes for the documented
+24-hour soak gate.
+
+Justfile entries:
+
+- `just brotli-fuzz-soak`
+- `just brotli-fuzz-soak-smoke`
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `nu --ide-check 0 tools/brotli/fuzz/soak.nu` | parsed successfully |
+| `just --list` | lists `brotli-fuzz-soak` and `brotli-fuzz-soak-smoke` |
+| `just brotli-fuzz-soak-smoke` | one decoder fuzz iteration and one encoder roundtrip fuzz iteration passed |
+
+This scripts the long fuzz requirement but does not claim that a 24-hour soak
+has already completed.

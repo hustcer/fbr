@@ -159,13 +159,18 @@ Current local release coverage:
   set.
 - Configurable fuzz targets: `native`, `wasm-gc`, `js`, or `all`.
 - Stale lock recovery for interrupted fuzz runs.
+- Scripted long fuzz soak entry points:
+  - `nu tools/brotli/fuzz/soak.nu`
+  - `just brotli-fuzz-soak`
+  - `just brotli-fuzz-soak-smoke`
 
 Reserved final-release work:
 
-- The original 24-hour fuzz gate is not replaced by the practical local gate.
+- The original 24-hour fuzz gate is now scriptable through
+  `tools/brotli/fuzz/soak.nu`, but this report does not claim that a 24-hour
+  soak has completed.
 - A broader corpus can now be run through `tools/brotli/release/validate.nu`
-  and the fuzz scripts, but the current checked-in report does not claim that a
-  24-hour soak has completed.
+  and the fuzz scripts before the final release artifact is cut.
 
 ## Accepted Exceptions
 

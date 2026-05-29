@@ -34,6 +34,9 @@ nu tools/brotli/fuzz/run.nu --batch-size 50
 nu tools/brotli/fuzz/run.nu --limit 25 --target all
 nu tools/brotli/fuzz/roundtrip.nu
 nu tools/brotli/fuzz/roundtrip.nu --count 25 --qualities 2,9,11 --target wasm-gc
+nu tools/brotli/fuzz/soak.nu
+just brotli-fuzz-soak
+just brotli-fuzz-soak-smoke
 ```
 
 `gen-corpus.nu` seeds `tools/brotli/fuzz/corpus/` from the embedded fixture set
@@ -55,6 +58,12 @@ to broaden release validation.
 Both fuzz runners use `tools/brotli/.harness-lock` to avoid overlapping
 temporary white-box test files. The lock records the owning process ID and
 automatically recovers if a previous interrupted run left a stale lock behind.
+
+`soak.nu` repeats the decoder fuzz corpus and encoder roundtrip fuzz loops for
+a duration or iteration limit and writes JSONL progress to
+`target/brotli-fuzz-soak/soak.jsonl`. The default duration is 24 hours for the
+documented long fuzz gate. Use `just brotli-fuzz-soak-smoke` for a one-iteration
+local smoke check.
 
 ## Release Validation
 

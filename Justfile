@@ -57,6 +57,14 @@ brotli-release-smoke:
 brotli-release-package:
     nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-fuzz
 
+# Run the Brotli long fuzz soak gate
+brotli-fuzz-soak duration_minutes='1440':
+    nu tools/brotli/fuzz/soak.nu --duration-min {{ duration_minutes }}
+
+# Run one short Brotli fuzz soak iteration
+brotli-fuzz-soak-smoke:
+    nu tools/brotli/fuzz/soak.nu --duration-min 0 --max-iterations 1 --decoder-limit 2 --roundtrip-count 1 --roundtrip-max-len 16 --roundtrip-qualities 2
+
 # Clean build directories
 clean:
     #!/usr/bin/env nu
