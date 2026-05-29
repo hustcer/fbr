@@ -3384,6 +3384,25 @@ Validation:
 
 `target-perf.nu` was not rerun for this increment per maintainer instruction.
 
+## 2026-05-30 — q10/q11 Bounded Suffix-Tree Match Source
+
+The q10/q11 bounded shortest-path seed now has a second match provider: a
+bounded suffix binary tree built over earlier positions in the current
+meta-block. The tree is deliberately capped by the existing match-check budget
+and remains a small-input seed for the full P4 suffix-tree/Zopfli backend.
+Suffix-tree matches are offered into the same two-state beam and still go
+through exact meta-block costing before selection.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `moon test --target native --filter '*bounded*'` | passed; 6/6 tests cover bounded command roundtrip, hash-chain multi-match enumeration, suffix-tree match enumeration, recent-distance costs, cost-model histograms, and beam retention |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged |
+
+`target-perf.nu` was not rerun for this increment per maintainer instruction.
+
 ## 2026-05-29 — Command-Block Histogram Split Candidate
 
 The q4+ LZ77 meta-block writer now estimates command-symbol histograms at the

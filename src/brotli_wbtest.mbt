@@ -1690,6 +1690,33 @@ test "brotli_sync q10 bounded shortest-path enumerates multiple matches" {
 }
 
 ///|
+test "brotli_sync q10 bounded suffix tree enumerates matches" {
+  let input : FixedArray[Byte] = [
+    b'a', b'b', b'c', b'd', b'e', b'f', b'X', b'a', b'b', b'c', b'd', b'e', b'f',
+    b'Y', b'a', b'b', b'c', b'd', b'e', b'f', b'Z',
+  ]
+  let config = brotli_bounded_shortest_path_config(
+    brotli_four_byte_hash_config(
+      brotli_high_quality_hash_config_for_quality(10),
+    ),
+  )
+  let table = brotli_bounded_suffix_tree_match_table(input, config)
+  let matches = table[14]
+  let mut saw_distance_7 = false
+  let mut saw_distance_14 = false
+  for i in 0..<matches.length() {
+    if matches[i].distance == 7 && matches[i].length >= 6 {
+      saw_distance_7 = true
+    }
+    if matches[i].distance == 14 && matches[i].length >= 6 {
+      saw_distance_14 = true
+    }
+  }
+  assert_true(saw_distance_7)
+  assert_true(saw_distance_14)
+}
+
+///|
 test "brotli_sync q10 bounded shortest-path costs recent distances" {
   let cached : FixedArray[Int] = [4, 11, 15, 16]
   let uncached : FixedArray[Int] = [11, 15, 16, 20]

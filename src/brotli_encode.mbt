@@ -2868,6 +2868,7 @@ fn brotli_build_bounded_shortest_path_command_candidate(
   }
   let len = data.length()
   let previous = brotli_previous_match_positions(data, config)
+  let suffix_matches = brotli_bounded_suffix_tree_match_table(data, config)
   let cost_model = brotli_bounded_shortest_path_cost_model(
     data, config, distance_cache,
   )
@@ -2923,6 +2924,63 @@ fn brotli_build_bounded_shortest_path_command_candidate(
           // Keep the DP bounded: several previous matches per position, and
           // only a few representative copy lengths for each match. This grows
           // the P4 candidate graph without taking on full Zopfli search cost.
+          let bounded_lengths : FixedArray[Int] = [
+            config.min_match_length,
+            match_.length / 2,
+            match_.length,
+          ]
+          for i in 0..<bounded_lengths.length() {
+            let copy_length = bounded_lengths[i]
+            if copy_length < config.min_match_length ||
+              copy_length > match_.length ||
+              position + copy_length > len {
+              continue
+            }
+            let end = position + copy_length
+            let copy_cost = base_cost +
+              brotli_bounded_shortest_path_copy_cost(
+                copy_length,
+                match_.distance,
+                position,
+                current_cache,
+                cost_model,
+              )
+            let next_cache = brotli_copy_distance_cache(current_cache)
+            let distance_code = brotli_compute_distance_code(
+              match_.distance,
+              position,
+              next_cache,
+            )
+            brotli_update_distance_cache(
+              next_cache,
+              match_.distance,
+              distance_code,
+            )
+            brotli_bounded_shortest_path_offer_state(
+              costs,
+              state_cache0,
+              state_cache1,
+              state_cache2,
+              state_cache3,
+              previous_position,
+              previous_slot,
+              choice_copy_length,
+              choice_copy_distance,
+              end,
+              copy_cost,
+              next_cache,
+              position,
+              slot,
+              copy_length,
+              match_.distance,
+            )
+          }
+        }
+      }
+      let tree_matches = suffix_matches[position]
+      for match_index in 0..<tree_matches.length() {
+        let match_ = tree_matches[match_index]
+        if match_.length >= config.min_match_length {
           let bounded_lengths : FixedArray[Int] = [
             config.min_match_length,
             match_.length / 2,
