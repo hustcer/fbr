@@ -32,6 +32,8 @@ nu tools/brotli/fuzz/run.nu
 nu tools/brotli/fuzz/run.nu --limit 25
 nu tools/brotli/fuzz/run.nu --batch-size 50
 nu tools/brotli/fuzz/run.nu --limit 25 --target all
+nu tools/brotli/fuzz/roundtrip.nu
+nu tools/brotli/fuzz/roundtrip.nu --count 25 --qualities 2,9,11 --target wasm-gc
 ```
 
 `gen-corpus.nu` seeds `tools/brotli/fuzz/corpus/` from the embedded fixture set
@@ -43,6 +45,12 @@ keep full-corpus local runs fast while still reporting the batch that failed.
 The default MoonBit test target is `native`; pass `--target wasm-gc`, `--target
 js`, or `--target all` when validating backend-specific release behavior. The
 temporary file is removed after the run.
+
+`roundtrip.nu` is the encoder fuzz companion. It generates deterministic byte
+inputs, encodes them with selected Brotli quality levels, decodes the result
+through `unbrotli_sync`, and asserts byte-for-byte equality. The defaults cover
+q0, q1, q2, q9, and q11 on the native backend; use `--qualities` and `--target`
+to broaden release validation.
 
 ## Silesia q=11 Verification
 

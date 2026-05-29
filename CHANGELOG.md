@@ -110,6 +110,9 @@ All notable changes to this project will be documented in this file.
 - Brotli fuzz runner accepts `--target`, so the same generated corpus can now
   be checked on `native`, `wasm-gc`, `js`, or `all` targets during release
   validation.
+- Added `tools/brotli/fuzz/roundtrip.nu`, a deterministic encoder fuzz harness
+  that checks random byte inputs through `brotli_sync` -> `unbrotli_sync` for
+  selected quality levels and MoonBit backends.
 
 ## v0.8.0 - 2026-05-20
 

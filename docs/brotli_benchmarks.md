@@ -3012,3 +3012,29 @@ Validation:
 
 This is a release-readiness tooling change only. It does not change Brotli
 encode/decode behavior or the recorded codec target-perf baseline.
+
+## 2026-05-29 — Encoder Roundtrip Fuzz Harness
+
+Added `tools/brotli/fuzz/roundtrip.nu` as the encoder-side fuzz companion to
+the decoder robustness runner. It generates deterministic byte inputs, encodes
+each input with selected Brotli quality levels, decodes the result with
+`unbrotli_sync`, and asserts byte-for-byte equality.
+
+Default release-oriented coverage:
+
+- q0/q1 stored meta-blocks.
+- q2 standard compressed path.
+- q9 high-quality P3 path.
+- q11 current P4 release-exception path.
+- configurable MoonBit targets via `--target`.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 2 --qualities 0,2 --target native --batch-size 2` | 4/4 passed |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --target native` | 20/20 passed |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 3 --max-len 256 --qualities 2,11 --target wasm-gc` | 6/6 passed |
+
+This expands release-readiness coverage without changing Brotli encode/decode
+implementation or the recorded codec target-perf baseline.
