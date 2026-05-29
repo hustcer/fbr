@@ -3268,6 +3268,32 @@ soak log contained 6 successful rows and left no temporary harness files.
 This is release-validation tooling only; it does not change Brotli
 encode/decode behavior or the recorded codec target-perf baseline.
 
+## 2026-05-29 — Command-Block Histogram Split Candidate
+
+The q4+ LZ77 meta-block writer now estimates command-symbol histograms at the
+1/4, 1/2, and 3/4 command boundaries. When the estimated command-tree payload
+saving clears the block-header overhead guard, it writes an exact-costed
+two-command-block candidate and selects it only if its final bit count beats
+the existing weighted, literal-split, and context candidates.
+
+This is the first accepted P3 block-clustering increment that changes command
+block layout rather than only literal block or literal context layout.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `moon test --target native --filter 'brotli_sync splits LZ77 command blocks by command histograms'` | passed; synthetic command-skew candidate beats the weighted single-command-tree writer and round-trips through `unbrotli_sync` |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json` | q5 40,328 bytes vs Google 40,515 (-0.46%); q9 39,081 bytes vs Google 39,695 (-1.55%) |
+| `nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin --mode encode --quality 5 --targets wasm-gc,native --repeats 3 --samples 3 --json` | q5 output 22,336 bytes vs Google 22,271; wasm-gc/native min encode 81.122/52.656 ms |
+| `nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin --mode encode --quality 9 --targets wasm-gc,native --repeats 3 --samples 3 --json` | q9 output 21,514 bytes vs Google 22,063; wasm-gc/native min encode 77.966/45.555 ms |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native` | 12/12 encoder roundtrips passed |
+| `moon check --target all && moon test --target all && moon info` | all-target check passed; 459 tests passed on wasm, wasm-gc, js, and native; public interface generation unchanged |
+
+The Silesia 64 KiB and 128 KiB outputs are unchanged for the measured q5/q9
+samples; the accepted value is structural coverage for command-block histogram
+splitting with no measured size regression on these release samples.
+
 ## 2026-05-29 — Soak Log Append Mode
 
 `tools/brotli/fuzz/soak.nu` now accepts:

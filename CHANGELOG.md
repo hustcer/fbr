@@ -76,6 +76,11 @@ All notable changes to this project will be documented in this file.
   the intermediate 4-byte candidate that wins the accepted stream. Sampled
   64 KiB target-perf keeps output at 22,336 bytes and improves native encode
   from 142.394 to 94.185 ms and wasm-gc encode from 541.752 to 524.160 ms.
+- Brotli q4+ now exact-costs a command-block histogram split candidate when
+  command symbols differ enough across the command stream. Silesia 128 KiB
+  q5/q9 output remains stable at 40,328/39,081 bytes, and sampled 64 KiB
+  target-perf records q5 wasm-gc/native encode at 81.122/52.656 ms and q9 at
+  77.966/45.555 ms.
 - Brotli q9 ratio improved by enabling the mixed-dictionary candidate. On
   Silesia, q9 1 MiB falls from 273,633 to 271,776 bytes (overhead vs Google
   q9 263,791 reduced from 3.73% to 3.03%), q9 128 KiB falls from 40,013 to
@@ -96,7 +101,7 @@ All notable changes to this project will be documented in this file.
 - New `docs/brotli.md` planning document with phased delivery details.
 - New `docs/brotli_benchmarks.md` recording every accepted size/time delta
   for the Brotli encoder/decoder.
-- 458 in-package tests covering Brotli decoder helpers, transforms, fixtures,
+- 459 in-package tests covering Brotli decoder helpers, transforms, fixtures,
   roundtrips, q0..q11 end-to-end, stream chunking, and security limits, all
   passing on `wasm`, `wasm-gc`, `js`, and `native`.
 - Brotli release-validation checkpoint recorded: q0/q1 2 MiB stored streams
