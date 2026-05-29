@@ -83,7 +83,7 @@ larger P3/P4 algorithm-completion targets.
 | P3 broader algorithm | Richer literal, command, and distance block/histogram clustering | Plan still lists richer histogram/block clustering as remaining work beyond the current single split/context candidates | Incomplete |
 | P3 performance | q5 encode-time budget and regression tracking | Target-perf evidence is recorded in `docs/brotli_benchmarks.md`; latest codec-changing commits carry wasm-gc/native evidence | Evidence recorded, not rerun for tooling-only updates |
 | P4 q10/q11 validity | q10/q11 outputs decode through MoonBit and Google Brotli | q10/q11 pass external Google decode in the release gate | Complete for stream validity |
-| P4 q10/q11 ratio | Within 2% of Google Brotli on Silesia | Current 1 MiB Silesia window: q10 +9.05%, q11 +10.49% | Incomplete; release requires explicit exception |
+| P4 q10/q11 ratio | Within 2% of Google Brotli on Silesia | Current 1 MiB Silesia window: q10 +9.05%, q11 +10.49% | Incomplete; exception accepted for the current Brotli-capable release |
 | P4 Zopfli backend | Suffix-tree plus bounded shortest-path/Zopfli parser with recent-distance-cache state | Local shortest-path probes were rejected as too slow or incomplete; no production Zopfli backend is enabled | Incomplete |
 | P4 performance and memory | Encode within 5x and memory within 2x of C reference | No accepted production Zopfli backend exists, so these P4 acceptance checks cannot be claimed | Incomplete |
 | Fuzz gate | Scripted fuzz harness and long-fuzz route | Checked-in corpus, generated deterministic corpus, encoder roundtrip fuzz, and bounded 3-iteration soak passed | Release-ready locally; 24-hour soak not claimed |
@@ -226,20 +226,22 @@ P4 q10/q11:
 - They remain outside the documented P4 2% ratio target.
 - Local heuristic tuning was stopped because measured trials either produced
   small size gains or regressed wasm-gc/native encode performance too much.
+- The q10/q11 ratio exception is accepted for the current Brotli-capable
+  release candidate because q10/q11 stream validity is proven and completing
+  the original P4 target requires a larger Zopfli/suffix-tree backend.
 - Completing P4 as originally specified still requires a real bounded
   shortest-path/Zopfli backend with recent-distance-cache state and explicit
   memory caps.
 
 ## Release Recommendation
 
-The implementation is ready for release validation as a Brotli-capable fzip
-build with the documented P4 ratio exception. It should not be described as a
-complete P4 Zopfli encoder.
+The implementation is ready as a Brotli-capable fzip release candidate with
+the accepted P4 ratio exception. It should not be described as a complete P4
+Zopfli encoder.
 
 Before cutting a final public release artifact, the remaining non-heuristic
 release tasks are:
 
-- Decide whether the q10/q11 P4 ratio exception is acceptable for the release.
 - Run any required long-duration fuzz soak.
 - Run any release-specific packaging/publishing checks beyond local
   `moon package` and `moon publish --dry-run` package verification.

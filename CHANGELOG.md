@@ -133,6 +133,8 @@ All notable changes to this project will be documented in this file.
   release readiness from incomplete P3/P4 algorithm targets.
 - Added a bounded full-corpus Brotli fuzz soak Justfile entry for repeatable
   finite release-validation runs.
+- Accepted the q10/q11 Brotli P4 ratio exception for the current
+  Brotli-capable release candidate while keeping P4 marked incomplete.
 
 ## v0.8.0 - 2026-05-20
 
