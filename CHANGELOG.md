@@ -104,6 +104,9 @@ All notable changes to this project will be documented in this file.
   the 5% P3 window, q10/q11 remain valid with a documented P4 ratio exception,
   22 upstream conformance fixtures pass, and the 25-input local fuzz gate
   passes.
+- Brotli fuzz runner now batches generated white-box tests. The 25-input local
+  gate drops from 54.73s to 2.19s on this machine, and the current 58-input
+  corpus completes in 7.00s, making broader release validation practical.
 
 ## v0.8.0 - 2026-05-20
 

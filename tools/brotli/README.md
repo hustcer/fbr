@@ -30,14 +30,16 @@ then removes the temporary file.
 nu tools/brotli/fuzz/gen-corpus.nu --count 1000
 nu tools/brotli/fuzz/run.nu
 nu tools/brotli/fuzz/run.nu --limit 25
+nu tools/brotli/fuzz/run.nu --batch-size 50
 ```
 
 `gen-corpus.nu` seeds `tools/brotli/fuzz/corpus/` from the embedded fixture set
 and adds random truncation, append, and delete-middle mutations. `run.nu`
-generates a temporary `src/brotli_fuzz_wbtest.mbt` per input and asserts
+generates temporary `src/brotli_fuzz_wbtest.mbt` batches and asserts
 `unbrotli_sync` either returns bytes or raises `FzipError`; native panics or
-unchecked bounds failures fail the run. The temporary file is removed after the
-run.
+unchecked bounds failures fail the run. The default batch size is 25 inputs to
+keep full-corpus local runs fast while still reporting the batch that failed.
+The temporary file is removed after the run.
 
 ## Silesia q=11 Verification
 

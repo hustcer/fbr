@@ -2972,3 +2972,25 @@ remain valid but outside the P4 2% ratio target, so this release checkpoint
 requires the documented P4 ratio exception. Local heuristic optimization can
 stop here; remaining release work should focus on broader corpus validation,
 the long fuzz gate, and packaging/release checks.
+
+## 2026-05-29 — Batched Fuzz Runner Release Gate
+
+The decoder fuzz runner now writes multiple generated white-box tests into the
+temporary `src/brotli_fuzz_wbtest.mbt` file and invokes `moon test` once per
+batch. This keeps the same semantic check for each input: `unbrotli_sync` may
+return decoded bytes or a typed `FzipError`, but native panics and unchecked
+bounds failures still fail the run.
+
+Fuzz-runner timing on the current corpus:
+
+| Command | Inputs | Batch size | Result | Wall time |
+| ------- | ------ | ---------- | ------ | --------- |
+| `nu tools/brotli/fuzz/run.nu --limit 25` before batching | 25 | 1 | pass | 54.73s |
+| `nu tools/brotli/fuzz/run.nu --limit 25` after batching | 25 | 25 | pass | 2.19s |
+| `nu tools/brotli/fuzz/run.nu` after batching | 58 | 25 | pass | 7.00s |
+
+The 25-input local gate is 25.0x faster by wall clock, and the full checked-in
+corpus now runs comfortably as a local release gate. This does not replace the
+documented 24-hour fuzz requirement for final release readiness; it removes the
+per-input `moon test` overhead that made broader local fuzz sweeps needlessly
+expensive.
