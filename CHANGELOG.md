@@ -119,6 +119,8 @@ All notable changes to this project will be documented in this file.
   validation gate from one Nushell command.
 - Added `docs/brotli_release_report.md` with the current Brotli release
   readiness summary, validation evidence, and accepted P4 ratio exception.
+- Added Justfile entries for the full, smoke, and package-only Brotli release
+  validation gates, and added package verification to the release runner.
 
 ## v0.8.0 - 2026-05-20
 

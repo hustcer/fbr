@@ -3,7 +3,7 @@ set shell := ['nu', '-m', 'light', '-c']
 # The export setting causes all just variables
 # to be exported as environment variables.
 
-set export := true
+set export
 
 JUST_FILE_PATH := justfile()
 NU_DIR := parent_directory(`$nu.current-exe`)
@@ -44,6 +44,18 @@ bench:
 # Run tests
 test:
     moon test --target all
+
+# Run the full Brotli practical release validation gate
+brotli-release:
+    nu tools/brotli/release/validate.nu
+
+# Run a quick Brotli release validation smoke gate
+brotli-release-smoke:
+    nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-package --decoder-fuzz-limit 2 --roundtrip-count 1 --roundtrip-max-len 16 --roundtrip-qualities 2
+
+# Run Brotli packaging and publish dry-run validation only
+brotli-release-package:
+    nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-fuzz
 
 # Clean build directories
 clean:

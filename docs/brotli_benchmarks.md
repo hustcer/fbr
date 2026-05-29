@@ -3083,3 +3083,31 @@ The release runner intentionally does not call `target-perf.nu` by default.
 Target-perf remains the decision harness for codec changes, while this script
 keeps release validation reproducible for correctness and documented ratio
 coverage.
+
+## 2026-05-29 — Release Packaging Gate
+
+The practical release runner now includes package validation by default, and
+the repo `Justfile` exposes focused Brotli release entries:
+
+- `just brotli-release`
+- `just brotli-release-smoke`
+- `just brotli-release-package`
+
+`moon package --dry-run` is not implemented by the current toolchain, so the
+package gate uses `moon package` plus `moon publish --dry-run`. The publish
+dry-run validates the packaged zip, extracts it, and runs `moon check` against
+the extracted package. Because version `0.8.0` already exists upstream, the
+dry-run ends with a duplicate-version 409; the release runner treats that exact
+case as success only when the packaged-zip extraction and check have already
+passed.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `just --list` | lists `brotli-release`, `brotli-release-smoke`, and `brotli-release-package` |
+| `just brotli-release-smoke` | decoder fuzz corpus and encoder roundtrip fuzz passed |
+| `just brotli-release-package` | `moon package` and `moon publish --dry-run` package verification passed |
+
+This is release-readiness tooling only; it does not change Brotli encode/decode
+behavior or the recorded codec target-perf baseline.

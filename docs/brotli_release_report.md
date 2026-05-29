@@ -44,6 +44,8 @@ changes; the latest release-validation work is tooling and documentation only.
 - Encoder roundtrip fuzz harness.
 - Shared Brotli harness locking with stale-lock recovery.
 - Practical release validation runner.
+- Justfile entry points for full, smoke, and package-only Brotli release
+  validation.
 
 ## Current Encoder Behavior
 
@@ -133,6 +135,17 @@ Result:
 | decoder fuzz corpus                    | pass   | 6,515.04   |
 | encoder roundtrip fuzz                 | pass   | 13,210.20  |
 
+Additional package-only release gate:
+
+```nu
+just brotli-release-package
+```
+
+| Step | Result | Elapsed ms |
+| ---- | ------ | ---------- |
+| `moon package` | pass | 131.48 |
+| `moon publish --dry-run` package verification | pass | 2,436.83 |
+
 The `moon test --target all` step reported 458 passed and 0 failed on each of
 `wasm`, `wasm-gc`, `js`, and `native`.
 
@@ -182,7 +195,8 @@ release tasks are:
 
 - Decide whether the q10/q11 P4 ratio exception is acceptable for the release.
 - Run any required long-duration fuzz soak.
-- Run packaging/publishing checks for the target release process.
+- Run any release-specific packaging/publishing checks beyond local
+  `moon package` and `moon publish --dry-run` package verification.
 
 ## Key References
 

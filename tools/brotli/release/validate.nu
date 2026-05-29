@@ -21,6 +21,28 @@ def run-step [name: string, action: closure]: nothing -> record {
   {step: $name, ok: true, elapsed_ms: $elapsed}
 }
 
+def moon-publish-dry-run-check []: nothing -> record {
+  let result = (moon publish --dry-run | complete)
+  let output = [$result.stdout $result.stderr] | str join (char newline)
+  let duplicate_version = (
+    $output | str contains "Version Error: The version you are attempting to upload"
+  )
+  let package_check_passed = (
+    ($output | str contains "validating packaged zip:")
+    and ($output | str contains "running moon check on extracted package")
+    and ($output | str contains "Check passed")
+  )
+  if $result.exit_code == 0 or ($duplicate_version and $package_check_passed) {
+    {
+      stdout: $output
+      stderr: ""
+      exit_code: 0
+    }
+  } else {
+    $result
+  }
+}
+
 def require-file [path: string]: nothing -> nothing {
   if not ($path | path exists) {
     print --stderr $"Missing release validation input: ($path)"
@@ -42,11 +64,15 @@ def main [
   --roundtrip-qualities: string = "0,1,2,9,11"
   --roundtrip-target: string = "native"
   --skip-moon
+  --skip-conformance
   --skip-ratio
   --skip-fuzz
+  --skip-package
 ]: nothing -> nothing {
-  require-file $silesia_2m
-  require-file $silesia_1m
+  if not $skip_ratio {
+    require-file $silesia_2m
+    require-file $silesia_1m
+  }
 
   mut results = []
 
@@ -58,8 +84,10 @@ def main [
     $results = append-step $results "git diff --check" { git diff --check | complete }
   }
 
-  $results = append-step $results "Brotli conformance corpus" {
-    nu tools/brotli/conformance/run.nu | complete
+  if not $skip_conformance {
+    $results = append-step $results "Brotli conformance corpus" {
+      nu tools/brotli/conformance/run.nu | complete
+    }
   }
 
   if not $skip_ratio {
@@ -106,6 +134,13 @@ def main [
     ]
     $results = append-step $results "encoder roundtrip fuzz" {
       nu ...$roundtrip_args | complete
+    }
+  }
+
+  if not $skip_package {
+    $results = append-step $results "moon package" { moon package | complete }
+    $results = append-step $results "moon publish --dry-run package verification" {
+      moon-publish-dry-run-check
     }
   }
 

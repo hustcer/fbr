@@ -61,14 +61,25 @@ automatically recovers if a previous interrupted run left a stale lock behind.
 ```nu
 nu tools/brotli/release/validate.nu
 nu tools/brotli/release/validate.nu --skip-ratio --decoder-fuzz-limit 25
+just brotli-release
+just brotli-release-smoke
+just brotli-release-package
 ```
 
 Runs the practical Brotli release gate from one command: MoonBit all-target
 checks, upstream conformance, q0/q1 external decode validation, q2..q9 ratio
 and external decode validation, q10/q11 ratio-exception decode validation,
-decoder fuzz, encoder roundtrip fuzz, and `git diff --check`. The default gate
-does not run `tools/brotli/bench/target-perf.nu`; run target-perf separately
-when changing Brotli codec behavior or making a performance decision.
+decoder fuzz, encoder roundtrip fuzz, packaging, publish dry-run package
+verification, and `git diff --check`. The default gate does not run
+`tools/brotli/bench/target-perf.nu`; run target-perf separately when changing
+Brotli codec behavior or making a performance decision.
+
+The Justfile recipes are thin entry points:
+
+- `just brotli-release`: full practical gate.
+- `just brotli-release-smoke`: quick decoder and encoder fuzz smoke.
+- `just brotli-release-package`: packaging and publish dry-run package
+  verification only.
 
 ## Silesia q=11 Verification
 
