@@ -17,6 +17,8 @@ fixtures into `src/tests/brotli_fixtures/`.
 ```nu
 nu tools/brotli/conformance/run.nu
 nu tools/brotli/conformance/run.nu --fixture monkey
+just brotli-conformance
+just brotli-conformance-fixture monkey
 ```
 
 Runs the upstream corpus at `/Users/hustcer/iWork/refs/brotli/tests/testdata`
@@ -34,8 +36,10 @@ nu tools/brotli/fuzz/run.nu
 nu tools/brotli/fuzz/run.nu --limit 25
 nu tools/brotli/fuzz/run.nu --batch-size 50
 nu tools/brotli/fuzz/run.nu --limit 25 --target all
+just brotli-fuzz native 25 25
 nu tools/brotli/fuzz/roundtrip.nu
 nu tools/brotli/fuzz/roundtrip.nu --count 25 --qualities 2,9,11 --target wasm-gc
+just brotli-roundtrip native 12 2048 0,1,2,9,11 25
 nu tools/brotli/fuzz/soak.nu
 nu tools/brotli/fuzz/soak.nu --append-log
 just brotli-fuzz-soak
@@ -103,6 +107,14 @@ The Justfile recipes are thin entry points:
 - `just brotli-release-smoke`: quick decoder and encoder fuzz smoke.
 - `just brotli-release-generated-fuzz`: generated deterministic decoder fuzz
   corpus plus encoder roundtrip fuzz.
+- `just brotli-conformance` and `just brotli-conformance-fixture`: upstream
+  conformance corpus shortcuts.
+- `just brotli-fuzz` and `just brotli-roundtrip`: direct decoder and encoder
+  fuzz shortcuts with target/count/batch parameters.
+- `just brotli-ratio`: ratio and external-decode shortcut for a selected input
+  and quality set.
+- `just brotli-target-perf-decode` and `just brotli-target-perf-encode`:
+  explicit wasm-gc/native performance harness shortcuts.
 - `just brotli-release-package`: packaging and publish dry-run package
   verification only.
 - `just brotli-release-candidate`: full practical gate, generated deterministic
@@ -144,6 +156,7 @@ timings.
 ```nu
 nu tools/brotli/bench/ratio.nu target/brotli-silesia/silesia-100m.bin --qualities 2,9,11
 nu tools/brotli/bench/ratio.nu target/brotli-silesia/silesia-100m.bin --qualities 2 --json
+just brotli-ratio target/brotli-bench/silesia-2m.bin 2,3,4,5,6,7,8,9
 ```
 
 Compares MoonBit `brotli_sync` output size against the Google `brotli` CLI for
@@ -167,6 +180,12 @@ nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-128k.bin \
   --quality 2 \
   --targets wasm-gc,native \
   --json
+
+just brotli-target-perf-decode \
+  target/brotli-bench/silesia-1m.bin.google.q11.br \
+  target/brotli-bench/silesia-1m.bin
+
+just brotli-target-perf-encode target/brotli-bench/silesia-128k.bin 2
 ```
 
 Measures Brotli decode or encode time through temporary MoonBit white-box tests

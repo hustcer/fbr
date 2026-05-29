@@ -103,20 +103,21 @@ def case-length [index: int, max_len: int]: nothing -> int {
 }
 
 def roundtrip-cases [count: int, max_len: int, qualities: list<int>]: nothing -> list<record> {
-  mut cases = []
-  for index in 0..<$count {
+  0..<$count
+  | each {|index|
     let length = case-length $index $max_len
     let seed = $index + 1
-    for quality in $qualities {
-      $cases = ($cases | append {
+    $qualities
+    | each {|quality|
+      {
         index: $index
         length: $length
         seed: $seed
         quality: $quality
-      })
+      }
     }
   }
-  $cases
+  | flatten
 }
 
 def test-source [case: record batch_index: int]: nothing -> string {
@@ -163,6 +164,47 @@ def write-temp-tests [cases: list<record> batch_index: int]: nothing -> string {
   $"brotli roundtrip fuzz batch ($batch_index) *"
 }
 
+def run-batch [batch: record, target: string]: nothing -> list<record> {
+  let filter = write-temp-tests $batch.item $batch.index
+  let run = (moon test --target $target --filter $filter | complete)
+  let ok = $run.exit_code == 0
+  if not $ok {
+    print --stderr $run.stdout
+    print --stderr $run.stderr
+  }
+  $batch.item
+  | each {|case|
+    {
+      case: $case.index
+      length: $case.length
+      quality: $case.quality
+      batch: $batch.index
+      target: $target
+      ok: $ok
+      exit_code: $run.exit_code
+    }
+  }
+}
+
+def run-batches [
+  cases: list<record>
+  batch_size: int
+  target: string
+]: nothing -> list<record> {
+  # generate keeps each moon test run ordered because batches share one
+  # generated white-box test file.
+  $cases
+  | chunks $batch_size
+  | enumerate
+  | generate {|batch, state=null|
+    {
+      out: (run-batch $batch $target)
+      next: $state
+    }
+  }
+  | flatten
+}
+
 def main [
   --count (-n): int = 12
   --max-len: int = 2048
@@ -190,31 +232,7 @@ def main [
   let parsed_qualities = parse-qualities $qualities
   let cases = roundtrip-cases $count $max_len $parsed_qualities
 
-  mut results = []
-  for batch in ($cases | chunks $batch_size | enumerate) {
-    let filter = write-temp-tests $batch.item $batch.index
-    let run = (moon test --target $target --filter $filter | complete)
-    let ok = $run.exit_code == 0
-    if not $ok {
-      print --stderr $run.stdout
-      print --stderr $run.stderr
-    }
-    let batch_results = (
-      $batch.item
-      | each {|case|
-        {
-          case: $case.index
-          length: $case.length
-          quality: $case.quality
-          batch: $batch.index
-          target: $target
-          ok: $ok
-          exit_code: $run.exit_code
-        }
-      }
-    )
-    $results = ($results | append $batch_results)
-  }
+  let results = run-batches $cases $batch_size $target
 
   rm --force $temp_file
   print ($results | table)

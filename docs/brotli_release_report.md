@@ -57,6 +57,8 @@ Additional reproducible release-validation coverage has also passed:
   validation.
 - Aggregate Justfile release-candidate entry points for the accepted full and
   smoke release-validation gate sets.
+- Direct Justfile entry points for conformance, decoder fuzz, encoder
+  roundtrip fuzz, ratio, and wasm-gc/native target-perf checks.
 
 ## Current Encoder Behavior
 
@@ -228,6 +230,9 @@ Current local release coverage:
   - `just brotli-fuzz-soak-smoke`
 - A bounded soak execution has passed 3 full decoder-fuzz iterations and 3
   default encoder-roundtrip iterations.
+- Generated-test batch runners now use Nushell `generate` pipelines for the
+  sequential temp-file workflow, reducing mutable accumulator code in the
+  conformance, decoder fuzz, and encoder roundtrip harnesses.
 
 Reserved final-release work:
 

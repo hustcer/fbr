@@ -172,6 +172,9 @@ All notable changes to this project will be documented in this file.
 - Brotli soak runner now accepts `--append-log` so interrupted or segmented
   long fuzz soaks can preserve existing JSONL evidence and continue iteration
   numbering.
+- Added direct Justfile recipes for Brotli conformance, decoder fuzz, encoder
+  roundtrip fuzz, ratio checks, and wasm-gc/native target-perf, and simplified
+  generated-test batch runners with Nushell `generate` pipelines.
 
 ## v0.8.0 - 2026-05-20
 

@@ -150,6 +150,45 @@ def write-temp-tests [paths: list<string> batch_index: int]: nothing -> string {
   $"brotli fuzz batch ($batch_index) *"
 }
 
+def run-batch [batch: record, target: string]: nothing -> list<record> {
+  let filter = write-temp-tests $batch.item $batch.index
+  let run = (moon test --target $target --filter $filter | complete)
+  let ok = $run.exit_code == 0
+  if not $ok {
+    print --stderr $run.stdout
+    print --stderr $run.stderr
+  }
+  $batch.item
+  | each {|path|
+    {
+      input: ($path | path basename)
+      batch: $batch.index
+      target: $target
+      ok: $ok
+      exit_code: $run.exit_code
+    }
+  }
+}
+
+def run-batches [
+  paths: list<string>
+  batch_size: int
+  target: string
+]: nothing -> list<record> {
+  # generate keeps the sequential temp-file workflow while avoiding a mutable
+  # accumulator for per-input result rows.
+  $paths
+  | chunks $batch_size
+  | enumerate
+  | generate {|batch, state=null|
+    {
+      out: (run-batch $batch $target)
+      next: $state
+    }
+  }
+  | flatten
+}
+
 def main [
   --corpus-dir (-c): string = $default_corpus_dir
   --limit (-n): int = 0
@@ -176,29 +215,7 @@ def main [
     exit 1
   }
 
-  mut results = []
-  for batch in ($selected | chunks $batch_size | enumerate) {
-    let filter = write-temp-tests $batch.item $batch.index
-    let run = (moon test --target $target --filter $filter | complete)
-    let ok = $run.exit_code == 0
-    if not $ok {
-      print --stderr $run.stdout
-      print --stderr $run.stderr
-    }
-    let batch_results = (
-      $batch.item
-      | each {|path|
-        {
-          input: ($path | path basename)
-          batch: $batch.index
-          target: $target
-          ok: $ok
-          exit_code: $run.exit_code
-        }
-      }
-    )
-    $results = ($results | append $batch_results)
-  }
+  let results = run-batches $selected $batch_size $target
 
   rm --force $temp_file
   print ($results | table)

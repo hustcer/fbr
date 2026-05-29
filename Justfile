@@ -57,6 +57,34 @@ brotli-release-smoke:
 brotli-release-generated-fuzz count='1000' seed='1':
     nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-package --generated-fuzz-count {{ count }} --generated-fuzz-seed {{ seed }}
 
+# Run the upstream Brotli conformance corpus
+brotli-conformance:
+    nu tools/brotli/conformance/run.nu
+
+# Run one upstream Brotli conformance fixture by expected-file name
+brotli-conformance-fixture fixture:
+    nu tools/brotli/conformance/run.nu --fixture {{ fixture }}
+
+# Run the checked-in Brotli decoder fuzz corpus
+brotli-fuzz target='native' limit='0' batch_size='25':
+    nu tools/brotli/fuzz/run.nu --target {{ target }} --limit {{ limit }} --batch-size {{ batch_size }}
+
+# Run deterministic Brotli encoder roundtrip fuzz
+brotli-roundtrip target='native' count='12' max_len='2048' qualities='0,1,2,9,11' batch_size='25':
+    nu tools/brotli/fuzz/roundtrip.nu --target {{ target }} --count {{ count }} --max-len {{ max_len }} --qualities {{ qualities }} --batch-size {{ batch_size }}
+
+# Run the Brotli ratio and external-decode harness
+brotli-ratio input='target/brotli-bench/silesia-2m.bin' qualities='2,3,4,5,6,7,8,9':
+    nu tools/brotli/bench/ratio.nu {{ input }} --qualities {{ qualities }} --json
+
+# Run wasm-gc/native Brotli decode target-perf
+brotli-target-perf-decode input expected targets='wasm-gc,native' repeats='10' samples='5':
+    nu tools/brotli/bench/target-perf.nu {{ input }} --mode decode --expected {{ expected }} --targets {{ targets }} --repeats {{ repeats }} --samples {{ samples }} --json
+
+# Run wasm-gc/native Brotli encode target-perf
+brotli-target-perf-encode input quality='11' targets='wasm-gc,native' repeats='10' samples='5':
+    nu tools/brotli/bench/target-perf.nu {{ input }} --mode encode --quality {{ quality }} --targets {{ targets }} --repeats {{ repeats }} --samples {{ samples }} --json
+
 # Run Brotli packaging and publish dry-run validation only
 brotli-release-package:
     nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-fuzz

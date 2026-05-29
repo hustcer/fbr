@@ -113,6 +113,21 @@ def write-temp-test [fixture: record]: nothing -> string {
   $test_name
 }
 
+def run-fixture [fixture: record]: nothing -> record {
+  let test_name = write-temp-test $fixture
+  let run = (moon test --target native --filter $test_name | complete)
+  let ok = $run.exit_code == 0
+  if not $ok {
+    print --stderr $run.stdout
+    print --stderr $run.stderr
+  }
+  {
+    fixture: $fixture.name
+    ok: $ok
+    exit_code: $run.exit_code
+  }
+}
+
 def main [
   --fixture (-f): string # Run one corpus fixture by expected-file name.
 ]: nothing -> nothing {
@@ -130,21 +145,17 @@ def main [
     exit 1
   }
 
-  mut results = []
-  for item in $fixtures {
-    let test_name = write-temp-test $item
-    let run = (moon test --target native --filter $test_name | complete)
-    let ok = $run.exit_code == 0
-    if not $ok {
-      print --stderr $run.stdout
-      print --stderr $run.stderr
+  # Keep fixture execution sequential because every case rewrites the same
+  # temporary white-box test file.
+  let results = (
+    $fixtures
+    | generate {|fixture, state=null|
+      {
+        out: (run-fixture $fixture)
+        next: $state
+      }
     }
-    $results = ($results | append {
-      fixture: $item.name
-      ok: $ok
-      exit_code: $run.exit_code
-    })
-  }
+  )
 
   rm --force $temp_file
   print ($results | table)
