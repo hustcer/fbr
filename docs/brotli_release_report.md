@@ -66,6 +66,30 @@ Additional reproducible release-validation coverage has also passed:
 | q9            | High-quality parser plus gated mixed static-dictionary search   | Inside measured P3 2 MiB size window             |
 | q10..q11      | Deeper high-quality parser plus mixed static-dictionary matches | Valid, but accepted only with P4 ratio exception |
 
+## Phase Completion Audit
+
+This matrix audits the current code against the `docs/brotli.md` phase
+acceptance criteria. It separates stream-valid release readiness from the
+larger P3/P4 algorithm-completion targets.
+
+| Area | Requirement | Current evidence | Status |
+| ---- | ----------- | ---------------- | ------ |
+| P1 decoder | `unbrotli_sync`, `UnbrotliStream`, static dictionary, transforms, conformance fixtures | Public APIs exist; 22 upstream Google Brotli conformance fixtures pass in the release gate | Complete |
+| P1 correctness | Decoder must return output or `FzipError`, not panic, on fuzz inputs | Checked-in decoder corpus and generated deterministic corpus pass through `tools/brotli/fuzz/run.nu` | Release-ready locally |
+| P2 q0/q1 validity | q0/q1 outputs decode through MoonBit and Google Brotli | `nu tools/brotli/release/validate.nu` verifies q0 and q1 on the 2 MiB Silesia slice with external Google decode | Complete for stream validity |
+| P2 q0/q1 ratio | Original plan asked for q0 >= 1.6:1 and q1 >= 2.0:1 on `silesia.tar` | Current q0/q1 are stored meta-block streams and intentionally do not target Google q0/q1 ratios | Accepted exception, not original-ratio complete |
+| P3 q2..q9 validity | All q2..q9 outputs decode through MoonBit and Google Brotli | q2..q9 are covered by roundtrip tests and 2 MiB external Google decode in the release gate | Complete for current validation corpus |
+| P3 q2..q9 ratio | Within 5% of Google Brotli per quality on Silesia | Current 2 MiB Silesia window: q2 +2.41%, q3 -0.94%, q4 -0.43%, q5 +1.99%, q6 +4.20%, q7 +3.38%, q8 +4.47%, q9 +4.69% | Complete for measured 2 MiB Silesia slice |
+| P3 broader algorithm | Richer literal, command, and distance block/histogram clustering | Plan still lists richer histogram/block clustering as remaining work beyond the current single split/context candidates | Incomplete |
+| P3 performance | q5 encode-time budget and regression tracking | Target-perf evidence is recorded in `docs/brotli_benchmarks.md`; latest codec-changing commits carry wasm-gc/native evidence | Evidence recorded, not rerun for tooling-only updates |
+| P4 q10/q11 validity | q10/q11 outputs decode through MoonBit and Google Brotli | q10/q11 pass external Google decode in the release gate | Complete for stream validity |
+| P4 q10/q11 ratio | Within 2% of Google Brotli on Silesia | Current 1 MiB Silesia window: q10 +9.05%, q11 +10.49% | Incomplete; release requires explicit exception |
+| P4 Zopfli backend | Suffix-tree plus bounded shortest-path/Zopfli parser with recent-distance-cache state | Local shortest-path probes were rejected as too slow or incomplete; no production Zopfli backend is enabled | Incomplete |
+| P4 performance and memory | Encode within 5x and memory within 2x of C reference | No accepted production Zopfli backend exists, so these P4 acceptance checks cannot be claimed | Incomplete |
+| Fuzz gate | Scripted fuzz harness and long-fuzz route | Checked-in corpus, generated deterministic corpus, encoder roundtrip fuzz, and bounded 3-iteration soak passed | Release-ready locally; 24-hour soak not claimed |
+| Packaging | Package validation before release | `moon package` and `moon publish --dry-run` package verification pass; duplicate published-version response is accepted only after package verification succeeds | Complete locally |
+| Hand-off checklist | `moon fmt`, `moon check`, `moon test`, `moon info`, changelog, benchmarks, fixtures | Latest release-validation commits passed these local gates and updated changelog/benchmark/report docs | Complete for current checkpoint |
+
 ## Size Evidence
 
 Latest recorded external Google Brotli decode and size comparison:

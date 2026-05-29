@@ -129,6 +129,8 @@ All notable changes to this project will be documented in this file.
   release validation runner and Justfile.
 - Recorded broader Brotli release fuzz validation evidence for the generated
   corpus gate and bounded soak runner.
+- Added a phase-by-phase Brotli release audit that separates stream-valid
+  release readiness from incomplete P3/P4 algorithm targets.
 
 ## v0.8.0 - 2026-05-20
 
