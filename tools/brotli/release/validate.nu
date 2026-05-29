@@ -59,6 +59,9 @@ def main [
   --silesia-1m: string = $default_silesia_1m
   --decoder-fuzz-limit: int = 0
   --decoder-fuzz-target: string = "native"
+  --generated-fuzz-count: int = 0
+  --generated-fuzz-seed: int = 1
+  --generated-fuzz-dir: string = "target/brotli-release-fuzz-corpus"
   --roundtrip-count: int = 12
   --roundtrip-max-len: int = 2048
   --roundtrip-qualities: string = "0,1,2,9,11"
@@ -106,7 +109,22 @@ def main [
   }
 
   if not $skip_fuzz {
-    let decoder_fuzz_args = if $decoder_fuzz_limit > 0 {
+    if $generated_fuzz_count > 0 {
+      let generate_args = [
+        "tools/brotli/fuzz/gen-corpus.nu"
+        "--count"
+        ($generated_fuzz_count | into string)
+        "--seed"
+        ($generated_fuzz_seed | into string)
+        "--corpus-dir"
+        $generated_fuzz_dir
+      ]
+      $results = append-step $results "generate deterministic decoder fuzz corpus" {
+        nu ...$generate_args | complete
+      }
+    }
+
+    let base_decoder_fuzz_args = if $decoder_fuzz_limit > 0 {
       [
         "tools/brotli/fuzz/run.nu"
         "--limit"
@@ -116,6 +134,11 @@ def main [
       ]
     } else {
       ["tools/brotli/fuzz/run.nu" "--target" $decoder_fuzz_target]
+    }
+    let decoder_fuzz_args = if $generated_fuzz_count > 0 {
+      $base_decoder_fuzz_args | append ["--corpus-dir" $generated_fuzz_dir]
+    } else {
+      $base_decoder_fuzz_args
     }
     $results = append-step $results "decoder fuzz corpus" {
       nu ...$decoder_fuzz_args | complete

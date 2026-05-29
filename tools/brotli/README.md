@@ -74,8 +74,10 @@ local smoke check.
 ```nu
 nu tools/brotli/release/validate.nu
 nu tools/brotli/release/validate.nu --skip-ratio --decoder-fuzz-limit 25
+nu tools/brotli/release/validate.nu --skip-ratio --generated-fuzz-count 1000 --generated-fuzz-seed 12345
 just brotli-release
 just brotli-release-smoke
+just brotli-release-generated-fuzz
 just brotli-release-package
 ```
 
@@ -91,6 +93,8 @@ The Justfile recipes are thin entry points:
 
 - `just brotli-release`: full practical gate.
 - `just brotli-release-smoke`: quick decoder and encoder fuzz smoke.
+- `just brotli-release-generated-fuzz`: generated deterministic decoder fuzz
+  corpus plus encoder roundtrip fuzz.
 - `just brotli-release-package`: packaging and publish dry-run package
   verification only.
 

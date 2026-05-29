@@ -53,6 +53,10 @@ brotli-release:
 brotli-release-smoke:
     nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-package --decoder-fuzz-limit 2 --roundtrip-count 1 --roundtrip-max-len 16 --roundtrip-qualities 2
 
+# Run Brotli release validation with a generated deterministic decoder fuzz corpus
+brotli-release-generated-fuzz count='1000' seed='1':
+    nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-package --generated-fuzz-count {{ count }} --generated-fuzz-seed {{ seed }}
+
 # Run Brotli packaging and publish dry-run validation only
 brotli-release-package:
     nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-fuzz

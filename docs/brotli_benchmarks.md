@@ -3159,3 +3159,32 @@ Validation:
 
 This improves release-validation reproducibility without changing Brotli
 encode/decode behavior or the recorded codec target-perf baseline.
+
+## 2026-05-29 — Generated Fuzz Corpus Release Gate
+
+The practical release runner now accepts generated deterministic decoder fuzz
+corpus options:
+
+- `--generated-fuzz-count`
+- `--generated-fuzz-seed`
+- `--generated-fuzz-dir`
+
+When `--generated-fuzz-count` is greater than zero, the release runner first
+calls `tools/brotli/fuzz/gen-corpus.nu`, then runs the decoder fuzz harness
+against that generated corpus. The repo `Justfile` exposes this as:
+
+```nu
+just brotli-release-generated-fuzz
+```
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `nu --ide-check 0 tools/brotli/release/validate.nu` | parsed successfully |
+| `just --list` | lists `brotli-release-generated-fuzz` |
+| `nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-package --generated-fuzz-count 12 --generated-fuzz-seed 12345 --roundtrip-count 1 --roundtrip-max-len 16 --roundtrip-qualities 2` | generated 20 decoder fuzz inputs, decoder fuzz passed, encoder roundtrip fuzz passed |
+
+This wires the reproducible corpus generator into release validation without
+changing Brotli encode/decode behavior or the recorded codec target-perf
+baseline.

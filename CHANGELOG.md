@@ -125,6 +125,8 @@ All notable changes to this project will be documented in this file.
   Brotli long fuzz soak gate.
 - Made Brotli fuzz corpus generation deterministic with `--seed` and
   `--corpus-dir` options for reproducible release-validation corpora.
+- Added a generated deterministic Brotli fuzz corpus path to the practical
+  release validation runner and Justfile.
 
 ## v0.8.0 - 2026-05-20
 

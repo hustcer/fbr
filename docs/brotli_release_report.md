@@ -157,6 +157,8 @@ Current local release coverage:
 - 58 checked-in decoder fuzz corpus inputs.
 - Deterministic seed-based corpus generation via
   `tools/brotli/fuzz/gen-corpus.nu --seed ... --corpus-dir ...`.
+- Generated deterministic corpus release gate via
+  `tools/brotli/release/validate.nu --generated-fuzz-count ...`.
 - Encoder roundtrip fuzz across the default q0, q1, q2, q9, and q11 quality
   set.
 - Configurable fuzz targets: `native`, `wasm-gc`, `js`, or `all`.
