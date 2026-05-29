@@ -2762,3 +2762,45 @@ Conclusion: this is an accepted P3 ratio improvement. q9 now meets the 5%
 target on the measured 2 MiB Silesia slice. P3 remains open because q2 is still
 outside the 2 MiB ratio target and broader block/histogram clustering remains
 unfinished.
+
+## 2026-05-29 — q2 Two-Mebibyte Standard Chunk
+
+The same larger-chunk strategy also applies to q2 after scaling the q2 natural
+parser command budget with the doubled input bound. A first q2 2 MiB chunk
+trial without the larger command budget fell back to a stored meta-block
+(`2,097,157` bytes), so this increment keeps the q2 fast profile but raises its
+large-chunk command cap from 52,000 to 104,000 commands. q3..q8 and q10/q11
+remain at their existing 1 MiB standard chunk size.
+
+Validation commands:
+
+```nu
+moon check --target native
+nu tools/brotli/encode/verify.nu target/brotli-bench/silesia-2m.bin --quality 2
+nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-2m.bin --qualities 2 --json
+nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+  --mode encode \
+  --quality 2 \
+  --targets wasm-gc,native \
+  --repeats 1 \
+  --samples 1 \
+  --json
+```
+
+Correctness and ratio result:
+
+| Corpus     | Quality | Previous bytes | New bytes | Google bytes | Previous overhead | New overhead | Google decode |
+| ---------- | ------- | -------------- | --------- | ------------ | ----------------- | ------------ | ------------- |
+| silesia-2m | 2       | 693,243        | 652,695   | 637,343      | +8.77%            | +2.41%       | pass          |
+
+Target-perf result:
+
+| Mode   | Corpus      | Quality | Target  | MoonBit bytes | Google bytes | MoonBit ms | Google ms |
+| ------ | ----------- | ------- | ------- | ------------- | ------------ | ---------- | --------- |
+| encode | silesia-64k | 2       | wasm-gc | 25,245        | 24,364       | 480.975    | 36.015    |
+| encode | silesia-64k | 2       | native  | 25,245        | 24,364       | 75.117     | 36.015    |
+
+Conclusion: this is an accepted P3 ratio improvement. q2 now meets the 5%
+target on the measured 2 MiB Silesia slice without changing the 64 KiB encoded
+size. P3's remaining ratio work is no longer the q2/q9 2 MiB gap; it is the
+broader block/histogram clustering and release validation matrix.

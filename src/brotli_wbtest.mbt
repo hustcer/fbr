@@ -1517,10 +1517,15 @@ test "brotli_sync q9 admits shorter high-quality matches" {
 }
 
 ///|
-test "brotli_sync q9 allows two-mebibyte high-quality chunks" {
+test "brotli_sync q2 and q9 allow two-mebibyte chunks" {
+  assert_eq(brotli_standard_chunk_size_for_quality(2), 2097152)
   assert_eq(brotli_standard_chunk_size_for_quality(8), 1048576)
   assert_eq(brotli_standard_chunk_size_for_quality(9), 2097152)
   assert_eq(brotli_standard_chunk_size_for_quality(10), 1048576)
+  assert_eq(
+    brotli_hash_max_input_length(brotli_natural_hash_config_for_quality(2)),
+    2097152,
+  )
   assert_eq(
     brotli_hash_max_input_length(brotli_intermediate_hash_config_for_quality(8)),
     1048576,
@@ -1608,7 +1613,7 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   inspect(natural.table_size, content="32768")
   inspect(natural.max_match_checks, content="8")
   inspect(natural.min_match_length, content="10")
-  inspect(natural.max_commands, content="52000")
+  inspect(natural.max_commands, content="104000")
   inspect(four_byte.hash_bytes, content="4")
   inspect(four_byte.table_size, content="32768")
   inspect(

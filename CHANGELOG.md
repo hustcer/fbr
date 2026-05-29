@@ -51,6 +51,11 @@ All notable changes to this project will be documented in this file.
   535,421 bytes versus Google q9's 511,433 bytes, reducing overhead from
   6.04% to 4.69%. Sampled 64 KiB target-perf remains 21,514 bytes versus
   Google q9's 22,063 bytes, with wasm-gc/native encode at 523.417/89.076 ms.
+- Brotli q2 uses the same 2 MiB chunk strategy with a proportional natural
+  parser command budget. On 2 MiB Silesia, q2 improves from 693,243 to
+  652,695 bytes versus Google q2's 637,343 bytes, reducing overhead from
+  8.77% to 2.41%. Sampled 64 KiB target-perf remains 25,245 bytes versus
+  Google q2's 24,364 bytes, with wasm-gc/native encode at 480.975/75.117 ms.
 - Brotli q4 through q8 now exact-cost an intermediate hash-chain candidate
   between the q2/q3 fast path and the q9 high-quality path. On 1 MiB Silesia,
   q4 improves from 313,577 to 287,092 bytes, q5/q6 to 278,961 bytes, and

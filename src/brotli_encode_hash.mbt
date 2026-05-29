@@ -10,6 +10,7 @@ priv struct BrotliHashConfig {
   lazy_lookahead : Int
   scan_step : Int
   max_commands : Int
+  max_input_length : Int
   min_copy_ratio_percent : Int
   require_dense_match_density : Bool
   density_sample_step : Int
@@ -30,6 +31,7 @@ fn brotli_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
     lazy_lookahead: 3,
     scan_step: 1,
     max_commands: 1200,
+    max_input_length: 1048576,
     min_copy_ratio_percent: 0,
     require_dense_match_density: true,
     density_sample_step: 256,
@@ -59,7 +61,16 @@ fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
       3
     },
     scan_step: 1,
-    max_commands: 52000,
+    max_commands: if quality <= 2 {
+      104000
+    } else {
+      52000
+    },
+    max_input_length: if quality <= 2 {
+      2097152
+    } else {
+      1048576
+    },
     min_copy_ratio_percent: 12,
     require_dense_match_density: false,
     density_sample_step: 256,
@@ -104,6 +115,11 @@ fn brotli_high_quality_hash_config_for_quality(
     lazy_lookahead,
     scan_step: 1,
     max_commands,
+    max_input_length: if quality == 9 {
+      2097152
+    } else {
+      1048576
+    },
     min_copy_ratio_percent: 12,
     require_dense_match_density: false,
     density_sample_step: 256,
@@ -145,6 +161,7 @@ fn brotli_intermediate_hash_config_for_quality(
     lazy_lookahead: 3,
     scan_step: 1,
     max_commands,
+    max_input_length: 1048576,
     min_copy_ratio_percent: 12,
     require_dense_match_density: false,
     density_sample_step: 256,
@@ -166,6 +183,7 @@ fn brotli_four_byte_hash_config(config : BrotliHashConfig) -> BrotliHashConfig {
     lazy_lookahead: config.lazy_lookahead,
     scan_step: config.scan_step,
     max_commands: config.max_commands,
+    max_input_length: config.max_input_length,
     min_copy_ratio_percent: config.min_copy_ratio_percent,
     require_dense_match_density: config.require_dense_match_density,
     density_sample_step: config.density_sample_step,
@@ -176,14 +194,7 @@ fn brotli_four_byte_hash_config(config : BrotliHashConfig) -> BrotliHashConfig {
 
 ///|
 fn brotli_hash_max_input_length(config : BrotliHashConfig) -> Int {
-  // High-quality parsing is the only path that is allowed to spend enough work
-  // to encode a 2 MiB chunk. Fast and intermediate modes keep the existing
-  // 1 MiB bound so their target-perf profile stays predictable.
-  if config.max_commands >= 300000 {
-    2097152
-  } else {
-    1048576
-  }
+  config.max_input_length
 }
 
 ///|

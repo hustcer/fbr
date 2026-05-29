@@ -3608,10 +3608,10 @@ fn brotli_encode_uncompressed(
 
 ///|
 fn brotli_standard_chunk_size_for_quality(quality : Int) -> Int {
-  // q9 needs a larger P3 chunk so matches and literal-context statistics can
-  // cross the previous 1 MiB boundary. Keep other standard modes unchanged
+  // q2 and q9 need larger P3 chunks so matches and literal-context statistics
+  // can cross the previous 1 MiB boundary. Keep other standard modes unchanged
   // until their target-perf tradeoff has separate evidence.
-  if quality == 9 {
+  if quality == 2 || quality == 9 {
     2097152
   } else {
     1048576
