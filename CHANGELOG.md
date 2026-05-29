@@ -117,6 +117,8 @@ All notable changes to this project will be documented in this file.
   stale locks left by interrupted local validation runs.
 - Added `tools/brotli/release/validate.nu` to run the practical Brotli release
   validation gate from one Nushell command.
+- Added `docs/brotli_release_report.md` with the current Brotli release
+  readiness summary, validation evidence, and accepted P4 ratio exception.
 
 ## v0.8.0 - 2026-05-20
 
