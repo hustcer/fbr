@@ -28,6 +28,8 @@ then removes the temporary file.
 
 ```nu
 nu tools/brotli/fuzz/gen-corpus.nu --count 1000
+nu tools/brotli/fuzz/gen-corpus.nu --count 1000 --seed 12345
+nu tools/brotli/fuzz/gen-corpus.nu --count 100 --corpus-dir target/brotli-fuzz-corpus
 nu tools/brotli/fuzz/run.nu
 nu tools/brotli/fuzz/run.nu --limit 25
 nu tools/brotli/fuzz/run.nu --batch-size 50
@@ -40,7 +42,9 @@ just brotli-fuzz-soak-smoke
 ```
 
 `gen-corpus.nu` seeds `tools/brotli/fuzz/corpus/` from the embedded fixture set
-and adds random truncation, append, and delete-middle mutations. `run.nu`
+and adds deterministic seed-based truncation, append, and delete-middle
+mutations. Use `--seed` to reproduce a corpus exactly and `--corpus-dir` to
+write a throwaway release-validation corpus under `target/`. `run.nu`
 generates temporary `src/brotli_fuzz_wbtest.mbt` batches and asserts
 `unbrotli_sync` either returns bytes or raises `FzipError`; native panics or
 unchecked bounds failures fail the run. The default batch size is 25 inputs to

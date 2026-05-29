@@ -155,6 +155,8 @@ Current local release coverage:
 
 - 22 upstream Google Brotli conformance fixtures.
 - 58 checked-in decoder fuzz corpus inputs.
+- Deterministic seed-based corpus generation via
+  `tools/brotli/fuzz/gen-corpus.nu --seed ... --corpus-dir ...`.
 - Encoder roundtrip fuzz across the default q0, q1, q2, q9, and q11 quality
   set.
 - Configurable fuzz targets: `native`, `wasm-gc`, `js`, or `all`.

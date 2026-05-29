@@ -3136,3 +3136,26 @@ Validation:
 
 This scripts the long fuzz requirement but does not claim that a 24-hour soak
 has already completed.
+
+## 2026-05-29 — Deterministic Fuzz Corpus Generation
+
+`tools/brotli/fuzz/gen-corpus.nu` now uses a seed-driven linear congruential
+generator instead of Nushell's process-random commands. The script accepts
+`--seed` and `--corpus-dir`, so release validation can reproduce a corpus
+exactly or generate throwaway corpora outside the ignored default corpus
+directory.
+
+The implementation uses Nushell `generate` to thread PRNG state through both
+byte generation and mutation generation, keeping the state transition explicit
+and avoiding ad hoc mutable random loops.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `nu --ide-check 0 tools/brotli/fuzz/gen-corpus.nu` | parsed successfully |
+| generate two corpora with `--count 12 --seed 12345` under separate `target/` directories and compare sorted SHA-256 manifests | identical |
+| `nu tools/brotli/fuzz/run.nu --corpus-dir target/brotli-fuzz-determinism-a --target native --batch-size 10` | 20/20 passed |
+
+This improves release-validation reproducibility without changing Brotli
+encode/decode behavior or the recorded codec target-perf baseline.

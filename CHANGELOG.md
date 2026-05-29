@@ -123,6 +123,8 @@ All notable changes to this project will be documented in this file.
   validation gates, and added package verification to the release runner.
 - Added `tools/brotli/fuzz/soak.nu` plus Justfile entries for the scripted
   Brotli long fuzz soak gate.
+- Made Brotli fuzz corpus generation deterministic with `--seed` and
+  `--corpus-dir` options for reproducible release-validation corpora.
 
 ## v0.8.0 - 2026-05-20
 
