@@ -123,6 +123,10 @@ All notable changes to this project will be documented in this file.
 - The q10/q11 bounded seed now shares one bounded-copy transition helper for
   hash-chain and suffix-tree matches, keeping recent-distance-cache updates and
   beam insertion behavior aligned for future P4 parser work.
+- The q4+ LZ77 meta-block writer now exact-costs a combined command-block plus
+  distance-block split candidate when both histogram estimators find useful
+  independent boundaries, extending P3 block-clustering coverage beyond
+  single-dimension split candidates.
 
 ### Tests and docs
 

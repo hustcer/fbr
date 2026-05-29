@@ -1445,6 +1445,64 @@ test "brotli_sync splits LZ77 distance blocks by distance histograms" {
 }
 
 ///|
+test "brotli_sync splits LZ77 command and distance blocks together" {
+  let input = FixedArray::make(5184, b'\x00')
+  for i in 0..<input.length() {
+    input[i] = (97 + i % 4).to_byte()
+  }
+  let commands : Array[BrotliEncodeCommand] = []
+  let mut offset = 0
+  for i in 0..<256 {
+    let insert_length = if i == 0 { 64 } else { 0 }
+    commands.push(brotli_make_encode_command(offset, insert_length, 4, 4, true))
+    offset += insert_length + 4
+  }
+  for _ in 0..<256 {
+    commands.push(brotli_make_encode_command(offset, 0, 16, 64, true))
+    offset += 16
+  }
+  assert_eq(offset, input.length())
+  assert_eq(brotli_best_command_block_split_point(commands), 256)
+  assert_eq(brotli_best_distance_block_split_point(commands), 256)
+  let weighted = BrotliBitWriter::new(
+    128 + input.length() * 4 + commands.length() * 8,
+  )
+  brotli_write_simple_lz77_metablock(weighted, input, commands, true, true)
+  let command_split = match
+    brotli_write_command_split_lz77_metablock(input, commands, 256, true) {
+    Some(candidate) => candidate
+    None => fail("expected command block split candidate")
+  }
+  let distance_split = match
+    brotli_write_distance_split_lz77_metablock(input, commands, 256, true) {
+    Some(candidate) => candidate
+    None => fail("expected distance block split candidate")
+  }
+  let joint_split = match
+    brotli_write_command_distance_split_lz77_metablock(
+      input, commands, 256, 256, true,
+    ) {
+    Some(candidate) => candidate
+    None => fail("expected joint command/distance block split candidate")
+  }
+  assert_true(joint_split.bit_pos < weighted.bit_pos)
+  assert_true(joint_split.bit_pos < command_split.bit_pos)
+  assert_true(joint_split.bit_pos < distance_split.bit_pos)
+  let best = brotli_write_best_lz77_metablock(
+    input, commands, true, 5, false, 0, 0,
+  )
+  assert_eq(best.bit_pos, joint_split.bit_pos)
+  let encoded = BrotliBitWriter::new(16 + joint_split.buf.length())
+  brotli_encode_window_bits(encoded, 22)
+  encoded.write_from_bits(joint_split.buf, joint_split.bit_pos)
+  let decoded = unbrotli_sync(encoded.finish())
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q2 writes UTF-8 context literal trees" {
   let input = FixedArray::make(4096, b'e')
   let previous_1 = FixedArray::make(16, 0)

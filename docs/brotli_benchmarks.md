@@ -3473,6 +3473,27 @@ Validation:
 The measured Silesia q5/q9 outputs remain unchanged; this increment extends P3
 block clustering to the distance tree dimension with bounded extra search cost.
 
+## 2026-05-30 — Command+Distance Block Split Candidate
+
+The q4+ LZ77 meta-block writer now exact-costs a combined command-block plus
+distance-block split candidate when both existing estimators find useful
+boundaries. Unlike the rejected binary literal/command/distance joint split,
+this candidate keeps the literal tree single, lets command and explicit-distance
+block lengths use independent split boundaries, and still competes by final bit
+count against the weighted, literal-split, context, command-only split, and
+distance-only split candidates.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `moon test --target native --filter '*splits LZ77*blocks*'` | passed; 4/4 tests cover literal, command, distance, and combined command+distance block split writers |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native` | 12/12 encoder roundtrips passed |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json` | q5 remains 40,328 bytes versus Google 40,515; q9 remains 39,081 bytes versus Google 39,695 |
+
+`target-perf.nu` was not rerun for this structural block-layout increment per
+maintainer instruction.
+
 ## 2026-05-29 — Soak Log Append Mode
 
 `tools/brotli/fuzz/soak.nu` now accepts:
