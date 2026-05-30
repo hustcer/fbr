@@ -1,10 +1,10 @@
 ///|
 /// Error categories reported by Brotli operations.
 ///
-/// The public decode/encode APIs raise `FzipError` with one of these codes. The
+/// The public decode/encode APIs raise `FbrError` with one of these codes. The
 /// code is intended for programmatic handling while the message gives a
 /// human-readable explanation.
-pub(all) enum FzipErrorCode {
+pub(all) enum FbrErrorCode {
   /// The input ended before the stream could be fully decoded.
   UnexpectedEOF
   /// Byte data could not be decoded as valid UTF-8.
@@ -36,7 +36,7 @@ pub(all) enum FzipErrorCode {
 
 ///|
 /// Write the symbolic error-code name, such as `"BrotliInvalidHuffman"`.
-pub impl Show for FzipErrorCode with fn output(self, logger) {
+pub impl Show for FbrErrorCode with fn output(self, logger) {
   match self {
     UnexpectedEOF => logger.write_string("UnexpectedEOF")
     InvalidUTF8 => logger.write_string("InvalidUTF8")
@@ -69,12 +69,12 @@ pub let error_messages : Array[String] = [
 ///
 /// `code` is stable enough for branching in callers. `message` may include
 /// additional context such as the failed format check.
-pub(all) suberror FzipError {
-  FzipError(code~ : FzipErrorCode, message~ : String)
+pub(all) suberror FbrError {
+  FbrError(code~ : FbrErrorCode, message~ : String)
 }
 
 ///|
-pub fn fzip_error_code_to_int(code : FzipErrorCode) -> Int {
+pub fn fbr_error_code_to_int(code : FbrErrorCode) -> Int {
   match code {
     UnexpectedEOF => 0
     InvalidUTF8 => 1
@@ -93,11 +93,11 @@ pub fn fzip_error_code_to_int(code : FzipErrorCode) -> Int {
 }
 
 ///|
-pub fn fzip_err(code : FzipErrorCode, msg? : String = "") -> FzipError {
+pub fn fbr_err(code : FbrErrorCode, msg? : String = "") -> FbrError {
   let message = if msg != "" {
     msg
   } else {
-    error_messages[fzip_error_code_to_int(code)]
+    error_messages[fbr_error_code_to_int(code)]
   }
-  FzipError(code~, message~)
+  FbrError(code~, message~)
 }

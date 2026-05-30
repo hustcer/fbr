@@ -8,17 +8,17 @@ import {
 }
 
 // Values
-pub fn brotli_sync(FixedArray[Byte], opts? : @encode.BrotliOptions) -> FixedArray[Byte] raise @common.FzipError
+pub fn brotli_sync(FixedArray[Byte], opts? : @encode.BrotliOptions) -> FixedArray[Byte] raise @common.FbrError
 
 pub let default_max_input_size : Int
 
 pub let default_max_output_size : Int
 
-pub fn fzip_err(@common.FzipErrorCode, msg? : String) -> @common.FzipError
+pub fn fbr_err(@common.FbrErrorCode, msg? : String) -> @common.FbrError
 
-pub fn fzip_error_code_to_int(@common.FzipErrorCode) -> Int
+pub fn fbr_error_code_to_int(@common.FbrErrorCode) -> Int
 
-pub fn unbrotli_sync(FixedArray[Byte], opts? : @decode.UnbrotliOptions) -> FixedArray[Byte] raise @common.FzipError
+pub fn unbrotli_sync(FixedArray[Byte], opts? : @decode.UnbrotliOptions) -> FixedArray[Byte] raise @common.FbrError
 
 // Errors
 
@@ -29,11 +29,11 @@ pub using @encode {type BrotliOptions}
 
 pub using @encode {type BrotliStream}
 
+pub using @common {type FbrError}
+
+pub using @common {type FbrErrorCode}
+
 pub using @common {type FlateStreamHandler}
-
-pub using @common {type FzipError}
-
-pub using @common {type FzipErrorCode}
 
 pub using @decode {type UnbrotliOptions}
 

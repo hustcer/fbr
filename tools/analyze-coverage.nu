@@ -8,7 +8,7 @@ let total_line = $coverage_output | lines | first
 let total_uncovered = $total_line | parse "Total: {uncovered} uncovered line(s) in {files} file(s)" | first
 
 print "\n╔════════════════════════════════════════════════════════════════╗"
-print "║              测试覆盖率分析报告 - fzip 库                      ║"
+print "║              测试覆盖率分析报告 - fbr 库                      ║"
 print "╚════════════════════════════════════════════════════════════════╝\n"
 
 print "📊 总体统计"

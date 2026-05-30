@@ -1,8 +1,8 @@
 ///|
-pub type FzipErrorCode = @common.FzipErrorCode
+pub type FbrErrorCode = @common.FbrErrorCode
 
 ///|
-pub type FzipError = @common.FzipError
+pub type FbrError = @common.FbrError
 
 ///|
 pub type FlateStreamHandler = @common.FlateStreamHandler
@@ -26,23 +26,23 @@ pub let default_max_output_size : Int = @common.default_max_output_size
 pub let default_max_input_size : Int = @common.default_max_input_size
 
 ///|
-pub fn fzip_err(
-  code : @common.FzipErrorCode,
+pub fn fbr_err(
+  code : @common.FbrErrorCode,
   msg? : String = "",
-) -> @common.FzipError {
-  @common.fzip_err(code, msg~)
+) -> @common.FbrError {
+  @common.fbr_err(code, msg~)
 }
 
 ///|
-pub fn fzip_error_code_to_int(code : @common.FzipErrorCode) -> Int {
-  @common.fzip_error_code_to_int(code)
+pub fn fbr_error_code_to_int(code : @common.FbrErrorCode) -> Int {
+  @common.fbr_error_code_to_int(code)
 }
 
 ///|
 pub fn unbrotli_sync(
   data : FixedArray[Byte],
   opts? : @decode.UnbrotliOptions = @decode.UnbrotliOptions::default(),
-) -> FixedArray[Byte] raise @common.FzipError {
+) -> FixedArray[Byte] raise @common.FbrError {
   @decode.unbrotli_sync(data, opts~)
 }
 
@@ -50,6 +50,6 @@ pub fn unbrotli_sync(
 pub fn brotli_sync(
   data : FixedArray[Byte],
   opts? : @encode.BrotliOptions = @encode.BrotliOptions::default(),
-) -> FixedArray[Byte] raise @common.FzipError {
+) -> FixedArray[Byte] raise @common.FbrError {
   @encode.brotli_sync(data, opts~)
 }

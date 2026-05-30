@@ -117,7 +117,7 @@ def test-source [path: string index: int batch_index: int]: nothing -> string {
     "///|"
     $"test \"($test_name)\" {"
     ([
-      "  let result : Result[FixedArray[Byte], FzipError] = try? unbrotli_sync("
+      "  let result : Result[FixedArray[Byte], FbrError] = try? unbrotli_sync("
       $input_name
       ")"
     ] | str join)

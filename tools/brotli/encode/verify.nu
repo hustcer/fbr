@@ -3,7 +3,7 @@
 # Legacy JS file-IO verifier. This is intentionally retained for exact
 # external-decoder validation; target-perf.nu is the default perf harness.
 
-const generated_test = "_build/js/release/test/fzip.whitebox_test.js"
+const generated_test = "_build/js/release/test/encode/encode.whitebox_test.js"
 const temp_dir = "target/brotli-encode"
 const temp_runner = "target/brotli-encode/verify-generated.js"
 
@@ -55,14 +55,14 @@ def main [
       "  \"  const fs = require('fs');\\n\" +"
       "  \"  const crypto = require('crypto');\\n\" +"
       "  \"  const input = fs.readFileSync(\" + JSON.stringify(inputPath) + \");\\n\" +"
-      "  \"  const opts = new _M0TP27hustcer4fzip13BrotliOptions(\" + quality + \", \" + windowBits + \", 1073741824);\\n\" +"
-      "  \"  const result = _M0FP27hustcer4fzip20brotli__sync_2einner(input, opts);\\n\" +"
+      "  \"  const opts = new _M0TP37hustcer3fbr6encode13BrotliOptions(\" + quality + \", \" + windowBits + \", 1073741824);\\n\" +"
+      "  \"  const result = _M0FP37hustcer3fbr6encode20brotli__sync_2einner(input, opts);\\n\" +"
       "  \"  if (result.$tag !== 1) { console.error('encode failed', result._0); process.exit(1); }\\n\" +"
       "  \"  const out = Buffer.from(result._0);\\n\" +"
       "  \"  fs.writeFileSync(\" + JSON.stringify(encodedPath) + \", out);\\n\" +"
       "  \"  console.log(JSON.stringify({input_size: input.length, encoded_size: out.length, encoded_sha256: crypto.createHash('sha256').update(out).digest('hex')}));\\n\" +"
       "  \"})();\\n\";"
-      "vm.runInNewContext(src, {require, console, process, Buffer, Uint8Array, exports: {}, module: {exports: {}}}, {filename: 'fzip.whitebox_test.encode.js'});"
+      "vm.runInNewContext(src, {require, console, process, Buffer, Uint8Array, exports: {}, module: {exports: {}}}, {filename: 'fbr.encode.whitebox_test.verify.js'});"
     ]
     | str join (char newline)
   )

@@ -1,10 +1,10 @@
 ///|
 fn assert_brotli_error(
-  result : Result[FixedArray[Byte], FzipError],
-  expected : FzipErrorCode,
+  result : Result[FixedArray[Byte], FbrError],
+  expected : FbrErrorCode,
 ) -> Unit raise {
-  guard result is Err(FzipError(code~, ..)) else {
-    fail("expected Brotli FzipError")
+  guard result is Err(FbrError(code~, ..)) else {
+    fail("expected Brotli FbrError")
   }
   assert_eq(code, expected)
 }
@@ -1563,7 +1563,7 @@ test "brotli_sync default quality round-trips" {
 ///|
 test "brotli_sync rejects invalid quality" {
   let input : FixedArray[Byte] = [1]
-  let result : Result[FixedArray[Byte], FzipError] = try? brotli_sync(input, opts={
+  let result : Result[FixedArray[Byte], FbrError] = try? brotli_sync(input, opts={
     quality: 12,
     window_bits: 22,
     max_input_size: default_max_input_size,
@@ -1574,7 +1574,7 @@ test "brotli_sync rejects invalid quality" {
 ///|
 test "brotli_sync enforces max_input_size" {
   let input : FixedArray[Byte] = [1, 2]
-  let result : Result[FixedArray[Byte], FzipError] = try? brotli_sync(input, opts={
+  let result : Result[FixedArray[Byte], FbrError] = try? brotli_sync(input, opts={
     quality: 1,
     window_bits: 22,
     max_input_size: 1,

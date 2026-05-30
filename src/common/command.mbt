@@ -80,9 +80,9 @@ pub let brotli_command_info_table : FixedArray[BrotliCommandInfo] = {
 }
 
 ///|
-pub fn brotli_command_info(symbol : Int) -> BrotliCommandInfo raise FzipError {
+pub fn brotli_command_info(symbol : Int) -> BrotliCommandInfo raise FbrError {
   if symbol < 0 || symbol >= brotli_num_command_symbols {
-    raise fzip_err(BrotliInvalidMetablock, msg="invalid Brotli command symbol")
+    raise fbr_err(BrotliInvalidMetablock, msg="invalid Brotli command symbol")
   }
   brotli_command_info_table[symbol]
 }

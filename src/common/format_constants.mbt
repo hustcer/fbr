@@ -93,9 +93,9 @@ pub fn brotli_distance_alphabet_size(
 }
 
 ///|
-pub fn brotli_validate_window_bits(window_bits : Int) -> Unit raise FzipError {
+pub fn brotli_validate_window_bits(window_bits : Int) -> Unit raise FbrError {
   if window_bits < brotli_min_window_bits ||
     window_bits > brotli_max_window_bits {
-    raise fzip_err(BrotliInvalidWindowBits)
+    raise fbr_err(BrotliInvalidWindowBits)
   }
 }

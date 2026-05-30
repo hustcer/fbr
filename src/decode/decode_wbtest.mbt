@@ -1,10 +1,10 @@
 ///|
 fn assert_brotli_error(
-  result : Result[FixedArray[Byte], FzipError],
-  expected : FzipErrorCode,
+  result : Result[FixedArray[Byte], FbrError],
+  expected : FbrErrorCode,
 ) -> Unit raise {
-  guard result is Err(FzipError(code~, ..)) else {
-    fail("expected Brotli FzipError")
+  guard result is Err(FbrError(code~, ..)) else {
+    fail("expected Brotli FbrError")
   }
   assert_eq(code, expected)
 }
@@ -99,7 +99,7 @@ fn write_window10_final_metablock_header(
 fn make_one_symbol_tree(
   symbol : Int,
   alphabet_size : Int,
-) -> FixedArray[BrotliHuffmanCode] raise FzipError {
+) -> FixedArray[BrotliHuffmanCode] raise FbrError {
   let lengths = FixedArray::make(alphabet_size, b'\x00')
   lengths[symbol] = b'\x01'
   brotli_build_huffman_table(lengths, alphabet_size, brotli_huffman_table_bits)
@@ -118,7 +118,7 @@ fn make_tree_group(
 fn make_single_block_body_header(
   command_symbol : Int,
   distance_symbol : Int,
-) -> BrotliCompressedMetablockHeader raise FzipError {
+) -> BrotliCompressedMetablockHeader raise FbrError {
   let literal_trees : Array[FixedArray[BrotliHuffmanCode]] = []
   literal_trees.push(make_one_symbol_tree(65, brotli_num_literal_symbols))
   let command_trees : Array[FixedArray[BrotliHuffmanCode]] = []
@@ -187,8 +187,8 @@ test "BrotliBitReader reads and aligns LSB-first bits" {
 test "BrotliBitReader align_to_byte rejects non-zero padding" {
   let reader = BrotliBitReader::new([0x09], 0, 1)
   inspect(reader.take_bits(1), content="1")
-  let result : Result[Unit, FzipError] = try? reader.align_to_byte()
-  guard result is Err(FzipError(code~, ..)) else {
+  let result : Result[Unit, FbrError] = try? reader.align_to_byte()
+  guard result is Err(FbrError(code~, ..)) else {
     fail("expected padding error")
   }
   assert_eq(code, BrotliInvalidPadding)
@@ -285,10 +285,10 @@ test "brotli_read_huffman_code rejects malformed simple tables" {
   pos += 2
   wbits(duplicate, pos, 1)
   let duplicate_reader = BrotliBitReader::new(duplicate, 0, duplicate.length())
-  let duplicate_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_read_huffman_code(
+  let duplicate_result : Result[FixedArray[BrotliHuffmanCode], FbrError] = try? brotli_read_huffman_code(
     duplicate_reader, 4, 4, 3,
   )
-  guard duplicate_result is Err(FzipError(code=duplicate_code, ..)) else {
+  guard duplicate_result is Err(FbrError(code=duplicate_code, ..)) else {
     fail("expected duplicate simple Huffman error")
   }
   assert_eq(duplicate_code, BrotliInvalidHuffman)
@@ -305,10 +305,10 @@ test "brotli_read_huffman_code rejects malformed simple tables" {
     0,
     out_of_range.length(),
   )
-  let out_of_range_result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_read_huffman_code(
+  let out_of_range_result : Result[FixedArray[BrotliHuffmanCode], FbrError] = try? brotli_read_huffman_code(
     out_of_range_reader, 4, 3, 3,
   )
-  guard out_of_range_result is Err(FzipError(code=range_code, ..)) else {
+  guard out_of_range_result is Err(FbrError(code=range_code, ..)) else {
     fail("expected out-of-range simple Huffman error")
   }
   assert_eq(range_code, BrotliInvalidHuffman)
@@ -353,10 +353,10 @@ test "brotli_read_huffman_code rejects complex repeat overflow" {
   }
   wbits(encoded, pos, 7) // repeat-zero extra bits: 10 zeros for alphabet 4
   let reader = BrotliBitReader::new(encoded, 0, encoded.length())
-  let result : Result[FixedArray[BrotliHuffmanCode], FzipError] = try? brotli_read_huffman_code(
+  let result : Result[FixedArray[BrotliHuffmanCode], FbrError] = try? brotli_read_huffman_code(
     reader, 4, 4, 2,
   )
-  guard result is Err(FzipError(code~, ..)) else {
+  guard result is Err(FbrError(code~, ..)) else {
     fail("expected complex repeat overflow error")
   }
   assert_eq(code, BrotliInvalidHuffman)
@@ -486,10 +486,10 @@ test "brotli_read_context_map rejects RLE overflow" {
   pos += 2
   wbits(encoded, pos, 1) // reps = 3 for a 2-entry map
   let reader = BrotliBitReader::new(encoded, 0, encoded.length())
-  let result : Result[BrotliContextMap, FzipError] = try? brotli_read_context_map(
+  let result : Result[BrotliContextMap, FbrError] = try? brotli_read_context_map(
     reader, 2,
   )
-  guard result is Err(FzipError(code~, ..)) else {
+  guard result is Err(FbrError(code~, ..)) else {
     fail("expected context map repeat overflow")
   }
   assert_eq(code, BrotliInvalidContextMap)
@@ -527,18 +527,18 @@ test "brotli_read_huffman_tree_group reads consecutive trees" {
 ///|
 test "brotli_read_huffman_tree_group validates parameters" {
   let reader = BrotliBitReader::new([0x00], 0, 1)
-  let empty : Result[BrotliHuffmanTreeGroup, FzipError] = try? brotli_read_huffman_tree_group(
+  let empty : Result[BrotliHuffmanTreeGroup, FbrError] = try? brotli_read_huffman_tree_group(
     reader, 4, 4, 0, 3,
   )
-  guard empty is Err(FzipError(code=empty_code, ..)) else {
+  guard empty is Err(FbrError(code=empty_code, ..)) else {
     fail("expected empty tree group error")
   }
   assert_eq(empty_code, BrotliInvalidHuffman)
 
-  let invalid_alphabet : Result[BrotliHuffmanTreeGroup, FzipError] = try? brotli_read_huffman_tree_group(
+  let invalid_alphabet : Result[BrotliHuffmanTreeGroup, FbrError] = try? brotli_read_huffman_tree_group(
     reader, 2, 4, 1, 3,
   )
-  guard invalid_alphabet is Err(FzipError(code=alphabet_code, ..)) else {
+  guard invalid_alphabet is Err(FbrError(code=alphabet_code, ..)) else {
     fail("expected invalid alphabet error")
   }
   assert_eq(alphabet_code, BrotliInvalidHuffman)

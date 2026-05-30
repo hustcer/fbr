@@ -5,7 +5,7 @@
 
 const default_compressed = "target/brotli-silesia/silesia-100m.bin.br"
 const default_expected = "target/brotli-silesia/silesia-100m.bin"
-const generated_test = "_build/js/debug/test/fzip.whitebox_test.js"
+const generated_test = "_build/js/debug/test/decode/decode.whitebox_test.js"
 const temp_dir = "target/brotli-silesia"
 const temp_runner = "target/brotli-silesia/verify-generated.js"
 
@@ -57,8 +57,8 @@ def main [
       "  \"  const crypto = require('crypto');\\n\" +"
       "  \"  const compressed = fs.readFileSync(\" + JSON.stringify(compressedPath) + \");\\n\" +"
       "  \"  const expected = fs.readFileSync(\" + JSON.stringify(expectedPath) + \");\\n\" +"
-      ("  \"  const opts = new _M0TP27hustcer4fzip15UnbrotliOptions(undefined, " + ($output_cap | into string) + ", compressed.length + 1);\\n\" +")
-      "  \"  const result = _M0FP27hustcer4fzip22unbrotli__sync_2einner(compressed, opts);\\n\" +"
+      ("  \"  const opts = new _M0TP37hustcer3fbr6decode15UnbrotliOptions(undefined, " + ($output_cap | into string) + ", compressed.length + 1);\\n\" +")
+      "  \"  const result = _M0FP37hustcer3fbr6decode22unbrotli__sync_2einner(compressed, opts);\\n\" +"
       "  \"  if (result.$tag !== 1) { console.error('decode failed', result._0); process.exit(1); }\\n\" +"
       "  \"  const out = Buffer.from(result._0);\\n\" +"
       "  \"  const sha = crypto.createHash('sha256').update(out).digest('hex');\\n\" +"
@@ -66,7 +66,7 @@ def main [
       "  \"  console.log(JSON.stringify({purpose: 'file-io-verification', moonbit_backend: 'legacy-js', decoded_size: out.length, sha256: sha, expected_size: expected.length, expected_sha256: expectedSha}));\\n\" +"
       "  \"  if (out.length !== expected.length || sha !== expectedSha) { process.exit(1); }\\n\" +"
       "  \"})();\\n\";"
-      "vm.runInNewContext(src, {require, console, process, Buffer, Uint8Array, exports: {}, module: {exports: {}}}, {filename: 'fzip.whitebox_test.silesia.js'});"
+      "vm.runInNewContext(src, {require, console, process, Buffer, Uint8Array, exports: {}, module: {exports: {}}}, {filename: 'fbr.decode.whitebox_test.silesia.js'});"
     ]
     | str join (char newline)
   )

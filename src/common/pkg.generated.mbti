@@ -16,9 +16,9 @@ pub let brotli_block_size_cap : Int
 
 pub fn brotli_build_command_info(Int) -> BrotliCommandInfo
 
-pub fn brotli_build_huffman_table(FixedArray[Byte], Int, Int) -> FixedArray[BrotliHuffmanCode] raise FzipError
+pub fn brotli_build_huffman_table(FixedArray[Byte], Int, Int) -> FixedArray[BrotliHuffmanCode] raise FbrError
 
-pub fn brotli_build_simple_huffman_table(FixedArray[Int], Int, Int) -> FixedArray[BrotliHuffmanCode] raise FzipError
+pub fn brotli_build_simple_huffman_table(FixedArray[Int], Int, Int) -> FixedArray[BrotliHuffmanCode] raise FbrError
 
 pub let brotli_code_length_code_order : FixedArray[Int]
 
@@ -28,7 +28,7 @@ pub let brotli_code_length_prefix_value : FixedArray[Int]
 
 pub let brotli_command_cell_pos : FixedArray[Int]
 
-pub fn brotli_command_info(Int) -> BrotliCommandInfo raise FzipError
+pub fn brotli_command_info(Int) -> BrotliCommandInfo raise FbrError
 
 pub let brotli_command_info_table : FixedArray[BrotliCommandInfo]
 
@@ -48,9 +48,9 @@ pub fn brotli_distance_alphabet_size(Int, Int, Int) -> Int
 
 pub let brotli_distance_context_bits : Int
 
-pub fn brotli_distance_extra_bits(Int, Int, Int) -> Int raise FzipError
+pub fn brotli_distance_extra_bits(Int, Int, Int) -> Int raise FbrError
 
-pub fn brotli_distance_offset(Int, Int, Int) -> Int raise FzipError
+pub fn brotli_distance_offset(Int, Int, Int) -> Int raise FbrError
 
 pub fn brotli_distance_ring_slot(Int) -> Int
 
@@ -68,7 +68,7 @@ pub let brotli_insert_length_extra_bits : FixedArray[Int]
 
 pub let brotli_literal_context_bits : Int
 
-pub fn brotli_literal_context_id(Int, Int, Int) -> Int raise FzipError
+pub fn brotli_literal_context_id(Int, Int, Int) -> Int raise FbrError
 
 pub fn brotli_log2_floor_plus_one(Int) -> Int
 
@@ -120,9 +120,9 @@ pub let brotli_transform_shift_all : Int
 
 pub let brotli_transform_shift_first : Int
 
-pub fn brotli_transform_string_length(Int) -> Int raise FzipError
+pub fn brotli_transform_string_length(Int) -> Int raise FbrError
 
-pub fn brotli_transform_string_offset(Int) -> Int raise FzipError
+pub fn brotli_transform_string_offset(Int) -> Int raise FbrError
 
 pub let brotli_transform_triplets : FixedArray[Int]
 
@@ -138,9 +138,9 @@ pub let brotli_utf8_lut1 : FixedArray[Int]
 
 pub let brotli_utf8_lut2 : FixedArray[Int]
 
-pub fn brotli_validate_huffman_lengths(FixedArray[Int], Int) -> Unit raise FzipError
+pub fn brotli_validate_huffman_lengths(FixedArray[Int], Int) -> Unit raise FbrError
 
-pub fn brotli_validate_window_bits(Int) -> Unit raise FzipError
+pub fn brotli_validate_window_bits(Int) -> Unit raise FbrError
 
 pub let brotli_window_gap : Int
 
@@ -154,9 +154,9 @@ pub let default_max_output_size : Int
 
 pub let error_messages : Array[String]
 
-pub fn fzip_err(FzipErrorCode, msg? : String) -> FzipError
+pub fn fbr_err(FbrErrorCode, msg? : String) -> FbrError
 
-pub fn fzip_error_code_to_int(FzipErrorCode) -> Int
+pub fn fbr_error_code_to_int(FbrErrorCode) -> Int
 
 pub fn max_int_val() -> Int
 
@@ -169,8 +169,8 @@ pub fn slc(FixedArray[Byte], Int, e? : Int) -> FixedArray[Byte]
 pub fn trim_buf(FixedArray[Byte], Int) -> FixedArray[Byte]
 
 // Errors
-pub(all) suberror FzipError {
-  FzipError(code~ : FzipErrorCode, message~ : String)
+pub(all) suberror FbrError {
+  FbrError(code~ : FbrErrorCode, message~ : String)
 }
 
 // Types and methods
@@ -190,8 +190,8 @@ pub(all) struct BrotliDistanceRing {
 }
 pub fn BrotliDistanceRing::compensate_dictionary_copy(Self) -> Unit
 pub fn BrotliDistanceRing::new() -> Self
-pub fn BrotliDistanceRing::record(Self, Int) -> Unit raise FzipError
-pub fn BrotliDistanceRing::take_short_code(Self, Int) -> Int raise FzipError
+pub fn BrotliDistanceRing::record(Self, Int) -> Unit raise FbrError
+pub fn BrotliDistanceRing::take_short_code(Self, Int) -> Int raise FbrError
 
 pub(all) struct BrotliHuffmanCode {
   bits : Int
@@ -200,9 +200,7 @@ pub(all) struct BrotliHuffmanCode {
 pub fn BrotliHuffmanCode::empty() -> Self
 pub fn BrotliHuffmanCode::new(Int, Int) -> Self
 
-pub(all) struct FlateStreamHandler((FixedArray[Byte], Bool) -> Unit)
-
-pub(all) enum FzipErrorCode {
+pub(all) enum FbrErrorCode {
   UnexpectedEOF
   InvalidUTF8
   InvalidZipData
@@ -217,7 +215,9 @@ pub(all) enum FzipErrorCode {
   BrotliReserved
   BrotliInvalidPadding
 } derive(Eq, @debug.Debug)
-pub impl Show for FzipErrorCode
+pub impl Show for FbrErrorCode
+
+pub(all) struct FlateStreamHandler((FixedArray[Byte], Bool) -> Unit)
 
 // Type aliases
 

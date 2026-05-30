@@ -10,7 +10,7 @@ priv struct BrotliCommand {
 fn brotli_read_command(
   reader : BrotliBitReader,
   command_tree : FixedArray[@common.BrotliHuffmanCode],
-) -> BrotliCommand raise @common.FzipError {
+) -> BrotliCommand raise @common.FbrError {
   let symbol = brotli_read_symbol(
     reader, command_tree, @common.brotli_huffman_table_bits,
   )
@@ -36,7 +36,7 @@ fn brotli_decode_compressed_metablock_body(
   output : BrotliOutputBuilder,
   length : Int,
   state : BrotliDecoderState,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   let literal_blocks = BrotliBlockTracker::new_with_length(
     header.literal_block.num_types,
     header.literal_block.first_length,
@@ -58,7 +58,7 @@ fn brotli_decode_compressed_metablock_body(
     )
     command_blocks.remaining -= 1
     if command.insert_length > remaining {
-      raise @common.fzip_err(
+      raise @common.fbr_err(
         @common.BrotliInvalidMetablock,
         msg="Brotli insert length exceeds meta-block",
       )
@@ -93,7 +93,7 @@ fn brotli_decode_compressed_metablock_body(
         @common.brotli_huffman_table_bits,
       )
       if literal < 0 || literal > 255 {
-        raise @common.fzip_err(
+        raise @common.fbr_err(
           @common.BrotliInvalidMetablock,
           msg="Brotli literal out of byte range",
         )
@@ -141,7 +141,7 @@ fn brotli_decode_compressed_metablock_body(
     }
     let copied = output.len - output_before_copy
     if copied > remaining {
-      raise @common.fzip_err(
+      raise @common.fbr_err(
         @common.BrotliInvalidMetablock,
         msg="Brotli copy length exceeds meta-block",
       )

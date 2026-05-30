@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn unbrotli_sync(FixedArray[Byte], opts? : UnbrotliOptions) -> FixedArray[Byte] raise @common.FzipError
+pub fn unbrotli_sync(FixedArray[Byte], opts? : UnbrotliOptions) -> FixedArray[Byte] raise @common.FbrError
 
 // Errors
 
@@ -24,7 +24,7 @@ pub(all) struct UnbrotliStream {
   // private fields
 }
 pub fn UnbrotliStream::new(opts? : UnbrotliOptions) -> Self
-pub fn UnbrotliStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise @common.FzipError
+pub fn UnbrotliStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise @common.FbrError
 pub fn UnbrotliStream::set_ondata(Self, (FixedArray[Byte], Bool) -> Unit) -> Unit
 
 // Type aliases

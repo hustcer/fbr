@@ -616,7 +616,7 @@ fn brotli_build_identity_dictionary_commands(
       ) {
       Some((length, output_length, distance)) => {
         let insert_length = position - literal_start
-        let command_result : Result[BrotliEncodeCommand, @common.FzipError] = try? brotli_make_dictionary_encode_command(
+        let command_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_dictionary_encode_command(
           literal_start, insert_length, length, output_length, distance,
         )
         match command_result {
@@ -636,7 +636,7 @@ fn brotli_build_identity_dictionary_commands(
     return None
   }
   if literal_start < data.length() {
-    let final_result : Result[BrotliEncodeCommand, @common.FzipError] = try? brotli_make_encode_command(
+    let final_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command(
       literal_start,
       data.length() - literal_start,
       0,
@@ -725,7 +725,7 @@ fn brotli_build_mixed_dictionary_lz77_commands_with_distance_cache(
         Some((word_length, output_length, dictionary_distance)) =>
           if output_length >= 8 && output_length >= match_length + 2 {
             let insert_length = position - literal_start
-            let command_result : Result[BrotliEncodeCommand, @common.FzipError] = try? brotli_make_dictionary_encode_command(
+            let command_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_dictionary_encode_command(
               literal_start, insert_length, word_length, output_length, dictionary_distance,
             )
             match command_result {
@@ -808,7 +808,7 @@ fn brotli_build_mixed_dictionary_lz77_commands_with_distance_cache(
     return None
   }
   if literal_start < data.length() {
-    let final_result : Result[BrotliEncodeCommand, @common.FzipError] = try? brotli_make_encode_command(
+    let final_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command(
       literal_start,
       data.length() - literal_start,
       0,

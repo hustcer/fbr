@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn brotli_sync(FixedArray[Byte], opts? : BrotliOptions) -> FixedArray[Byte] raise @common.FzipError
+pub fn brotli_sync(FixedArray[Byte], opts? : BrotliOptions) -> FixedArray[Byte] raise @common.FbrError
 
 // Errors
 
@@ -24,7 +24,7 @@ pub(all) struct BrotliStream {
   // private fields
 }
 pub fn BrotliStream::new(opts? : BrotliOptions) -> Self
-pub fn BrotliStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise @common.FzipError
+pub fn BrotliStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise @common.FbrError
 pub fn BrotliStream::set_ondata(Self, (FixedArray[Byte], Bool) -> Unit) -> Unit
 
 // Type aliases

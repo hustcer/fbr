@@ -1,8 +1,8 @@
 ///|
-type FzipErrorCode = @common.FzipErrorCode
+type FbrErrorCode = @common.FbrErrorCode
 
 ///|
-type FzipError = @common.FzipError
+type FbrError = @common.FbrError
 
 ///|
 type BrotliHuffmanCode = @common.BrotliHuffmanCode
@@ -38,8 +38,8 @@ let brotli_literal_context_bits = @common.brotli_literal_context_bits
 let brotli_distance_context_bits = @common.brotli_distance_context_bits
 
 ///|
-fn fzip_err(code : FzipErrorCode, msg? : String = "") -> FzipError {
-  @common.fzip_err(code, msg~)
+fn fbr_err(code : FbrErrorCode, msg? : String = "") -> FbrError {
+  @common.fbr_err(code, msg~)
 }
 
 ///|
@@ -52,7 +52,7 @@ fn brotli_build_huffman_table(
   lengths : FixedArray[Byte],
   alphabet_size : Int,
   root_bits : Int,
-) -> FixedArray[BrotliHuffmanCode] raise FzipError {
+) -> FixedArray[BrotliHuffmanCode] raise FbrError {
   @common.brotli_build_huffman_table(lengths, alphabet_size, root_bits)
 }
 
@@ -70,7 +70,7 @@ fn brotli_distance_alphabet_size(
 ///|
 fn brotli_command_info(
   symbol : Int,
-) -> @common.BrotliCommandInfo raise FzipError {
+) -> @common.BrotliCommandInfo raise FbrError {
   @common.brotli_command_info(symbol)
 }
 
@@ -84,7 +84,7 @@ fn brotli_distance_extra_bits(
   code : Int,
   postfix_bits : Int,
   direct_codes : Int,
-) -> Int raise FzipError {
+) -> Int raise FbrError {
   @common.brotli_distance_extra_bits(code, postfix_bits, direct_codes)
 }
 
@@ -93,7 +93,7 @@ fn brotli_distance_offset(
   code : Int,
   postfix_bits : Int,
   direct_codes : Int,
-) -> Int raise FzipError {
+) -> Int raise FbrError {
   @common.brotli_distance_offset(code, postfix_bits, direct_codes)
 }
 
@@ -102,7 +102,7 @@ fn brotli_literal_context_id(
   mode : Int,
   previous_byte : Int,
   previous_byte2 : Int,
-) -> Int raise FzipError {
+) -> Int raise FbrError {
   @common.brotli_literal_context_id(mode, previous_byte, previous_byte2)
 }
 

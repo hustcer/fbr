@@ -28,16 +28,16 @@ pub fn brotli_transform_count() -> Int {
 }
 
 ///|
-pub fn brotli_transform_string_offset(id : Int) -> Int raise FzipError {
+pub fn brotli_transform_string_offset(id : Int) -> Int raise FbrError {
   if id < 0 || id >= brotli_transform_prefix_suffix_map.length() {
-    raise fzip_err(
+    raise fbr_err(
       BrotliInvalidTransform,
       msg="Brotli transform string id out of range",
     )
   }
   let offset = brotli_transform_prefix_suffix_map[id]
   if offset < 0 || offset >= brotli_transform_prefix_suffix.length() {
-    raise fzip_err(
+    raise fbr_err(
       BrotliInvalidTransform,
       msg="Brotli transform string out of range",
     )
@@ -46,7 +46,7 @@ pub fn brotli_transform_string_offset(id : Int) -> Int raise FzipError {
 }
 
 ///|
-pub fn brotli_transform_string_length(id : Int) -> Int raise FzipError {
+pub fn brotli_transform_string_length(id : Int) -> Int raise FbrError {
   brotli_transform_prefix_suffix[brotli_transform_string_offset(id)].to_int()
 }
 

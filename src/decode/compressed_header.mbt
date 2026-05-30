@@ -24,7 +24,7 @@ priv struct BrotliCompressedMetablockHeader {
 ///|
 fn brotli_read_block_switch_header(
   reader : BrotliBitReader,
-) -> BrotliBlockSwitchHeader raise @common.FzipError {
+) -> BrotliBlockSwitchHeader raise @common.FbrError {
   let num_types = brotli_read_block_type_count(reader)
   if num_types == 1 {
     return {
@@ -56,7 +56,7 @@ fn brotli_read_block_switch_header(
 fn brotli_read_context_modes(
   reader : BrotliBitReader,
   num_literal_block_types : Int,
-) -> FixedArray[Byte] raise @common.FzipError {
+) -> FixedArray[Byte] raise @common.FbrError {
   let modes = FixedArray::make(num_literal_block_types, b'\x00')
   for i in 0..<num_literal_block_types {
     modes[i] = reader.take_bits(2).to_byte()
@@ -67,7 +67,7 @@ fn brotli_read_context_modes(
 ///|
 fn brotli_read_compressed_metablock_header(
   reader : BrotliBitReader,
-) -> BrotliCompressedMetablockHeader raise @common.FzipError {
+) -> BrotliCompressedMetablockHeader raise @common.FbrError {
   let literal_block = brotli_read_block_switch_header(reader)
   let command_block = brotli_read_block_switch_header(reader)
   let distance_block = brotli_read_block_switch_header(reader)

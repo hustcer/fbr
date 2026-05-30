@@ -7,9 +7,9 @@ priv struct BrotliHuffmanTreeGroup {
 fn BrotliHuffmanTreeGroup::tree(
   self : BrotliHuffmanTreeGroup,
   index : Int,
-) -> FixedArray[@common.BrotliHuffmanCode] raise @common.FzipError {
+) -> FixedArray[@common.BrotliHuffmanCode] raise @common.FbrError {
   if index < 0 || index >= self.trees.length() {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidHuffman,
       msg="Brotli tree group index out of range",
     )
@@ -24,15 +24,15 @@ fn brotli_read_huffman_tree_group(
   alphabet_size_limit : Int,
   num_trees : Int,
   root_bits : Int,
-) -> BrotliHuffmanTreeGroup raise @common.FzipError {
+) -> BrotliHuffmanTreeGroup raise @common.FbrError {
   if num_trees < 1 {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidHuffman,
       msg="empty Brotli Huffman tree group",
     )
   }
   if alphabet_size_limit < 1 || alphabet_size_max < alphabet_size_limit {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidHuffman,
       msg="invalid Brotli Huffman tree group alphabet",
     )

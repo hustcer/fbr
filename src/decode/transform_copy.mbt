@@ -4,9 +4,9 @@ fn BrotliOutputBuilder::copy_transformed_dictionary_word(
   word_offset : Int,
   word_length : Int,
   transform_index : Int,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   if transform_index < 0 || transform_index >= @common.brotli_transform_count() {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidTransform,
       msg="Brotli transform index out of range",
     )
@@ -17,7 +17,7 @@ fn BrotliOutputBuilder::copy_transformed_dictionary_word(
   let suffix_id = @common.brotli_transform_triplets[triplet_offset + 2]
   if transform_type == @common.brotli_transform_shift_first ||
     transform_type == @common.brotli_transform_shift_all {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidTransform,
       msg="Brotli shift transform is not supported",
     )
@@ -38,13 +38,13 @@ fn BrotliOutputBuilder::copy_transformed_dictionary_word(
   } else if transform_type != @common.brotli_transform_uppercase_first &&
     transform_type != @common.brotli_transform_uppercase_all &&
     transform_type != @common.brotli_transform_identity {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidTransform,
       msg="unknown Brotli transform",
     )
   }
   if source_length < 0 {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidTransform,
       msg="Brotli transform omits too much",
     )

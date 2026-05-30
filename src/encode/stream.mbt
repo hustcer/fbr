@@ -33,7 +33,7 @@ pub fn BrotliStream::push(
   self : BrotliStream,
   chunk : FixedArray[Byte],
   final_? : Bool = false,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   self.chunks.push(chunk)
   if final_ {
     let data = @common.concat_chunks(self.chunks)

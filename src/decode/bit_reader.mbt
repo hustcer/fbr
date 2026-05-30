@@ -27,7 +27,7 @@ fn BrotliBitReader::new(
 fn BrotliBitReader::refill_to(
   self : BrotliBitReader,
   n : Int,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   // Fast path: when at least one byte of room remains in the accumulator
   // (bits_avail <= 24) and at least 3 bytes of input are available, fill
   // three bytes at once. Branch-free, no EOF check needed for the fast
@@ -49,7 +49,7 @@ fn BrotliBitReader::refill_to(
   }
   while self.bits_avail < n {
     if self.byte_pos >= self.byte_end {
-      raise @common.fzip_err(
+      raise @common.fbr_err(
         @common.UnexpectedEOF,
         msg="brotli input ended while reading bits need=\{n} available=\{self.bits_avail}",
       )
@@ -81,9 +81,9 @@ fn brotli_low_mask(n : Int) -> UInt {
 fn BrotliBitReader::peek_bits(
   self : BrotliBitReader,
   n : Int,
-) -> UInt raise @common.FzipError {
+) -> UInt raise @common.FbrError {
   if n < 0 || n > 24 {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidMetablock,
       msg="invalid Brotli bit read width",
     )
@@ -96,9 +96,9 @@ fn BrotliBitReader::peek_bits(
 fn BrotliBitReader::drop_bits(
   self : BrotliBitReader,
   n : Int,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   if n < 0 || n > self.bits_avail {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidMetablock,
       msg="invalid Brotli bit drop width",
     )
@@ -111,7 +111,7 @@ fn BrotliBitReader::drop_bits(
 fn BrotliBitReader::take_bits(
   self : BrotliBitReader,
   n : Int,
-) -> UInt raise @common.FzipError {
+) -> UInt raise @common.FbrError {
   let value = self.peek_bits(n)
   self.drop_bits(n)
   value
@@ -120,7 +120,7 @@ fn BrotliBitReader::take_bits(
 ///|
 fn BrotliBitReader::align_to_byte(
   self : BrotliBitReader,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   // bits_avail is always non-negative; `bits_avail & 7` matches the number of
   // padding bits we must consume to land on the next byte boundary (because
   // every refill loads whole bytes and starts byte-aligned).
@@ -128,7 +128,7 @@ fn BrotliBitReader::align_to_byte(
   if extra > 0 {
     let padding = self.take_bits(extra)
     if padding != 0U {
-      raise @common.fzip_err(@common.BrotliInvalidPadding)
+      raise @common.fbr_err(@common.BrotliInvalidPadding)
     }
   }
 }
@@ -139,13 +139,10 @@ fn BrotliBitReader::take_bytes(
   out : FixedArray[Byte],
   offset : Int,
   length : Int,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   self.align_to_byte()
   if offset < 0 || length < 0 || offset > out.length() - length {
-    raise @common.fzip_err(
-      @common.InvalidZipData,
-      msg="output buffer too small",
-    )
+    raise @common.fbr_err(@common.InvalidZipData, msg="output buffer too small")
   }
   let mut dst = offset
   let end = offset + length
@@ -157,7 +154,7 @@ fn BrotliBitReader::take_bytes(
   }
   let remaining = end - dst
   if remaining > self.byte_end - self.byte_pos {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.UnexpectedEOF,
       msg="brotli input ended while reading bytes",
     )
@@ -176,16 +173,16 @@ fn BrotliBitReader::take_bytes(
 ///|
 fn BrotliBitReader::expect_final_padding_zero(
   self : BrotliBitReader,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   if self.bits_avail > 0 {
     let mask = brotli_low_mask(self.bits_avail)
     if (self.bit_buf & mask) != 0U {
-      raise @common.fzip_err(@common.BrotliInvalidPadding)
+      raise @common.fbr_err(@common.BrotliInvalidPadding)
     }
   }
   while self.byte_pos < self.byte_end {
     if self.buf[self.byte_pos] != b'\x00' {
-      raise @common.fzip_err(@common.BrotliInvalidPadding)
+      raise @common.fbr_err(@common.BrotliInvalidPadding)
     }
     self.byte_pos += 1
   }

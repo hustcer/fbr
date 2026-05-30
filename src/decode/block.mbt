@@ -1,7 +1,7 @@
 ///|
 fn brotli_decode_var_len_uint8(
   reader : BrotliBitReader,
-) -> Int raise @common.FzipError {
+) -> Int raise @common.FbrError {
   if reader.take_bits(1) == 0U {
     0
   } else {
@@ -17,7 +17,7 @@ fn brotli_decode_var_len_uint8(
 ///|
 fn brotli_read_block_type_count(
   reader : BrotliBitReader,
-) -> Int raise @common.FzipError {
+) -> Int raise @common.FbrError {
   brotli_decode_var_len_uint8(reader) + 1
 }
 
@@ -25,12 +25,12 @@ fn brotli_read_block_type_count(
 fn brotli_read_block_length(
   reader : BrotliBitReader,
   table : FixedArray[@common.BrotliHuffmanCode],
-) -> Int raise @common.FzipError {
+) -> Int raise @common.FbrError {
   let code = brotli_read_symbol(
     reader, table, @common.brotli_huffman_table_bits,
   )
   if code < 0 || code >= @common.brotli_num_block_length_symbols {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidMetablock,
       msg="invalid Brotli block length code",
     )
@@ -53,15 +53,15 @@ priv struct BrotliBlockTracker {
 fn BrotliBlockTracker::new_with_length(
   num_types : Int,
   initial_length : Int,
-) -> BrotliBlockTracker raise @common.FzipError {
+) -> BrotliBlockTracker raise @common.FbrError {
   if num_types < 1 {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidMetablock,
       msg="block type count must be positive",
     )
   }
   if initial_length < 1 {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidMetablock,
       msg="block length must be positive",
     )
@@ -79,7 +79,7 @@ fn BrotliBlockTracker::new_with_length(
 fn BrotliBlockTracker::resolve_type_code(
   self : BrotliBlockTracker,
   code : Int,
-) -> Int raise @common.FzipError {
+) -> Int raise @common.FbrError {
   if self.num_types == 1 {
     self.current_type = 0
     return 0
@@ -92,7 +92,7 @@ fn BrotliBlockTracker::resolve_type_code(
     code - 2
   }
   if block_type < 0 {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidMetablock,
       msg="negative block type",
     )
@@ -111,9 +111,9 @@ fn BrotliBlockTracker::switch_with_code(
   self : BrotliBlockTracker,
   code : Int,
   length : Int,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   if length < 1 {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidMetablock,
       msg="block length must be positive",
     )
@@ -127,7 +127,7 @@ fn BrotliBlockTracker::ensure_ready(
   self : BrotliBlockTracker,
   reader : BrotliBitReader,
   header : BrotliBlockSwitchHeader,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   if self.remaining > 0 {
     return
   }
@@ -137,13 +137,13 @@ fn BrotliBlockTracker::ensure_ready(
     return
   }
   guard header.type_tree is Some(type_tree) else {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidMetablock,
       msg="missing Brotli block type tree",
     )
   }
   guard header.length_tree is Some(length_tree) else {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidMetablock,
       msg="missing Brotli block length tree",
     )

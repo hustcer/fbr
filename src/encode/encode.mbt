@@ -169,7 +169,7 @@ fn BrotliBitWriter::finish(self : BrotliBitWriter) -> FixedArray[Byte] {
 fn brotli_encode_window_bits(
   writer : BrotliBitWriter,
   window_bits : Int,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   @common.brotli_validate_window_bits(window_bits)
   if window_bits == 16 {
     writer.write_bits(1, 0)
@@ -336,9 +336,9 @@ fn brotli_make_huffman_spec(
   count : Int,
   alphabet_size_max : Int,
   alphabet_size_limit : Int,
-) -> BrotliHuffmanSpec raise @common.FzipError {
+) -> BrotliHuffmanSpec raise @common.FbrError {
   if count <= 0 || count > alphabet_size_limit {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidHuffman,
       msg="invalid encoder alphabet",
     )
@@ -356,7 +356,7 @@ fn brotli_make_huffman_spec(
   }
   let padded_count = brotli_next_power_of_two(count)
   if padded_count > alphabet_size_limit {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidHuffman,
       msg="encoder alphabet too large",
     )
@@ -396,7 +396,7 @@ fn brotli_make_weighted_huffman_spec(
   frequencies : FixedArray[Int],
   alphabet_size_max : Int,
   alphabet_size_limit : Int,
-) -> BrotliHuffmanSpec raise @common.FzipError {
+) -> BrotliHuffmanSpec raise @common.FbrError {
   if count <= 4 {
     return brotli_make_huffman_spec(
       symbols, count, alphabet_size_max, alphabet_size_limit,
@@ -458,7 +458,7 @@ fn brotli_make_weighted_huffman_spec(
       }
     }
     if first < 0 || second < 0 {
-      raise @common.fzip_err(
+      raise @common.fbr_err(
         @common.BrotliInvalidHuffman,
         msg="invalid weighted tree",
       )
@@ -500,14 +500,14 @@ fn brotli_make_weighted_huffman_spec(
 ///|
 fn brotli_find_fixed_prefix_payload(
   value : Int,
-) -> (Int, Int) raise @common.FzipError {
+) -> (Int, Int) raise @common.FbrError {
   for i in 0..<@common.brotli_code_length_prefix_value.length() {
     if @common.brotli_code_length_prefix_value[i] == value {
       let bits = @common.brotli_code_length_prefix_length[i]
       return (bits, i & ((1 << bits) - 1))
     }
   }
-  raise @common.fzip_err(
+  raise @common.fbr_err(
     @common.BrotliInvalidHuffman,
     msg="missing fixed prefix payload",
   )
@@ -518,9 +518,9 @@ fn brotli_huffman_payload_from_lengths(
   code_lengths : FixedArray[Byte],
   alphabet_size : Int,
   target : Int,
-) -> BrotliCommandPrefix raise @common.FzipError {
+) -> BrotliCommandPrefix raise @common.FbrError {
   if target < 0 || target >= alphabet_size {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidHuffman,
       msg="target outside alphabet",
     )
@@ -557,7 +557,7 @@ fn brotli_huffman_payload_from_lengths(
       }
     }
   }
-  raise @common.fzip_err(
+  raise @common.fbr_err(
     @common.BrotliInvalidHuffman,
     msg="target has no Huffman code",
   )
@@ -627,7 +627,7 @@ fn brotli_write_complex_code_lengths(
   spec : BrotliHuffmanSpec,
   code_length_code_lengths : FixedArray[Byte],
   last_nonzero : Int,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   let mut symbol = 0
   while symbol <= last_nonzero {
     let length = spec.code_lengths[symbol].to_int()
@@ -719,7 +719,7 @@ fn brotli_write_complex_code_lengths(
 fn brotli_write_complex_huffman(
   writer : BrotliBitWriter,
   spec : BrotliHuffmanSpec,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   writer.write_bits(2, 0) // complex Huffman marker, skip 0
   let last_nonzero = brotli_complex_huffman_last_nonzero(spec)
   let code_length_symbols = FixedArray::make(
@@ -759,7 +759,7 @@ fn brotli_write_complex_huffman(
     }
     let (tree_lengths, _) = h_tree(frequencies, 5)
     if tree_lengths.length() == 0 {
-      raise @common.fzip_err(
+      raise @common.fbr_err(
         @common.BrotliInvalidHuffman,
         msg="code-length alphabet too large",
       )
@@ -790,7 +790,7 @@ fn brotli_write_complex_huffman(
 fn brotli_write_huffman_spec(
   writer : BrotliBitWriter,
   spec : BrotliHuffmanSpec,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   if spec.simple {
     let symbol_bits = @common.brotli_log2_floor_plus_one(
       spec.alphabet_size_max - 1,
@@ -806,7 +806,7 @@ fn brotli_simple_huffman_payload(
   symbols : FixedArray[Int],
   count : Int,
   target : Int,
-) -> BrotliCommandPrefix raise @common.FzipError {
+) -> BrotliCommandPrefix raise @common.FbrError {
   let table = @common.brotli_build_simple_huffman_table(
     symbols,
     count - 1,
@@ -825,7 +825,7 @@ fn brotli_simple_huffman_payload(
       }
     }
   }
-  raise @common.fzip_err(
+  raise @common.fbr_err(
     @common.BrotliInvalidHuffman,
     msg="symbol missing from simple tree",
   )
@@ -835,7 +835,7 @@ fn brotli_simple_huffman_payload(
 fn brotli_huffman_spec_payload(
   spec : BrotliHuffmanSpec,
   target : Int,
-) -> BrotliCommandPrefix raise @common.FzipError {
+) -> BrotliCommandPrefix raise @common.FbrError {
   if spec.simple {
     brotli_simple_huffman_payload(spec.symbols, spec.count, target)
   } else {
@@ -850,7 +850,7 @@ fn brotli_huffman_spec_payload(
 ///|
 fn brotli_huffman_payload_table(
   spec : BrotliHuffmanSpec,
-) -> FixedArray[BrotliCommandPrefix] raise @common.FzipError {
+) -> FixedArray[BrotliCommandPrefix] raise @common.FbrError {
   let empty_payload = {
     symbol: -1,
     insert_extra: 0,
@@ -1089,7 +1089,7 @@ fn brotli_command_literal_utf8_context_tree(
   position : Int,
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> Int raise @common.FzipError {
+) -> Int raise @common.FbrError {
   let previous_byte_1 = if position > 0 {
     data[position - 1].to_int()
   } else {
@@ -1113,7 +1113,7 @@ fn brotli_command_literal_utf8_context_tree4(
   position : Int,
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> Int raise @common.FzipError {
+) -> Int raise @common.FbrError {
   let previous_byte_1 = if position > 0 {
     data[position - 1].to_int()
   } else {
@@ -1137,7 +1137,7 @@ fn brotli_command_literal_utf8_context_tree8(
   position : Int,
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> Int raise @common.FzipError {
+) -> Int raise @common.FbrError {
   let previous_byte_1 = if position > 0 {
     data[position - 1].to_int()
   } else {
@@ -1161,7 +1161,7 @@ fn brotli_command_literal_utf8_context_tree16(
   position : Int,
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> Int raise @common.FzipError {
+) -> Int raise @common.FbrError {
   let previous_byte_1 = if position > 0 {
     data[position - 1].to_int()
   } else {
@@ -1185,7 +1185,7 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context16(
   commands : Array[BrotliEncodeCommand],
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise @common.FzipError {
+) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise @common.FbrError {
   let symbols : Array[FixedArray[Int]] = []
   let seen : Array[FixedArray[Bool]] = []
   let counts = FixedArray::make(16, 0)
@@ -1227,7 +1227,7 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context8(
   commands : Array[BrotliEncodeCommand],
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise @common.FzipError {
+) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise @common.FbrError {
   let symbols : Array[FixedArray[Int]] = []
   let seen : Array[FixedArray[Bool]] = []
   let counts = FixedArray::make(8, 0)
@@ -1269,7 +1269,7 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context4(
   commands : Array[BrotliEncodeCommand],
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise @common.FzipError {
+) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise @common.FbrError {
   let symbols : Array[FixedArray[Int]] = []
   let seen : Array[FixedArray[Bool]] = []
   let counts = FixedArray::make(4, 0)
@@ -1311,7 +1311,7 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context(
   commands : Array[BrotliEncodeCommand],
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise @common.FzipError {
+) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise @common.FbrError {
   let symbols : Array[FixedArray[Int]] = []
   let seen : Array[FixedArray[Bool]] = []
   let counts = FixedArray::make(2, 0)
@@ -1762,7 +1762,7 @@ fn brotli_find_single_copy_match(
 ///|
 fn brotli_distance_prefix_for_distance(
   distance : Int,
-) -> BrotliCommandPrefix raise @common.FzipError {
+) -> BrotliCommandPrefix raise @common.FbrError {
   for
     code in @common.brotli_num_distance_short_codes..<@common.brotli_distance_alphabet_size(
       0, 0, 24,
@@ -1780,7 +1780,7 @@ fn brotli_distance_prefix_for_distance(
       }
     }
   }
-  raise @common.fzip_err(
+  raise @common.fbr_err(
     @common.BrotliInvalidDistance,
     msg="no Brotli distance prefix",
   )
@@ -1789,9 +1789,9 @@ fn brotli_distance_prefix_for_distance(
 ///|
 fn brotli_distance_prefix_for_code(
   distance_code : Int,
-) -> BrotliCommandPrefix raise @common.FzipError {
+) -> BrotliCommandPrefix raise @common.FbrError {
   if distance_code < 0 {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidDistance,
       msg="negative Brotli distance code",
     )
@@ -1892,7 +1892,7 @@ fn brotli_find_command_prefix(
   insert_length : Int,
   copy_length : Int,
   explicit_distance : Bool,
-) -> BrotliCommandPrefix raise @common.FzipError {
+) -> BrotliCommandPrefix raise @common.FbrError {
   for symbol in 0..<@common.brotli_num_command_symbols {
     let info = @common.brotli_command_info(symbol)
     let distance_ok = if explicit_distance {
@@ -1917,7 +1917,7 @@ fn brotli_find_command_prefix(
       }
     }
   }
-  raise @common.fzip_err(
+  raise @common.fbr_err(
     @common.BrotliInvalidMetablock,
     msg="no Brotli command prefix",
   )
@@ -1926,7 +1926,7 @@ fn brotli_find_command_prefix(
 ///|
 fn brotli_find_insert_only_command_prefix(
   insert_length : Int,
-) -> BrotliCommandPrefix raise @common.FzipError {
+) -> BrotliCommandPrefix raise @common.FbrError {
   for symbol in 0..<@common.brotli_num_command_symbols {
     let info = @common.brotli_command_info(symbol)
     if insert_length >= info.insert_len_offset {
@@ -1944,7 +1944,7 @@ fn brotli_find_insert_only_command_prefix(
       }
     }
   }
-  raise @common.fzip_err(
+  raise @common.fbr_err(
     @common.BrotliInvalidMetablock,
     msg="no Brotli insert-only command prefix",
   )
@@ -1958,7 +1958,7 @@ fn brotli_make_encode_command_with_distance_mode(
   distance : Int,
   has_copy : Bool,
   explicit_distance : Bool,
-) -> BrotliEncodeCommand raise @common.FzipError {
+) -> BrotliEncodeCommand raise @common.FbrError {
   let command = if has_copy {
     brotli_find_command_prefix(insert_length, copy_length, explicit_distance)
   } else {
@@ -1987,7 +1987,7 @@ fn brotli_make_encode_command_with_distance_code(
   copy_length : Int,
   distance : Int,
   distance_code : Int,
-) -> BrotliEncodeCommand raise @common.FzipError {
+) -> BrotliEncodeCommand raise @common.FbrError {
   if distance_code == 0 {
     return brotli_make_encode_command_with_distance_mode(
       insert_start, insert_length, copy_length, distance, true, false,
@@ -2013,7 +2013,7 @@ fn brotli_try_make_encode_command_with_distance_code(
   distance : Int,
   distance_code : Int,
 ) -> BrotliEncodeCommand? {
-  let result : Result[BrotliEncodeCommand, @common.FzipError] = try? brotli_make_encode_command_with_distance_code(
+  let result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command_with_distance_code(
     insert_start, insert_length, copy_length, distance, distance_code,
   )
   match result {
@@ -2031,7 +2031,7 @@ fn brotli_try_make_encode_command_with_distance_mode(
   has_copy : Bool,
   explicit_distance : Bool,
 ) -> BrotliEncodeCommand? {
-  let result : Result[BrotliEncodeCommand, @common.FzipError] = try? brotli_make_encode_command_with_distance_mode(
+  let result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command_with_distance_mode(
     insert_start, insert_length, copy_length, distance, has_copy, explicit_distance,
   )
   match result {
@@ -2047,7 +2047,7 @@ fn brotli_make_encode_command(
   copy_length : Int,
   distance : Int,
   has_copy : Bool,
-) -> BrotliEncodeCommand raise @common.FzipError {
+) -> BrotliEncodeCommand raise @common.FbrError {
   brotli_make_encode_command_with_distance_mode(
     insert_start, insert_length, copy_length, distance, has_copy, true,
   )
@@ -2060,7 +2060,7 @@ fn brotli_make_dictionary_encode_command(
   word_length : Int,
   output_length : Int,
   distance : Int,
-) -> BrotliEncodeCommand raise @common.FzipError {
+) -> BrotliEncodeCommand raise @common.FbrError {
   let command = brotli_find_command_prefix(insert_length, word_length, true)
   {
     insert_start,
@@ -2110,7 +2110,7 @@ fn brotli_build_literal_only_command(
   if !brotli_literal_only_may_beat_stored(data) {
     return None
   }
-  let command_result : Result[BrotliEncodeCommand, @common.FzipError] = try? brotli_make_encode_command(
+  let command_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command(
     0,
     data.length(),
     0,
@@ -2126,7 +2126,7 @@ fn brotli_build_literal_only_command(
 ///|
 fn brotli_block_length_prefix(
   length : Int,
-) -> BrotliCommandPrefix raise @common.FzipError {
+) -> BrotliCommandPrefix raise @common.FbrError {
   for symbol in 0..<@common.brotli_num_block_length_symbols {
     let extra_bits = @common.brotli_block_length_extra_bits[symbol]
     let extra = length - @common.brotli_block_length_bases[symbol]
@@ -2140,7 +2140,7 @@ fn brotli_block_length_prefix(
       }
     }
   }
-  raise @common.fzip_err(
+  raise @common.fbr_err(
     @common.BrotliInvalidMetablock,
     msg="invalid Brotli block length",
   )
@@ -2151,7 +2151,7 @@ fn brotli_write_two_block_header(
   writer : BrotliBitWriter,
   first_length : Int,
   second_length : Int,
-) -> (BrotliHuffmanSpec, BrotliCommandPrefix, BrotliCommandPrefix) raise @common.FzipError {
+) -> (BrotliHuffmanSpec, BrotliCommandPrefix, BrotliCommandPrefix) raise @common.FbrError {
   let first_prefix = brotli_block_length_prefix(first_length)
   let second_prefix = brotli_block_length_prefix(second_length)
   let length_symbols = FixedArray::make(
@@ -2184,7 +2184,7 @@ fn brotli_write_two_block_header(
 ///|
 fn brotli_write_trivial_two_tree_context_map(
   writer : BrotliBitWriter,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   brotli_write_var_len_uint8(writer, 1) // two literal trees
   writer.write_bits(1, 1) // use RLEMAX
   writer.write_bits(4, @common.brotli_literal_context_bits - 2)
@@ -2217,7 +2217,7 @@ fn brotli_write_trivial_two_tree_context_map(
 ///|
 fn brotli_write_trivial_two_distance_context_map(
   writer : BrotliBitWriter,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   brotli_write_var_len_uint8(writer, 1) // two distance trees
   writer.write_bits(1, 0) // no RLE prefix
   let symbols : FixedArray[Int] = [0, 1]
@@ -2284,7 +2284,7 @@ fn brotli_utf8_context_tree16(context : Int) -> Int {
 ///|
 fn brotli_write_utf8_context_map(
   writer : BrotliBitWriter,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   brotli_write_var_len_uint8(writer, 1) // two literal trees
   writer.write_bits(1, 0) // no RLE prefix
   let symbols : FixedArray[Int] = [0, 1]
@@ -2302,7 +2302,7 @@ fn brotli_write_utf8_context_map(
 ///|
 fn brotli_write_utf8_context_map4(
   writer : BrotliBitWriter,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   brotli_write_var_len_uint8(writer, 3) // four literal trees
   writer.write_bits(1, 0) // no RLE prefix
   let symbols : FixedArray[Int] = [0, 1, 2, 3]
@@ -2320,7 +2320,7 @@ fn brotli_write_utf8_context_map4(
 ///|
 fn brotli_write_utf8_context_map8(
   writer : BrotliBitWriter,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   brotli_write_var_len_uint8(writer, 7) // eight literal trees
   writer.write_bits(1, 0) // no RLE prefix
   let symbols : FixedArray[Int] = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -2338,7 +2338,7 @@ fn brotli_write_utf8_context_map8(
 ///|
 fn brotli_write_utf8_context_map16(
   writer : BrotliBitWriter,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   brotli_write_var_len_uint8(writer, 15) // sixteen literal trees
   writer.write_bits(1, 0) // no RLE prefix
   let symbols : FixedArray[Int] = [
@@ -2360,7 +2360,7 @@ fn brotli_write_split_literal_only_metablock(
   data : FixedArray[Byte],
   split : Int,
   is_last : Bool,
-) -> BrotliBitWriter? raise @common.FzipError {
+) -> BrotliBitWriter? raise @common.FbrError {
   if split <= 0 || split >= data.length() {
     return None
   }
@@ -2466,7 +2466,7 @@ fn brotli_try_split_literal_only_metablock(
   data : FixedArray[Byte],
   is_last : Bool,
   best : BrotliBitWriter?,
-) -> BrotliBitWriter? raise @common.FzipError {
+) -> BrotliBitWriter? raise @common.FbrError {
   if data.length() < 2048 || data.length() > 65536 {
     return best
   }
@@ -2621,7 +2621,7 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
     }
   }
   if literal_start < data.length() {
-    let final_result : Result[BrotliEncodeCommand, @common.FzipError] = try? brotli_make_encode_command(
+    let final_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command(
       literal_start,
       data.length() - literal_start,
       0,
@@ -2794,7 +2794,7 @@ fn brotli_bounded_shortest_path_copy_cost(
     match
       (
         try? brotli_distance_prefix_for_code(distance_code) :
-        Result[BrotliCommandPrefix, @common.FzipError]) {
+        Result[BrotliCommandPrefix, @common.FbrError]) {
       Ok(prefix) =>
         model.distance_bits[prefix.symbol] + prefix.insert_extra_bits
       Err(_) => 24
@@ -3218,7 +3218,7 @@ fn brotli_build_bounded_shortest_path_command_candidate(
       copy_length
     }
     let command = if copy_output_length > 0 {
-      let cmd_res : Result[BrotliEncodeCommand, @common.FzipError] = try? brotli_make_dictionary_encode_command(
+      let cmd_res : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_dictionary_encode_command(
         literal_start, insert_length, copy_length, output_length, distance,
       )
       match cmd_res {
@@ -3257,7 +3257,7 @@ fn brotli_build_bounded_shortest_path_command_candidate(
     literal_start = copy_start + output_length
   }
   if literal_start < len {
-    let final_result : Result[BrotliEncodeCommand, @common.FzipError] = try? brotli_make_encode_command(
+    let final_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command(
       literal_start,
       len - literal_start,
       0,
@@ -3280,7 +3280,7 @@ fn brotli_encode_single_copy_match(
   data : FixedArray[Byte],
   opts : BrotliOptions,
   match_ : BrotliSingleCopyMatch,
-) -> FixedArray[Byte] raise @common.FzipError {
+) -> FixedArray[Byte] raise @common.FbrError {
   let command = brotli_find_command_prefix(
     match_.insert_length,
     match_.copy_length,
@@ -3321,11 +3321,11 @@ fn brotli_encode_prefix_stored_single_copy_match(
   data : FixedArray[Byte],
   opts : BrotliOptions,
   match_ : BrotliSingleCopyMatch,
-) -> FixedArray[Byte]? raise @common.FzipError {
+) -> FixedArray[Byte]? raise @common.FbrError {
   if match_.insert_length <= 0 || match_.copy_length <= 0 {
     return None
   }
-  let command_result : Result[BrotliEncodeCommand, @common.FzipError] = try? brotli_make_encode_command(
+  let command_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command(
     0,
     0,
     match_.copy_length,
@@ -3357,7 +3357,7 @@ fn brotli_write_simple_lz77_metablock(
   commands : Array[BrotliEncodeCommand],
   is_last : Bool,
   weighted : Bool,
-) -> Unit raise @common.FzipError {
+) -> Unit raise @common.FbrError {
   // Single-pass literal collection + frequency tally.
   let literal_symbols = FixedArray::make(@common.brotli_num_literal_symbols, 0)
   let literal_seen = FixedArray::make(@common.brotli_num_literal_symbols, false)
@@ -3507,7 +3507,7 @@ fn brotli_write_split_lz77_metablock(
   commands : Array[BrotliEncodeCommand],
   split : Int,
   is_last : Bool,
-) -> BrotliBitWriter? raise @common.FzipError {
+) -> BrotliBitWriter? raise @common.FbrError {
   let literal_count = brotli_command_literal_count(commands)
   if split <= 0 || split >= literal_count {
     return None
@@ -3692,7 +3692,7 @@ fn brotli_write_command_split_lz77_metablock(
   commands : Array[BrotliEncodeCommand],
   split : Int,
   is_last : Bool,
-) -> BrotliBitWriter? raise @common.FzipError {
+) -> BrotliBitWriter? raise @common.FbrError {
   if split <= 0 || split >= commands.length() {
     return None
   }
@@ -3878,7 +3878,7 @@ fn brotli_write_literal_command_split_lz77_metablock(
   literal_split : Int,
   command_split : Int,
   is_last : Bool,
-) -> BrotliBitWriter? raise @common.FzipError {
+) -> BrotliBitWriter? raise @common.FbrError {
   let literal_total = brotli_command_literal_count(commands)
   if literal_split <= 0 ||
     literal_split >= literal_total ||
@@ -4123,7 +4123,7 @@ fn brotli_write_distance_split_lz77_metablock(
   commands : Array[BrotliEncodeCommand],
   split : Int,
   is_last : Bool,
-) -> BrotliBitWriter? raise @common.FzipError {
+) -> BrotliBitWriter? raise @common.FbrError {
   let total_distance_count = brotli_command_distance_symbol_count(commands)
   if split <= 0 || split >= total_distance_count {
     return None
@@ -4316,7 +4316,7 @@ fn brotli_write_literal_distance_split_lz77_metablock(
   literal_split : Int,
   distance_split : Int,
   is_last : Bool,
-) -> BrotliBitWriter? raise @common.FzipError {
+) -> BrotliBitWriter? raise @common.FbrError {
   let literal_total = brotli_command_literal_count(commands)
   let total_distance_count = brotli_command_distance_symbol_count(commands)
   if literal_split <= 0 ||
@@ -4569,7 +4569,7 @@ fn brotli_write_command_distance_split_lz77_metablock(
   command_split : Int,
   distance_split : Int,
   is_last : Bool,
-) -> BrotliBitWriter? raise @common.FzipError {
+) -> BrotliBitWriter? raise @common.FbrError {
   let total_distance_count = brotli_command_distance_symbol_count(commands)
   if command_split <= 0 ||
     command_split >= commands.length() ||
@@ -4819,7 +4819,7 @@ fn brotli_write_context_lz77_metablock(
   is_last : Bool,
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> BrotliBitWriter? raise @common.FzipError {
+) -> BrotliBitWriter? raise @common.FbrError {
   let (literal_sets, literal_frequencies_array) = match
     brotli_collect_command_literals_and_frequencies_by_utf8_context(
       data, commands, initial_previous_byte_1, initial_previous_byte_2,
@@ -4963,7 +4963,7 @@ fn brotli_write_context4_lz77_metablock(
   is_last : Bool,
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> BrotliBitWriter? raise @common.FzipError {
+) -> BrotliBitWriter? raise @common.FbrError {
   let (literal_sets, literal_frequencies_array) = match
     brotli_collect_command_literals_and_frequencies_by_utf8_context4(
       data, commands, initial_previous_byte_1, initial_previous_byte_2,
@@ -5133,7 +5133,7 @@ fn brotli_write_context8_lz77_metablock(
   is_last : Bool,
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> BrotliBitWriter? raise @common.FzipError {
+) -> BrotliBitWriter? raise @common.FbrError {
   let (literal_sets, literal_frequencies) = match
     brotli_collect_command_literals_and_frequencies_by_utf8_context8(
       data, commands, initial_previous_byte_1, initial_previous_byte_2,
@@ -5271,7 +5271,7 @@ fn brotli_write_context16_lz77_metablock(
   is_last : Bool,
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> BrotliBitWriter? raise @common.FzipError {
+) -> BrotliBitWriter? raise @common.FbrError {
   let (literal_sets, literal_frequencies) = match
     brotli_collect_command_literals_and_frequencies_by_utf8_context16(
       data, commands, initial_previous_byte_1, initial_previous_byte_2,
@@ -5411,7 +5411,7 @@ fn brotli_write_best_lz77_metablock(
   allow_contexts : Bool,
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> BrotliBitWriter raise @common.FzipError {
+) -> BrotliBitWriter raise @common.FbrError {
   if allow_contexts && quality <= 2 && data.length() >= 524288 {
     if commands.length() != 1 || commands[0].has_copy {
       match
@@ -5605,7 +5605,7 @@ fn brotli_try_compressed_commands(
   is_last : Bool,
   best : BrotliBitWriter?,
   quality : Int,
-) -> BrotliBitWriter? raise @common.FzipError {
+) -> BrotliBitWriter? raise @common.FbrError {
   match commands {
     Some(commands) => {
       let candidate = brotli_write_best_lz77_metablock(
@@ -5635,7 +5635,7 @@ fn brotli_try_compressed_command_candidate(
   allow_contexts : Bool,
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> BrotliCompressedChunk? raise @common.FzipError {
+) -> BrotliCompressedChunk? raise @common.FbrError {
   match candidate {
     Some(candidate) => {
       let writer = brotli_write_best_lz77_metablock(
@@ -5667,7 +5667,7 @@ fn brotli_try_split_literal_only_chunk(
   is_last : Bool,
   best : BrotliCompressedChunk?,
   distance_cache : FixedArray[Int],
-) -> BrotliCompressedChunk? raise @common.FzipError {
+) -> BrotliCompressedChunk? raise @common.FbrError {
   if data.length() < 2048 || data.length() > 65536 {
     return best
   }
@@ -5719,7 +5719,7 @@ fn brotli_use_natural_four_byte_candidate(
 fn brotli_encode_uncompressed(
   data : FixedArray[Byte],
   opts : BrotliOptions,
-) -> FixedArray[Byte] raise @common.FzipError {
+) -> FixedArray[Byte] raise @common.FbrError {
   let writer = BrotliBitWriter::new(brotli_encoded_capacity(data.length()))
   brotli_encode_window_bits(writer, opts.window_bits)
   let mut offset = 0
@@ -5760,7 +5760,7 @@ fn brotli_try_compressed_chunk(
   distance_cache : FixedArray[Int],
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> BrotliCompressedChunk? raise @common.FzipError {
+) -> BrotliCompressedChunk? raise @common.FbrError {
   // UTF-8 literal contexts depend on the two bytes before this meta-block; for
   // non-first chunks they come from the previous chunk, not from zero padding.
   let allow_contexts = true
@@ -6002,7 +6002,7 @@ fn brotli_try_compressed_chunk(
 fn brotli_encode_chunked_standard(
   data : FixedArray[Byte],
   opts : BrotliOptions,
-) -> FixedArray[Byte] raise @common.FzipError {
+) -> FixedArray[Byte] raise @common.FbrError {
   let chunk_size = brotli_standard_chunk_size_for_quality(opts.quality)
   let chunk_count = (data.length() + chunk_size - 1) / chunk_size
   let writer = BrotliBitWriter::new(data.length() + 8 + chunk_count * 16)
@@ -6073,7 +6073,7 @@ fn brotli_encode_chunked_standard(
 fn brotli_encode_standard(
   data : FixedArray[Byte],
   opts : BrotliOptions,
-) -> FixedArray[Byte] raise @common.FzipError {
+) -> FixedArray[Byte] raise @common.FbrError {
   if data.length() <= 262144 {
     match brotli_find_single_copy_match(data) {
       Some(match_) => {
@@ -6284,17 +6284,15 @@ fn brotli_encode_standard(
 }
 
 ///|
-fn brotli_validate_options(
-  opts : BrotliOptions,
-) -> Unit raise @common.FzipError {
+fn brotli_validate_options(opts : BrotliOptions) -> Unit raise @common.FbrError {
   if opts.quality < 0 || opts.quality > 11 {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.InvalidZipData,
       msg="Brotli quality must be 0..=11",
     )
   }
   if opts.max_input_size < 0 {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.InvalidZipData,
       msg="Brotli max_input_size must be >= 0",
     )
@@ -6312,16 +6310,16 @@ fn brotli_validate_options(
 pub fn brotli_sync(
   data : FixedArray[Byte],
   opts? : BrotliOptions = BrotliOptions::default(),
-) -> FixedArray[Byte] raise @common.FzipError {
+) -> FixedArray[Byte] raise @common.FbrError {
   brotli_validate_options(opts)
   if data.length() > opts.max_input_size {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.InvalidZipData,
       msg="input exceeds max_input_size",
     )
   }
   if opts.quality >= 10 && data.length() > 256 * 1024 * 1024 {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.InvalidZipData,
       msg="Brotli q10/q11 input exceeds 256 MiB safety cap",
     )
@@ -6330,7 +6328,7 @@ pub fn brotli_sync(
     0 | 1 => brotli_encode_uncompressed(data, opts)
     2..=11 => brotli_encode_standard(data, opts)
     _ =>
-      raise @common.fzip_err(
+      raise @common.fbr_err(
         @common.InvalidZipData,
         msg="Brotli quality must be 0..=11",
       )

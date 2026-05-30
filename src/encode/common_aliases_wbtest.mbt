@@ -1,8 +1,8 @@
 ///|
-type FzipErrorCode = @common.FzipErrorCode
+type FbrErrorCode = @common.FbrErrorCode
 
 ///|
-type FzipError = @common.FzipError
+type FbrError = @common.FbrError
 
 ///|
 let default_max_input_size = @common.default_max_input_size
@@ -18,6 +18,6 @@ fn brotli_literal_context_id(
   mode : Int,
   previous_byte : Int,
   previous_byte2 : Int,
-) -> Int raise FzipError {
+) -> Int raise FbrError {
   @common.brotli_literal_context_id(mode, previous_byte, previous_byte2)
 }

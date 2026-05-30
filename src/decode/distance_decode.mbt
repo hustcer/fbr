@@ -5,7 +5,7 @@ fn brotli_read_distance(
   distance_ring : @common.BrotliDistanceRing,
   npostfix : Int,
   ndirect : Int,
-) -> Int raise @common.FzipError {
+) -> Int raise @common.FbrError {
   let code = brotli_read_symbol(
     reader, distance_tree, @common.brotli_huffman_table_bits,
   )

@@ -27,9 +27,9 @@ fn brotli_inverse_move_to_front(map : FixedArray[Byte]) -> Unit {
 fn brotli_read_context_map(
   reader : BrotliBitReader,
   context_map_size : Int,
-) -> BrotliContextMap raise @common.FzipError {
+) -> BrotliContextMap raise @common.FbrError {
   if context_map_size < 0 {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidContextMap,
       msg="negative context map size",
     )
@@ -59,7 +59,7 @@ fn brotli_read_context_map(
     } else if code > max_run_length_prefix {
       let value = code - max_run_length_prefix
       if value >= num_trees {
-        raise @common.fzip_err(
+        raise @common.fbr_err(
           @common.BrotliInvalidContextMap,
           msg="context map tree index exceeds tree count",
         )
@@ -69,7 +69,7 @@ fn brotli_read_context_map(
     } else {
       let reps = (1 << code) + reader.take_bits(code).reinterpret_as_int()
       if index > context_map_size - reps {
-        raise @common.fzip_err(
+        raise @common.fbr_err(
           @common.BrotliInvalidContextMap,
           msg="context map repeat overflows",
         )
@@ -92,30 +92,30 @@ fn brotli_context_map_tree_index(
   block_type : Int,
   context_bits : Int,
   context : Int,
-) -> Int raise @common.FzipError {
+) -> Int raise @common.FbrError {
   if block_type < 0 || context < 0 || context_bits < 0 {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidContextMap,
       msg="negative context map index",
     )
   }
   let context_count = 1 << context_bits
   if context >= context_count {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidContextMap,
       msg="Brotli context out of range",
     )
   }
   let index = block_type * context_count + context
   if index < 0 || index >= context_map.map.length() {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidContextMap,
       msg="Brotli context map index out of range",
     )
   }
   let tree_index = context_map.map[index].to_int()
   if tree_index < 0 || tree_index >= context_map.num_trees {
-    raise @common.fzip_err(
+    raise @common.fbr_err(
       @common.BrotliInvalidContextMap,
       msg="Brotli context map tree out of range",
     )
