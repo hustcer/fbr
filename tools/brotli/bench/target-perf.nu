@@ -222,7 +222,7 @@ fn brotli_target_perf_read_file() -> FixedArray[Byte] {
 ` : "";
 let body;
 if (mode === "decode") {
-  body = `    let result = try? @fzip.unbrotli_sync(
+  body = `    let result = try? @fbr.unbrotli_sync(
       input,
       opts={ out: None, max_output_size: ${maxOutput}, max_input_size: input.length() + 1 },
     )
@@ -234,7 +234,7 @@ if (mode === "decode") {
       }
     }`;
 } else if (mode === "encode") {
-  body = `    let result = try? @fzip.brotli_sync(
+  body = `    let result = try? @fbr.brotli_sync(
       input,
       opts={ quality: ${quality}, window_bits: 22, max_input_size: input.length() + 1 },
     )
@@ -265,7 +265,7 @@ const check = mode === "decode"
     println("MBT_PERF_ERROR=encoded-total")
   }`;
 const pkg = `import {
-  "hustcer/fzip",
+  "hustcer/fbr",
 }
 
 options(
