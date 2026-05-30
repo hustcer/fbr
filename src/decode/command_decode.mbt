@@ -15,12 +15,16 @@ fn brotli_read_command(
     reader, command_tree, @common.brotli_huffman_table_bits,
   )
   let info = @common.brotli_command_info(symbol)
-  let insert_extra = reader
-    .take_bits(info.insert_len_extra_bits)
-    .reinterpret_as_int()
-  let copy_extra = reader
-    .take_bits(info.copy_len_extra_bits)
-    .reinterpret_as_int()
+  let insert_extra = if info.insert_len_extra_bits == 0 {
+    0
+  } else {
+    reader.take_bits(info.insert_len_extra_bits).reinterpret_as_int()
+  }
+  let copy_extra = if info.copy_len_extra_bits == 0 {
+    0
+  } else {
+    reader.take_bits(info.copy_len_extra_bits).reinterpret_as_int()
+  }
   {
     insert_length: info.insert_len_offset + insert_extra,
     copy_length: info.copy_len_offset + copy_extra,

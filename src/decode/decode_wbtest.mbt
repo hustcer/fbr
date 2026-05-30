@@ -617,6 +617,16 @@ test "brotli_read_command applies insert and copy extra bits" {
 }
 
 ///|
+test "brotli_read_command skips zero-width extra bits" {
+  let command_tree = make_one_symbol_tree(0, brotli_num_command_symbols)
+  let reader = BrotliBitReader::new([], 0, 0)
+  let command = brotli_read_command(reader, command_tree)
+  inspect(command.insert_length, content="0")
+  inspect(command.copy_length, content="2")
+  inspect(reader.byte_pos * 8 - reader.bits_avail, content="0")
+}
+
+///|
 test "BrotliDistanceRing resolves initial implicit distance" {
   inspect(brotli_distance_ring_slot(-1), content="3")
   inspect(brotli_distance_ring_slot(-2), content="2")
