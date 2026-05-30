@@ -20,7 +20,7 @@ pub(all) struct BrotliOptions {
 pub fn BrotliOptions::default() -> Self
 
 pub(all) struct BrotliStream {
-  mut ondata : @common.FlateStreamHandler?
+  mut ondata : @common.FbrStreamHandler?
   // private fields
 }
 pub fn BrotliStream::new(opts? : BrotliOptions) -> Self

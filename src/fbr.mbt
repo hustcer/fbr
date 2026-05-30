@@ -5,7 +5,7 @@ pub type FbrErrorCode = @common.FbrErrorCode
 pub type FbrError = @common.FbrError
 
 ///|
-pub type FlateStreamHandler = @common.FlateStreamHandler
+pub type FbrStreamHandler = @common.FbrStreamHandler
 
 ///|
 pub type UnbrotliOptions = @decode.UnbrotliOptions

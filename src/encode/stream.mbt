@@ -5,7 +5,7 @@
 /// `brotli_sync` and emitted through `ondata`.
 pub(all) struct BrotliStream {
   /// Called with compressed data when a final chunk is pushed.
-  mut ondata : @common.FlateStreamHandler?
+  mut ondata : @common.FbrStreamHandler?
   priv opts : BrotliOptions
   priv mut chunks : Array[FixedArray[Byte]]
 }
@@ -24,7 +24,7 @@ pub fn BrotliStream::set_ondata(
   self : BrotliStream,
   handler : (FixedArray[Byte], Bool) -> Unit,
 ) -> Unit {
-  self.ondata = Some(@common.FlateStreamHandler(handler))
+  self.ondata = Some(@common.FbrStreamHandler(handler))
 }
 
 ///|

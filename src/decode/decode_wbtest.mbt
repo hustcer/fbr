@@ -969,7 +969,7 @@ test "UnbrotliStream buffers chunks until final push" {
   let output : Array[FixedArray[Byte]] = []
   let finals : Array[Bool] = []
   stream.ondata = Some(
-    FlateStreamHandler((data, final_) => {
+    FbrStreamHandler((data, final_) => {
       finals.push(final_)
       output.push(data)
     }),

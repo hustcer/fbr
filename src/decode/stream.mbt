@@ -5,7 +5,7 @@
 /// `unbrotli_sync` and emitted through `ondata`.
 pub(all) struct UnbrotliStream {
   /// Called with decompressed data when a final chunk is pushed.
-  mut ondata : @common.FlateStreamHandler?
+  mut ondata : @common.FbrStreamHandler?
   priv opts : UnbrotliOptions
   priv mut chunks : Array[FixedArray[Byte]]
 }
@@ -24,7 +24,7 @@ pub fn UnbrotliStream::set_ondata(
   self : UnbrotliStream,
   handler : (FixedArray[Byte], Bool) -> Unit,
 ) -> Unit {
-  self.ondata = Some(@common.FlateStreamHandler(handler))
+  self.ondata = Some(@common.FbrStreamHandler(handler))
 }
 
 ///|

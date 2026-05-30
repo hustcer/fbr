@@ -144,7 +144,7 @@ pub fn brotli_validate_window_bits(Int) -> Unit raise FbrError
 
 pub let brotli_window_gap : Int
 
-pub fn call_handler(FlateStreamHandler, FixedArray[Byte], Bool) -> Unit
+pub fn call_handler(FbrStreamHandler, FixedArray[Byte], Bool) -> Unit
 
 pub fn concat_chunks(Array[FixedArray[Byte]]) -> FixedArray[Byte]
 
@@ -217,7 +217,7 @@ pub(all) enum FbrErrorCode {
 } derive(Eq, @debug.Debug)
 pub impl Show for FbrErrorCode
 
-pub(all) struct FlateStreamHandler((FixedArray[Byte], Bool) -> Unit)
+pub(all) struct FbrStreamHandler((FixedArray[Byte], Bool) -> Unit)
 
 // Type aliases
 

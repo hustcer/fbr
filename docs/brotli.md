@@ -90,8 +90,8 @@ Files that Brotli code will create, extend, or coexist with:
   `fzip_error_code_to_int`.
 - `src/stream.mbt` — add `UnbrotliStream` and (later) `BrotliStream`. Follow
   the existing `InflateStream` / `DeflateStream` pattern exactly: a public
-  `mut ondata : FlateStreamHandler?`, private buffered chunks, and
-  `push(chunk, final_?)`. The shared callback wrapper `FlateStreamHandler`
+  `mut ondata : FbrStreamHandler?`, private buffered chunks, and
+  `push(chunk, final_?)`. The shared callback wrapper `FbrStreamHandler`
   and helper `call_handler` are already defined at the top of
   `src/stream.mbt`; reuse them verbatim. `priv` is valid on individual
   fields of a `pub(all) struct` in MoonBit (see existing
@@ -1271,7 +1271,7 @@ through `ondata`.
 ///|
 pub(all) struct UnbrotliStream {
   /// Called with decompressed data when a final chunk is pushed.
-  mut ondata : FlateStreamHandler?
+  mut ondata : FbrStreamHandler?
   priv opts : UnbrotliOptions
   priv mut chunks : Array[FixedArray[Byte]]
 }

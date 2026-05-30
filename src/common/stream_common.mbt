@@ -3,11 +3,11 @@
 ///
 /// The wrapped function receives `(data, is_final)`. `data` is the produced
 /// output chunk and `is_final` is `true` for the final callback of a stream.
-pub(all) struct FlateStreamHandler((FixedArray[Byte], Bool) -> Unit)
+pub(all) struct FbrStreamHandler((FixedArray[Byte], Bool) -> Unit)
 
 ///|
 pub fn call_handler(
-  h : FlateStreamHandler,
+  h : FbrStreamHandler,
   data : FixedArray[Byte],
   final_ : Bool,
 ) -> Unit {

@@ -20,7 +20,7 @@ pub(all) struct UnbrotliOptions {
 pub fn UnbrotliOptions::default() -> Self
 
 pub(all) struct UnbrotliStream {
-  mut ondata : @common.FlateStreamHandler?
+  mut ondata : @common.FbrStreamHandler?
   // private fields
 }
 pub fn UnbrotliStream::new(opts? : UnbrotliOptions) -> Self

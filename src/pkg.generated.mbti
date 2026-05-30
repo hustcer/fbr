@@ -33,7 +33,7 @@ pub using @common {type FbrError}
 
 pub using @common {type FbrErrorCode}
 
-pub using @common {type FlateStreamHandler}
+pub using @common {type FbrStreamHandler}
 
 pub using @decode {type UnbrotliOptions}
 
