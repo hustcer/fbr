@@ -37,9 +37,9 @@ lint:
 b: __setup
     moon build --target all
 
-# Bench: Run performance benchmarks
+# Bench: Run Brotli performance benchmarks and regenerate the release report
 bench:
-    moon bench -p benchmarks
+    nu tools/brotli/bench/report.nu
 
 # Run tests
 test:
