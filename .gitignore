@@ -16,3 +16,4 @@ src/brotli_conformance_wbtest.mbt
 src/brotli_fuzz_wbtest.mbt
 src/brotli_roundtrip_fuzz_wbtest.mbt
 src/brotli_target_perf_wbtest.mbt
+src/brotli_target_perf_main/

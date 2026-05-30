@@ -191,18 +191,21 @@ just brotli-target-perf-decode \
 just brotli-target-perf-encode target/brotli-bench/silesia-128k.bin 2
 ```
 
-Measures Brotli decode or encode time through temporary MoonBit white-box tests
-on the selected targets. The default targets are `wasm-gc,native`, because
-those are the performance targets that matter for Brotli work; the older
-JavaScript harness remains useful for file-based verification but is not a good
-default performance signal. Encode mode reports both target encode time and
-MoonBit-vs-Google output size from the same target run, so ratio work cannot
-hide unacceptable runtime regressions.
+Measures Brotli decode or encode time through a temporary ignored MoonBit main
+package on the selected targets. The default targets are `wasm-gc,native`,
+because those are the performance targets that matter for Brotli work; the
+older JavaScript harness remains useful for file-based verification but is not
+a good default performance signal. Encode mode reports both target encode time
+and MoonBit-vs-Google output size from the same target run, so ratio work
+cannot hide unacceptable runtime regressions.
 
 `target-perf.nu` shares the Brotli harness lock with conformance and fuzz
-runners, including owner-PID stale-lock recovery. Its generated white-box test
+runners, including owner-PID stale-lock recovery. Its generated main package
 uses an ignored stable placeholder path so incremental `moon` commands do not
-retain missing generated-test inputs after a benchmark run.
+retain missing generated inputs after a benchmark run. Native release
+benchmark rows include `native_cc`; the current harness uses `cc-o0` for native
+release because default clang `-O2` does not finish reliably on the generated C
+for the Brotli package.
 
 ## Chunk Match Diagnostics
 
