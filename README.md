@@ -104,6 +104,24 @@ stream.push(chunk2, final_=true)
 - The root package imports both leaf packages and contains only facade
   wrappers.
 
+## Size Verification
+
+Run the artifact split check before release:
+
+```bash
+just size
+```
+
+The check builds three temporary release applications:
+
+- decode-only, importing `hustcer/fbr/decode`
+- encode-only, importing `hustcer/fbr/encode`
+- full, importing `hustcer/fbr`
+
+For the JS target it scans the linked artifact and fails if the decode-only
+artifact contains encode package markers, or the encode-only artifact contains
+decode package markers.
+
 See [docs/brotli-pkg.md](docs/brotli-pkg.md) for the package split rationale
 and [docs/brotli_benchmarks.md](docs/brotli_benchmarks.md) for recorded Brotli
 benchmark data.

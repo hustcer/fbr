@@ -55,7 +55,7 @@ release-smoke:
 
 # Run Brotli release validation with a generated deterministic decoder fuzz corpus
 release-generated-fuzz count='1000' seed='1':
-    nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-package --generated-fuzz-count {{ count }} --generated-fuzz-seed {{ seed }}
+    nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-size --skip-package --generated-fuzz-count {{ count }} --generated-fuzz-seed {{ seed }}
 
 # Run the upstream Brotli conformance corpus
 conformance:
@@ -85,9 +85,13 @@ target-perf-decode input expected targets='wasm-gc,native' repeats='10' samples=
 target-perf-encode input quality='11' targets='wasm-gc,native' repeats='10' samples='5':
     nu tools/brotli/bench/target-perf.nu {{ input }} --mode encode --quality {{ quality }} --targets {{ targets }} --repeats {{ repeats }} --samples {{ samples }} --json
 
+# Verify decode-only and encode-only release artifacts do not pull the opposite side
+size targets='js':
+    nu tools/brotli/size/verify.nu --targets {{ targets }}
+
 # Run Brotli packaging and publish dry-run validation only
 release-package:
-    nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-fuzz
+    nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-fuzz --skip-size
 
 # Run the accepted Brotli release-candidate gate set
 release-candidate generated_count='1000' seed='1' soak_iterations='3':

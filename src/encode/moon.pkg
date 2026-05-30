@@ -1,3 +1,7 @@
 import {
   "hustcer/fbr/common",
 }
+
+import {
+  "hustcer/fbr/decode",
+} for "wbtest"

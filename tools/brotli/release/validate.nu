@@ -115,6 +115,7 @@ def main [
   --skip-conformance
   --skip-ratio
   --skip-fuzz
+  --skip-size
   --skip-package
 ]: nothing -> nothing {
   if not $skip_ratio {
@@ -202,6 +203,12 @@ def main [
     ]
     $results = append-step $results "encoder roundtrip fuzz" {
       nu ...$roundtrip_args | complete
+    }
+  }
+
+  if not $skip_size {
+    $results = append-step $results "decode/encode artifact size split" {
+      nu tools/brotli/size/verify.nu --targets js --json | complete
     }
   }
 

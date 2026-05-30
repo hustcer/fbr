@@ -710,24 +710,28 @@ the decoder out of an encode-only program (see the measured result above). The
 purpose of this check is therefore **to confirm no DCE hazard defeats that** —
 not to prove the package split is what removes the code.
 
-Create three tiny downstream fixtures:
+The checked-in validation entry point creates three temporary main packages
+under ignored `src/fbr_size_*_main/` directories:
 
 ```text
-target/fbr-size/decode-only/   # imports hustcer/fbr/decode, calls unbrotli_sync
-target/fbr-size/encode-only/   # imports hustcer/fbr/encode, calls brotli_sync
-target/fbr-size/full/          # imports hustcer/fbr, calls both
+src/fbr_size_decode_main/   # imports hustcer/fbr/decode, calls unbrotli_sync
+src/fbr_size_encode_main/   # imports hustcer/fbr/encode, calls brotli_sync
+src/fbr_size_full_main/     # imports hustcer/fbr, calls both
 ```
 
-For each target backend, build in `release` and compare the linked artifact
-size. The linked output path is toolchain-version dependent — locate it under
-the build output directory (on `moon 0.1.20260522` this is
-`_build/<target>/release/build/<pkg>/`, e.g. `main.js` / `main.wasm`):
+Run:
 
 ```bash
-moon build --target wasm-gc --release
-moon build --target js --release
-moon build --target native --release
+just size
+# or:
+nu tools/brotli/size/verify.nu --targets js --json
 ```
+
+The script builds the fixtures in release mode and records linked artifact
+sizes. For the JS target it also scans the linked output for package markers,
+which makes the check an automated DCE-hazard gate rather than a manual size
+inspection. Additional targets such as `wasm-gc` can be added for size
+comparison with `--targets js,wasm-gc`.
 
 Acceptance criteria:
 

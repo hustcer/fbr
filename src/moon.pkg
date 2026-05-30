@@ -3,18 +3,3 @@ import {
   "hustcer/fbr/decode",
   "hustcer/fbr/encode",
 }
-
-options(
-  targets: {
-    // TODO: split this old flat-package internal suite across common/decode/encode.
-    "brotli_wbtest.mbt": [ "not", "wasm", "wasm-gc", "js", "native", "llvm" ],
-    "brotli_test_helpers_wbtest.mbt": [
-      "not",
-      "wasm",
-      "wasm-gc",
-      "js",
-      "native",
-      "llvm",
-    ],
-  },
-)

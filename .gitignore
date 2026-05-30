@@ -13,6 +13,8 @@ tools/zip64-fixtures/output/
 tools/zip64-fixtures/provenance.md
 tools/brotli/fuzz/corpus/
 tools/brotli/.harness-lock/
+tools/brotli/.size-lock/
+src/fbr_size_*_main/
 src/brotli_conformance_wbtest.mbt
 src/brotli_fuzz_wbtest.mbt
 src/brotli_roundtrip_fuzz_wbtest.mbt
