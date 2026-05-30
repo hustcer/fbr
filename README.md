@@ -1,244 +1,109 @@
-# fbr – High-performance compression library for MoonBit
+# fbr - Brotli for MoonBit
 
-`fzip` (short for _fast zip_) is a high-performance, in-memory compression library for MoonBit, ported from the [fflate](https://github.com/101arrowz/fflate) JavaScript library.
+`fbr` is a pure MoonBit Brotli (`.br`) encoder and decoder.
 
-This library provides:
+The package is split so applications can choose the smallest dependency graph
+for their use case:
 
-- **Deflate, GZIP, Zlib, ZIP, and Brotli** compression and decompression
-- **Synchronous APIs plus streaming APIs for DEFLATE/GZIP/Zlib/Brotli**
-- **ZIP64 metadata support** for in-memory ZIP archives that still fit the sync API limits
-- **Validation and size limits** for malformed input, zip bombs, path traversal, and corrupted data
-
-## Benchmark
-
-Platform: macOS (Apple Silicon), MoonBit wasm-gc target. Full results in [bench.md](https://github.com/hustcer/fzip/blob/feature/bench/src/benchmarks/bench.md).
-
-## Features
-
-- Pure MoonBit implementation with no external dependencies (compiled to Wasm-GC)
-- Support for DEFLATE, GZIP, Zlib, ZIP, and Brotli (RFC 7932) formats
-- Automatic format detection for decompression (GZIP/Zlib/DEFLATE; Brotli is opt-in via `unbrotli_sync`)
-- Streaming APIs for chunk-based DEFLATE/GZIP/Zlib/Brotli compression and decompression
-- In-memory ZIP read/write support, including ZIP64 metadata, data descriptors, listing, and CRC-32 validation
-- Brotli encoder at quality 0–11 with mixed static-dictionary and high-quality hash-chain parsing; Brotli decoder passes the full upstream conformance corpus and a 100 MiB Silesia q=11 acceptance roundtrip
-- Configurable input and output limits
-- 457+ tests covering format correctness, edge cases, security scenarios, and malformed input
+- Decode only: import `hustcer/fbr/decode`
+- Encode only: import `hustcer/fbr/encode`
+- Full convenience API: import `hustcer/fbr`
 
 ## Installation
 
 ```bash
-moon add hustcer/fzip
+moon add hustcer/fbr
 ```
 
-Or add this to your `moon.mod.json`:
+Or add this to `moon.mod.json`:
 
 ```json
 {
   "deps": {
-    "hustcer/fzip": "0.8.0"
+    "hustcer/fbr": "0.1.0"
   }
 }
 ```
 
-## Quick Start
+## Decode Only
 
 ```moonbit
-// Compress (GZIP)
-let data = @fzip.str_to_u8("Hello, MoonBit!")
-let compressed = @fzip.gzip_sync(data)
-
-// Decompress (auto-detect format)
-let original = @fzip.decompress_sync(compressed)
-let text = @fzip.str_from_u8(original)
-
-println(text) // "Hello, MoonBit!"
+let plain = @decode.unbrotli_sync(compressed)
 ```
 
-## Current Status
-
-Detailed API documentation can be explored via `moon ide doc` or in the codebase.
-
-### Working Features
-
-- **DEFLATE compression/decompression** - Full deflate algorithm implementation
-- **GZIP format support** - Deflate with GZIP headers, timestamps, metadata, and CRC-32 checksums
-- **Zlib format support** - Deflate with Zlib headers and Adler-32 checksums
-- **ZIP archive support** - Write, list, and extract ZIP archives
-- **ZIP64 metadata support** - Read and write ZIP64 metadata for archives that fit the current in-memory sync API limits
-- **ZIP data descriptors** - Read entries that use central-directory sizes and CRC-32
-- **Brotli support (RFC 7932)** - `brotli_sync` encoder at quality 0–11 (mixed static-dictionary + high-quality hash-chain parser), `unbrotli_sync` decoder for the full upstream conformance corpus, and `BrotliStream` / `UnbrotliStream` chunked wrappers
-- **Streaming compression** - Stream-based handlers for chunk-based data processing
-- **Input validation** - Size limits, path traversal detection, checksum validation, and malformed metadata rejection
-- **Auto-detection** - Decompression that recognizes GZIP, Zlib, or raw DEFLATE (Brotli is opt-in via `unbrotli_sync`)
-- **Test coverage** - Tests for encoding, decoding, edge cases, and security-related regressions
-
-### API Compatibility
-
-The API is inspired by the original `fflate` library structure and adapted for MoonBit:
-
-- Type-safe synchronous and stream-based representations (`ondata` callbacks).
-- Error propagation through MoonBit's `raise Error` mechanisms.
-- Zero-dependency string encoding/decoding implementations built-in.
-
-## Detailed API
-
-### ZIP
-
-The ZIP APIs are synchronous and in-memory: callers pass complete archive bytes to
-`unzip_sync`/`unzip_list`, and `zip_sync` builds a complete archive in a
-`FixedArray[Byte]`. ZIP64 support makes those APIs understand ZIP64 metadata; it
-does not add streaming extraction or creation for archives larger than memory.
+Use `hustcer/fbr/decode` in `moon.pkg`:
 
 ```moonbit
-// Create ZIP archive
-let files : Array[(String, FixedArray[Byte])] = [
-  ("hello.txt", @fzip.str_to_u8("Hello!")),
-  ("binary.dat", my_bytes),
-]
-let archive = @fzip.zip_sync(files)
-
-// Extract ZIP archive
-let extracted = @fzip.unzip_sync(archive)
-for entry in extracted {
-  let (filename, content) = entry
-  println("\{filename}: \{content.length()} bytes")
-}
-
-// List files without extracting
-let infos = @fzip.unzip_list(archive)
-for info in infos {
-  println("\{info.name}: original size \{info.original_size} (compressed: \{info.size})")
-}
-
-// Extract ZIP archive and verify each entry CRC-32
-let checked = @fzip.unzip_sync(archive, opts={ verify_checksum: true })
-```
-
-#### ZIP64 metadata support
-
-`zip_sync`, `unzip_sync`, and `unzip_list` understand ZIP64 metadata for archives and entries that still fit inside the sync API's `Int`/`FixedArray` limits. This is ZIP64 metadata compatibility for in-memory ZIP APIs, not large-file streaming.
-
-The writer emits ZIP64 metadata when a classic ZIP field needs a sentinel value:
-
-- entry compressed or uncompressed size reaches `0xFFFFFFFF`
-- entry local-header offset reaches `0xFFFFFFFF`
-- entry count reaches `0xFFFF`
-- central directory size or offset reaches `0xFFFFFFFF`
-
-ZIP64 archives include the ZIP64 EOCD record, ZIP64 EOCD locator, and per-entry ZIP64 extra fields required by the format. The classic EOCD is still written last.
-
-The reader validates ZIP64 metadata before extraction. Metadata that is structurally valid but too large for the current sync API raises `FzipErrorCode::Zip64ValueTooLarge`. Malformed ZIP64 metadata, encryption, multi-disk archives, and missing required ZIP64 extras raise `InvalidZipData`.
-
-For recoverable writer failures, use `zip_sync_checked`:
-
-```moonbit
-let archive = @fzip.zip_sync_checked(files) catch {
-  FzipError(code~, message~) => {
-    // Handle Zip64ValueTooLarge, ExtraFieldTooLong,
-    // FilenameTooLong, InvalidZipData, or another writer error.
-    return
-  }
+import {
+  "hustcer/fbr/decode"
 }
 ```
 
-`zip_sync` uses the same builder and aborts if the builder reports a recoverable error. It does not return a partial archive.
-
-True large-file streaming is not implemented yet. See [`docs/zip64.md`](docs/zip64.md) for the ZIP64 plan.
-
-### Brotli
-
-Brotli is a peer format in fzip and is added explicitly via `brotli_sync`/`unbrotli_sync`; it is **not** part of the `decompress_sync` auto-detect path because Brotli streams have no reliable magic header.
+## Encode Only
 
 ```moonbit
-// Compress with Brotli at the default quality.
-let compressed = @fzip.brotli_sync(data)
-
-// Compress at quality 9 with a 22-bit LZ77 window.
-let compressed = @fzip.brotli_sync(
+let compressed = @encode.brotli_sync(
   data,
   opts={
+    ..@encode.BrotliOptions::default(),
     quality: 9,
     window_bits: 22,
-    mode: @fzip.Generic,
-    max_input_size: @fzip.default_max_input_size,
   },
 )
-
-// Decompress a Brotli stream.
-let original = @fzip.unbrotli_sync(compressed)
 ```
 
-Streaming wrappers (`BrotliStream` and `UnbrotliStream`) buffer input chunks until `push(chunk, final_=true)`, matching the existing `DeflateStream`/`InflateStream` behaviour.
-
-The encoder supports the full quality range 0..=11. The decoder passes the full upstream Brotli conformance corpus (under `tools/brotli/conformance/`). See [`docs/brotli.md`](docs/brotli.md) for the implementation plan and [`docs/brotli_benchmarks.md`](docs/brotli_benchmarks.md) for the recorded size/time deltas at each level.
-
-### Automatic Decompression
+Use `hustcer/fbr/encode` in `moon.pkg`:
 
 ```moonbit
-// compress_sync defaults to gzip_sync
-let compressed = @fzip.compress_sync(data)
-
-// decompress_sync automatically detects GZIP, Zlib, or DEFLATE
-let original = @fzip.decompress_sync(compressed)
+import {
+  "hustcer/fbr/encode"
+}
 ```
 
-### Streaming
+## Full API
+
+The root package re-exports both sides for convenience:
 
 ```moonbit
-let stream = @fzip.DeflateStream::new()
-stream.ondata = Some(FlateStreamHandler(fn(data, is_final) {
-  // handle output chunk
-}))
+let compressed = @fbr.brotli_sync(data)
+let plain = @fbr.unbrotli_sync(compressed)
+```
+
+Use `hustcer/fbr` in `moon.pkg`:
+
+```moonbit
+import {
+  "hustcer/fbr"
+}
+```
+
+Size-sensitive applications should import `hustcer/fbr/decode` or
+`hustcer/fbr/encode` directly instead of the root facade.
+
+## Streams
+
+`BrotliStream` and `UnbrotliStream` buffer input chunks until
+`push(chunk, final_=true)`.
+
+```moonbit
+let stream = @encode.BrotliStream::new()
+stream.set_ondata((chunk, is_final) => {
+  // handle compressed chunk
+})
 stream.push(chunk1)
 stream.push(chunk2, final_=true)
 ```
 
-Available streams: `DeflateStream`, `InflateStream`, `GzipStream`, `GunzipStream`, `ZlibStream`, `UnzlibStream`, `DecompressStream`.
+## Status
 
-### Security Features
+- `brotli_sync` supports quality levels `0..=11`.
+- `unbrotli_sync` decodes RFC 7932 Brotli streams, including static dictionary
+  references and transforms.
+- `decode` imports only `common`.
+- `encode` imports only `common`.
+- The root package imports both leaf packages and contains only facade
+  wrappers.
 
-`fzip` includes checks for common compression and archive issues:
-
-- **Size limits**: Configurable max output (default 100MB) and input (default 1GB) sizes; ZIP extraction also caps total sync output and entry fan-out
-- **Checksum verification**:
-  - GZIP and Zlib verify their container checksums by default
-  - ZIP entry CRC-32 verification is opt-in via `unzip_sync(..., opts={ verify_checksum: true })`; this preserves the historical fast ZIP extraction path and avoids an extra checksum pass when callers already trust the archive source
-- **Compression ratio check**: ZIP files with compression ratios > 1000:1 are rejected
-- **Path traversal protection**: ZIP entries with unsafe paths (`../`, absolute paths) are rejected
-- **ZIP metadata validation**: ZIP filenames and extra fields are length-limited; encrypted and multi-disk ZIP archives are rejected
-- **Data descriptor support**: ZIP entries with general-purpose bit 3 are bounded by central-directory sizes and verified with CRC-32
-- **Strict UTF-8 decoding**: malformed UTF-8 is rejected unless Latin-1 decoding is explicitly requested
-
-Configure security options per operation:
-
-```moonbit
-// With all security features (default)
-let original = @fzip.gunzip_sync(compressed, opts={
-  out: None,
-  dictionary: None,
-  max_output_size: 10485760,   // 10MB limit
-  max_input_size: 104857600,   // 100MB limit
-  verify_checksum: true,        // Verify CRC-32 (default)
-})
-
-// Skip checksum verification when integrity is checked elsewhere
-let original = @fzip.gunzip_sync(compressed, opts={
-  verify_checksum: false,       // Skip CRC-32 for ~4x faster decompression
-  ..
-})
-```
-
-## Development
-
-```bash
-moon check              # Type check
-moon build              # Full build
-moon test               # Run tests
-moon test -v            # Verbose output
-moon fmt                # Format code
-moon bench              # Run benchmarks
-```
-
-## License
-
-[Apache-2.0](LICENSE)
+See [docs/brotli-pkg.md](docs/brotli-pkg.md) for the package split rationale
+and [docs/brotli_benchmarks.md](docs/brotli_benchmarks.md) for recorded Brotli
+benchmark data.

@@ -99,9 +99,9 @@ ends up in a decode-only binary." The latter is handled by DCE — _provided the
 layout does not defeat DCE_, which is the subject of the next section.
 
 The corollary is liberating for the reuse goal: **you may freely single-source
-shared code in `common`/`dictionary` to reduce source size, and DCE still
-ensures each consumer only pays for the symbols it actually reaches** — as long
-as the shared packages stay DCE-safe.
+shared code in `common` to reduce source size, and DCE still ensures each
+consumer only pays for the symbols it actually reaches** — as long as the
+shared package stays DCE-safe.
 
 ## DCE Hazards and `common` Constraints
 
@@ -125,7 +125,7 @@ DCE hazards to forbid in shared packages:
   package. Document the facade as convenience, and tell size-sensitive users to
   import `@fbr/decode` or `@fbr/encode` directly.
 
-`common` (and `dictionary`) must therefore contain **only**:
+`common` must therefore contain **only**:
 
 - Pure constants and static tables.
 - Pure functions (no dependency on a decode reader/output type or an encode
@@ -163,13 +163,11 @@ fbr/
       command.mbt            # ONLY shared prefix tables (see hot-path note).
       distance.mbt           # ONLY shared distance constants/pure helpers.
       context.mbt
-      compressed_header.mbt
-    dictionary/
-      moon.pkg
-      dictionary_data.mbt     # Raw embedded bytes (the large blob).
+      dictionary_data.mbt     # Raw embedded dictionary bytes.
       dictionary.mbt          # PURE word lookups only — no BrotliOutputBuilder.
       transform_data.mbt      # Transform definition tables.
       transform.mbt           # PURE transform metadata helpers only.
+      compressed_header.mbt
     decode/
       moon.pkg
       types.mbt               # BrotliOutputBuilder lives here.
@@ -196,12 +194,10 @@ fbr/
     brotli/
 ```
 
-> **`common` vs `dictionary`:** after the fix below, `dictionary` holds only raw
-> data plus pure lookups, which is the same contract as `common`. The reason to
-> keep it a separate package is to make the large embedded blob a distinct node
-> in the dependency graph (useful if a future no-static-dictionary encoder is
-> introduced). If that future is not planned, the two packages may be merged
-> into `common` to reduce package count — the contract is identical.
+> **Static dictionary placement:** the current implementation keeps dictionary
+> and transform data in `common`. Both leaf packages use that data today, so an
+> extra `dictionary` package is not required. If a future no-static-dictionary
+> encoder is introduced, this can be split again as a separate package.
 
 The root package `hustcer/fbr` is optional but useful. It should be a small
 facade that imports both `decode` and `encode` and exposes the familiar full
@@ -234,24 +230,18 @@ The intended package dependency graph is:
  hustcer/fbr/decode  hustcer/fbr/encode
          \          /
           v        v
-       hustcer/fbr/dictionary
-                |
-                v
         hustcer/fbr/common
 ```
 
-`common` must not import `decode` or `encode`. `dictionary` must not import
-`decode` or `encode`. That keeps shared code reusable without creating a hidden
-dependency from one high-level package to the other, and — critically — it is
-also what prevents the **circular dependency** described in the dictionary fix
-below (`dictionary` referencing a decode-only type while `decode` imports
-`dictionary`).
+`common` must not import `decode` or `encode`. That keeps shared code reusable
+without creating a hidden dependency from one high-level package to the other,
+and it prevents the circular dependency described in the dictionary fix below
+(`common` referencing a decode-only type while `decode` imports `common`).
 
 Decode-only users should compile this graph:
 
 ```text
 hustcer/fbr/decode
-  -> hustcer/fbr/dictionary
   -> hustcer/fbr/common
 ```
 
@@ -259,7 +249,6 @@ Encode-only users should compile this graph:
 
 ```text
 hustcer/fbr/encode
-  -> hustcer/fbr/dictionary
   -> hustcer/fbr/common
 ```
 
@@ -303,7 +292,7 @@ The practical rule is: if adding an item to `common` makes decode-only users
 compile encoder-only logic, or makes the compiler unable to strip one side, or
 sits on an inner loop, it does not belong in `common`.
 
-## What Goes In `dictionary`
+## Static Dictionary Data In `common`
 
 The Brotli static dictionary and transform tables are large and are referenced
 by both sides — but **only their raw data and pure lookups are shared**. This
@@ -325,16 +314,11 @@ so it cannot be referenced across packages at all).
 **The fix.** Because file names are organizational in MoonBit, split by _type
 ownership_, not by file name:
 
-- `dictionary` (shared) keeps only:
+- `common` keeps only:
   - `dictionary_data.mbt`: embedded static dictionary bytes (the large blob).
   - `transform_data.mbt`: transform definitions and suffix/prefix data.
-  - `dictionary.mbt`: **pure** word-length buckets, offsets, and byte lookups
-    (`word_offset`, `word_byte_at`, `word_is_ascii`, …) — no `BrotliOutputBuilder`.
-  - `transform.mbt`: **pure** transform metadata (`transform_count`,
-    `transform_string_offset`/`_length`, `ascii_upper`, …) — no
-    `BrotliOutputBuilder`.
-    These pure helpers currently `raise FzipError`; after the split they raise
-    `FbrError` (defined in `common`), so `dictionary` imports `common`.
+  - `dictionary.mbt`: pure word-length buckets, offsets, and byte lookups.
+  - `transform.mbt`: pure transform metadata and byte-case helpers.
 - `decode` owns the decode-side access layer that reads the shared data and
   writes into the output builder: the two `BrotliOutputBuilder::*` methods above
   and the uppercase-into-output logic. Put them in `decode/dictionary_copy.mbt`.
@@ -343,13 +327,13 @@ ownership_, not by file name:
   `brotli_dictionary_encode_entry_capacity`, …) — hash-based match finding over
   the same raw bytes.
 
-Net effect: the **raw dictionary bytes are single-sourced** in `dictionary`,
-while each side keeps its own derived access layer. Both `decode` and `encode`
-depend on `dictionary` for the raw bytes; neither depends on the other.
+Net effect: the raw dictionary bytes are single-sourced in `common`, while each
+side keeps its own derived access layer. Both `decode` and `encode` depend on
+`common`; neither depends on the other.
 
-If a future encoder mode allows a no-static-dictionary build, that should be a
-separate package such as `hustcer/fbr/encode_lite`, not a conditional behavior
-inside the main `encode` package.
+If a future encoder mode allows a no-static-dictionary build, that can justify
+reintroducing a separate package such as `hustcer/fbr/encode_lite` or a
+dictionary subpackage. It is not required for the current encoder/decoder split.
 
 ## What Goes In `decode`
 
@@ -372,9 +356,9 @@ It should also own decoder-only internals:
 - Padding validation.
 - Decoder-focused tests and conformance fixtures.
 
-The decoder should import only `common` and `dictionary`. It must not import
-`encode`, even for tests. Roundtrip tests that need both sides live in the
-top-level `tests` package, not in `decode`.
+The decoder should import only `common`. It must not import `encode`, even for
+tests. Roundtrip tests that need both sides live in the top-level `tests`
+package, not in `decode`.
 
 ## What Goes In `encode`
 
@@ -396,13 +380,13 @@ It should also own encoder-only internals:
 - Encoder hash-based dictionary matching (`encode_dict.mbt`).
 - Encoder-focused ratio and external decode validation tests.
 
-The encoder should import only `common` and `dictionary`. It must not import
-`decode`. The encoder currently reuses one fzip-core helper, `slc` (a private
-array-copy in fzip's `bits.mbt`), plus a couple of bit helpers. `hustcer/fbr`
-must **carry its own copy** of these — do not depend on `hustcer/fzip` for a
-one-line helper. Encoder validation should continue to use the external Google
-Brotli CLI where appropriate, because importing the local decoder into encoder
-tests can hide bitstream compatibility bugs.
+The encoder should import only `common`. It must not import `decode`. The
+encoder currently reuses one fzip-core helper, `slc` (a private array-copy in
+fzip's `bits.mbt`), plus a couple of bit helpers. `hustcer/fbr` must **carry its
+own copy** of these — do not depend on `hustcer/fzip` for a one-line helper.
+Encoder validation should continue to use the external Google Brotli CLI where
+appropriate, because importing the local decoder into encoder tests can hide
+bitstream compatibility bugs.
 
 ## Hot-Path and Cross-Package Inlining (Performance Invariant)
 
@@ -416,12 +400,12 @@ Note: function-level DCE was verified empirically (see above), but
 conservative invariant, backed by the benchmark gate:
 
 - **No function called from a decode or encode inner loop may live in `common`
-  or `dictionary`.**
+  unless benchmark evidence proves the package boundary is harmless.**
 - The decode hot primitives — `BrotliBitReader::peek_bits` / `drop_bits` /
   `take_bits` / `refill_to` — stay in `decode`.
 - The encode hot primitive — the bit writer — stays in `encode`.
-- `common`/`dictionary` hold only cold/setup code, pure constant tables, and
-  per-reference (not per-symbol) lookups.
+- `common` holds only cold/setup code, pure constant tables, and per-reference
+  (not per-symbol) lookups.
 - **Borderline shared helpers** that are logically shared _but_ may sit on a hot
   path — distance-code helpers (`distance.mbt`), command-prefix logic
   (`command.mbt`), and some Huffman helpers (`huffman.mbt`) — must be validated
@@ -563,8 +547,8 @@ affect the default `hustcer/fzip` artifact.
 ### Phase 1: Create `hustcer/fbr` Skeleton
 
 - Create a new repository or module with `moon.mod` name `hustcer/fbr`.
-- Add `src/common`, `src/dictionary`, `src/decode`, `src/encode`, and
-  `src/tests` packages, each with a `moon.pkg`.
+- Add `src/common`, `src/decode`, `src/encode`, and `src/tests` packages, each
+  with a `moon.pkg`.
 - Add a root facade package only after subpackages compile independently.
 - Copy docs and tools that are Brotli-specific from fzip.
 
@@ -575,10 +559,10 @@ moon check --target all
 moon info
 ```
 
-### Phase 2: Move Common And Dictionary Code
+### Phase 2: Move Common Code
 
 - Move Brotli constants and small shared tables into `common`.
-- Move static dictionary and transform **data + pure lookups** into `dictionary`
+- Move static dictionary and transform data plus pure lookups into `common`
   (no `BrotliOutputBuilder` methods — see the dictionary fix).
 - Add `FbrErrorCode` / `FbrError` / `fbr_err` to `common`.
 - Keep function bodies unchanged except for package-qualified references and the
@@ -590,7 +574,6 @@ Validation:
 ```bash
 moon check --target all
 moon test src/common
-moon test src/dictionary
 ```
 
 ### Phase 3: Move Decoder
@@ -752,7 +735,7 @@ Acceptance criteria:
   configuration, match finding, command candidate construction, or bit writer.
 - Encode-only artifact does not include decoder-only functions such as bit
   reader, meta-block parser, output builder, or decode state machine.
-- Both decode-only and encode-only may include `dictionary` raw bytes if
+- Both decode-only and encode-only may include dictionary raw bytes if
   required to keep behavior and encoded size unchanged.
 - Full facade artifact may include both sides.
 
@@ -794,8 +777,7 @@ search.
 Publish `hustcer/fbr` first as the canonical Brotli package. Keep the fzip
 release that removes unreleased Brotli APIs separate from the fbr release:
 
-1. Publish `hustcer/fbr` with decode, encode, dictionary, common, and facade
-   packages.
+1. Publish `hustcer/fbr` with decode, encode, common, and facade packages.
 2. Validate downstream decode-only and encode-only artifact size (confirm no DCE
    hazard).
 3. Update `hustcer/fzip` docs to reference `hustcer/fbr`.
