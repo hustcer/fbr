@@ -6,6 +6,7 @@ findings.md
 progress.md
 task_plan.md
 .agents/
+.antigravitycli/
 skills-lock.json
 bench/node_modules/
 tools/zip64-fixtures/output/

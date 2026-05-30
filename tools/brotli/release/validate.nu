@@ -50,6 +50,47 @@ def require-file [path: string]: nothing -> nothing {
   }
 }
 
+def parse-first-json-line [text: string]: nothing -> any {
+  $text
+  | lines
+  | where {|line| ($line | str trim) != "" }
+  | first
+  | from json
+}
+
+def run-ratio-with-overhead-gate [
+  input: string
+  qualities: string
+  max_overhead: float
+]: nothing -> record {
+  let result = (
+    nu tools/brotli/bench/ratio.nu $input --qualities $qualities --json
+    | complete
+  )
+  if $result.exit_code != 0 {
+    return $result
+  }
+  let rows = parse-first-json-line $result.stdout
+  let failures = (
+    $rows
+    | where {|row| $row.size_overhead > $max_overhead }
+    | each {|row|
+      let overhead = (($row.size_overhead * 100) | math round --precision 2)
+      let allowed = (($max_overhead * 100) | math round --precision 2)
+      $"q($row.quality) overhead ($overhead)% exceeds allowed ($allowed)%"
+    }
+  )
+  if ($failures | length) > 0 {
+    {
+      stdout: $result.stdout
+      stderr: ($failures | str join (char newline))
+      exit_code: 1
+    }
+  } else {
+    $result
+  }
+}
+
 def append-step [results: list<record>, name: string, action: closure]: nothing -> list<record> {
   $results | append (run-step $name $action)
 }
@@ -62,6 +103,7 @@ def main [
   --generated-fuzz-count: int = 0
   --generated-fuzz-seed: int = 1
   --generated-fuzz-dir: string = "target/brotli-release-fuzz-corpus"
+  --p3-max-overhead: float = 0.05
   --roundtrip-count: int = 12
   --roundtrip-max-len: int = 2048
   --roundtrip-qualities: string = "0,1,2,9,11"
@@ -101,7 +143,7 @@ def main [
     }
 
     $results = append-step $results "q2..q9 2MiB ratio and external decode" {
-      nu tools/brotli/bench/ratio.nu $silesia_2m --qualities 2,3,4,5,6,7,8,9 --json | complete
+      run-ratio-with-overhead-gate $silesia_2m 2,3,4,5,6,7,8,9 $p3_max_overhead
     }
     $results = append-step $results "q10..q11 1MiB ratio-exception decode" {
       nu tools/brotli/bench/ratio.nu $silesia_1m --qualities 10,11 --json | complete

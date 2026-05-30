@@ -100,9 +100,12 @@ Runs the practical Brotli release gate from one command: MoonBit all-target
 checks, upstream conformance, q0/q1 external decode validation, q2..q9 ratio
 and external decode validation, q10/q11 ratio-exception decode validation,
 decoder fuzz, encoder roundtrip fuzz, packaging, publish dry-run package
-verification, and `git diff --check`. The default gate does not run
-`tools/brotli/bench/target-perf.nu`; run target-perf separately when changing
-Brotli codec behavior or making a performance decision.
+verification, and `git diff --check`. The q2..q9 ratio step now fails if any
+measured quality exceeds the default 5% overhead gate; use
+`--p3-max-overhead` only when intentionally changing that release policy. The
+default gate does not run `tools/brotli/bench/target-perf.nu`; run target-perf
+separately when changing Brotli codec behavior or making a performance
+decision.
 
 The Justfile recipes are thin entry points:
 
