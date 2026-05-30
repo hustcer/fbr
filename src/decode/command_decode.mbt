@@ -68,6 +68,12 @@ fn brotli_decode_compressed_metablock_body(
   // because the tree group is built with at least one tree.
   let single_literal_tree = header.literal_context_map.num_trees == 1
   let literal_tree0 = header.literal_trees.tree(0)
+  // When the literal side also has a single block type there are no literal
+  // block-switch commands in the stream, so the inner loop can drop the
+  // per-byte `ensure_ready` call and `remaining` bookkeeping entirely. This is
+  // the dominant shape for literal-heavy low-quality streams.
+  let single_literal_block = single_literal_tree &&
+    header.literal_block.num_types == 1
   // Reuse one command record for the whole meta-block; `read_into` overwrites
   // every field each iteration, so the loop performs no per-command allocation.
   let command = BrotliCommand::{
@@ -98,20 +104,39 @@ fn brotli_decode_compressed_metablock_body(
       // straight into the buffer through locals (`ensure` reserved the run).
       let buf = output.buf
       let mut pos = output.len
-      for _ in 0..<command.insert_length {
-        literal_blocks.ensure_ready(reader, header.literal_block)
-        let literal = brotli_read_symbol(
-          reader, literal_tree0, @common.brotli_huffman_table_bits,
-        )
-        if literal < 0 || literal > 255 {
-          raise @common.fbr_err(
-            @common.BrotliInvalidMetablock,
-            msg="Brotli literal out of byte range",
+      if single_literal_block {
+        // Tightest path: one tree and one block type, so there are no literal
+        // block-switch commands to consume — drop the per-byte `ensure_ready`
+        // call and `remaining` decrement.
+        for _ in 0..<command.insert_length {
+          let literal = brotli_read_symbol(
+            reader, literal_tree0, @common.brotli_huffman_table_bits,
           )
+          if literal < 0 || literal > 255 {
+            raise @common.fbr_err(
+              @common.BrotliInvalidMetablock,
+              msg="Brotli literal out of byte range",
+            )
+          }
+          buf[pos] = literal.to_byte()
+          pos += 1
         }
-        buf[pos] = literal.to_byte()
-        pos += 1
-        literal_blocks.remaining -= 1
+      } else {
+        for _ in 0..<command.insert_length {
+          literal_blocks.ensure_ready(reader, header.literal_block)
+          let literal = brotli_read_symbol(
+            reader, literal_tree0, @common.brotli_huffman_table_bits,
+          )
+          if literal < 0 || literal > 255 {
+            raise @common.fbr_err(
+              @common.BrotliInvalidMetablock,
+              msg="Brotli literal out of byte range",
+            )
+          }
+          buf[pos] = literal.to_byte()
+          pos += 1
+          literal_blocks.remaining -= 1
+        }
       }
       output.len = pos
     } else {
