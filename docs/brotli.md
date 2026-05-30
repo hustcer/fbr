@@ -301,7 +301,7 @@ descriptive `FzipError`.
 | `brotli_state.mbt`           | ~480          | `dec/state.{c,h}`                               | `BrotliDecoderState` struct, sub-state enums, ring-buffer container, allocation helpers.                                                      |
 | `brotli_decode.mbt`          | ~1,600        | `dec/decode.c` (3,023 LOC condensed)            | The main state machine plus its sub-state pump.                                                                                               |
 | `brotli.mbt`                 | ~120          | `include/brotli/decode.h`                       | Public `unbrotli_sync` entry point, options handling, allocation policy.                                                                      |
-| `brotli_wbtest.mbt`          | ~600          | —                                               | White-box tests for bit reader, Huffman, transforms, dictionary access.                                                                       |
+| `src/*/*_wbtest.mbt`         | n/a           | —                                               | Package-local white-box tests in `common`, `decode`, and `encode` for bit reader, Huffman, transforms, dictionary access, and encoder helpers. |
 | `brotli_test.mbt`            | ~500          | —                                               | Black-box roundtrip and conformance tests through `unbrotli_sync`.                                                                            |
 | `src/tests/brotli_fixtures/` | n/a           | —                                               | Compressed test inputs and expected outputs.                                                                                                  |
 
@@ -1346,10 +1346,11 @@ Additional black-box tests:
   `InvalidZipData, msg="output exceeds max_output_size"`. Reuse the
   existing zip-bomb harness in `security_wbtest.mbt`.
 
-White-box tests live in `brotli_wbtest.mbt` and cover individual helpers
-(bit reader, Huffman, transforms, dictionary access). Aim for each helper
-to have at least one happy-path test and one error-path test per error code
-it can raise.
+White-box tests live next to the package they exercise, under
+`src/common`, `src/decode`, and `src/encode`. They cover individual helpers
+(bit reader, Huffman, transforms, dictionary access, and encoder internals).
+Aim for each helper to have at least one happy-path test and one error-path
+test per error code it can raise.
 
 Run all of the following before opening the P1 PR:
 

@@ -223,11 +223,11 @@ def collect-row [target: string, case_name: string, package: string]: nothing ->
     case: $case_name
     package: $package
     bytes: (file-size $artifact)
+    ok: $scan.symbol_ok
     artifact: $artifact
     symbol_checked: ($target == "js")
     forbidden_found: $scan.forbidden_found
     required_found: $scan.required_found
-    ok: $scan.symbol_ok
   }
 }
 
@@ -263,7 +263,7 @@ def main [
   if $json {
     print ($rows | to json --raw)
   } else {
-    print ($rows | table)
+    print ($rows | table -t light)
   }
   if ($failures | length) > 0 {
     print --stderr "fbr size verification failed: leaf artifact contains forbidden opposite-side markers."
