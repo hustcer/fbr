@@ -927,6 +927,13 @@ test "unbrotli_sync decodes compressed explicit-distance copy" {
 }
 
 ///|
+test "brotli_initial_output_capacity uses compressed-size hint" {
+  inspect(brotli_initial_output_capacity(1024, 1000), content="1024")
+  inspect(brotli_initial_output_capacity(100000000, 1000), content="5000")
+  inspect(brotli_initial_output_capacity(100000000, 1000000), content="5000000")
+}
+
+///|
 test "BrotliOutputBuilder copy_from_distance keeps overlap semantics" {
   let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
   output.ensure(8)

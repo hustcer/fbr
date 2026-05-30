@@ -84,16 +84,41 @@ fn BrotliDecoderState::max_distance(
 }
 
 ///|
-fn BrotliOutputBuilder::new(opts : UnbrotliOptions) -> BrotliOutputBuilder {
+fn brotli_initial_output_capacity(
+  max_output_size : Int,
+  input_len : Int,
+) -> Int {
+  if max_output_size <= 0 {
+    return 0
+  }
+  let min_capacity = 4096
+  let base = if input_len > min_capacity { input_len } else { min_capacity }
+  let scaled = if input_len > @common.max_int_val() / 5 {
+    @common.max_int_val()
+  } else {
+    input_len * 5
+  }
+  let wanted = if scaled > base { scaled } else { base }
+  if wanted > max_output_size {
+    max_output_size
+  } else {
+    wanted
+  }
+}
+
+///|
+fn BrotliOutputBuilder::new(
+  opts : UnbrotliOptions,
+  input_len? : Int = 0,
+) -> BrotliOutputBuilder {
   match opts.out {
     Some(out) =>
       { buf: out, len: 0, fixed: true, max_output_size: opts.max_output_size }
     None => {
-      let initial = if opts.max_output_size < 4096 {
-        opts.max_output_size
-      } else {
-        4096
-      }
+      let initial = brotli_initial_output_capacity(
+        opts.max_output_size,
+        input_len,
+      )
       {
         buf: FixedArray::make(initial, b'\x00'),
         len: 0,
@@ -321,7 +346,7 @@ fn brotli_decode_scaffold(
   let reader = BrotliBitReader::new(data, 0, data.length())
   let window_bits = brotli_decode_window_bits(reader)
   brotli_validate_window_bits(window_bits)
-  let output = BrotliOutputBuilder::new(opts)
+  let output = BrotliOutputBuilder::new(opts, input_len=data.length())
   let state = BrotliDecoderState::new_with_window_bits(window_bits)
   while true {
     let header = brotli_decode_metablock_header(reader)
