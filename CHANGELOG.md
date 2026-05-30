@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.2.0
+
+### Breaking
+
+- Renamed Brotli error APIs from `FzipError`, `FzipErrorCode`, `fzip_err`, and
+  `fzip_error_code_to_int` to `FbrError`, `FbrErrorCode`, `fbr_err`, and
+  `fbr_error_code_to_int`.
+- Renamed the stream callback wrapper from `FlateStreamHandler` to
+  `FbrStreamHandler`.
+
+### Changed
+
+- Updated package metadata and README examples for version `0.2.0`.
+- Updated Brotli verification tooling and generated API metadata to use the
+  `hustcer/fbr` package naming consistently.
+
 ## v0.1.0
 
 ### Added

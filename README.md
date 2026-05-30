@@ -36,7 +36,7 @@ Or add this to `moon.mod.json`:
 ```json
 {
   "deps": {
-    "hustcer/fbr": "0.1.0"
+    "hustcer/fbr": "0.2.0"
   }
 }
 ```
