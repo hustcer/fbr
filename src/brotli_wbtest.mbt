@@ -1841,7 +1841,7 @@ test "brotli_sync q10 bounded shortest-path candidate roundtrips" {
   let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
   match
     brotli_build_bounded_shortest_path_command_candidate(
-      input, config, distance_cache,
+      input, config, 0, 22, distance_cache,
     ) {
     Some(candidate) => {
       assert_true(candidate.commands.length() > 0)
@@ -1975,6 +1975,7 @@ test "brotli_sync q10 bounded shortest-path keeps a two-state beam" {
   let previous_slot = FixedArray::make(state_count, -1)
   let copy_length = FixedArray::make(state_count, 0)
   let copy_distance = FixedArray::make(state_count, 0)
+  let copy_output_length = FixedArray::make(state_count, 0)
   brotli_bounded_shortest_path_offer_state(
     costs,
     cache0,
@@ -1985,6 +1986,7 @@ test "brotli_sync q10 bounded shortest-path keeps a two-state beam" {
     previous_slot,
     copy_length,
     copy_distance,
+    copy_output_length,
     1,
     30,
     [4, 11, 15, 16],
@@ -1992,6 +1994,7 @@ test "brotli_sync q10 bounded shortest-path keeps a two-state beam" {
     0,
     4,
     4,
+    0,
   )
   brotli_bounded_shortest_path_offer_state(
     costs,
@@ -2003,6 +2006,7 @@ test "brotli_sync q10 bounded shortest-path keeps a two-state beam" {
     previous_slot,
     copy_length,
     copy_distance,
+    copy_output_length,
     1,
     10,
     [7, 11, 15, 16],
@@ -2010,6 +2014,7 @@ test "brotli_sync q10 bounded shortest-path keeps a two-state beam" {
     1,
     5,
     7,
+    0,
   )
   brotli_bounded_shortest_path_offer_state(
     costs,
@@ -2021,6 +2026,7 @@ test "brotli_sync q10 bounded shortest-path keeps a two-state beam" {
     previous_slot,
     copy_length,
     copy_distance,
+    copy_output_length,
     1,
     20,
     [9, 11, 15, 16],
@@ -2028,6 +2034,7 @@ test "brotli_sync q10 bounded shortest-path keeps a two-state beam" {
     0,
     6,
     9,
+    0,
   )
   let first = brotli_bounded_shortest_path_state_index(1, 0)
   let second = brotli_bounded_shortest_path_state_index(1, 1)

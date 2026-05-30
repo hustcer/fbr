@@ -409,24 +409,32 @@ fn brotli_bounded_previous_hash_matches_with_cache(
 ) -> Array[BrotliHashMatchCandidate] {
   let matches : Array[BrotliHashMatchCandidate] = []
   let len = data.length()
-  if position + 3 >= len {
+  let hash_bytes = if config.hash_bytes >= 4 { 4 } else { 3 }
+  if position + hash_bytes > len {
     return matches
   }
   let max_match_length = config.max_match_length
   let b0 = data[position]
   let b1 = data[position + 1]
   let b2 = data[position + 2]
-  let b3 = data[position + 3]
+  let b3 = if hash_bytes >= 4 { data[position + 3] } else { b'\x00' }
   let max_cache_codes = config.max_distance_cache_codes
   for code in 0..<max_cache_codes {
     let distance = brotli_distance_cache_candidate(distance_cache, code)
     if distance > 0 && distance <= position {
       let candidate = position - distance
-      if data[candidate] == b0 &&
+      let match_ok = if hash_bytes >= 4 {
+        data[candidate] == b0 &&
         data[candidate + 1] == b1 &&
         data[candidate + 2] == b2 &&
-        data[candidate + 3] == b3 {
-        let mut length = 4
+        data[candidate + 3] == b3
+      } else {
+        data[candidate] == b0 &&
+        data[candidate + 1] == b1 &&
+        data[candidate + 2] == b2
+      }
+      if match_ok {
+        let mut length = hash_bytes
         while length < max_match_length &&
               position + length < len &&
               data[position + length] == data[candidate + length] {
@@ -449,11 +457,18 @@ fn brotli_bounded_previous_hash_matches_with_cache(
   }
   let mut checked = 0
   while candidate >= 0 && checked < max_match_checks {
-    if data[candidate] == b0 &&
+    let match_ok = if hash_bytes >= 4 {
+      data[candidate] == b0 &&
       data[candidate + 1] == b1 &&
       data[candidate + 2] == b2 &&
-      data[candidate + 3] == b3 {
-      let mut length = 4
+      data[candidate + 3] == b3
+    } else {
+      data[candidate] == b0 &&
+      data[candidate + 1] == b1 &&
+      data[candidate + 2] == b2
+    }
+    if match_ok {
+      let mut length = hash_bytes
       while length < max_match_length &&
             position + length < len &&
             data[position + length] == data[candidate + length] {

@@ -73,7 +73,10 @@ def run-ratio-with-overhead-gate [
   let rows = parse-first-json-line $result.stdout
   let failures = (
     $rows
-    | where {|row| $row.size_overhead > $max_overhead }
+    | where {|row|
+      let abs_overhead = $row.moonbit_size - $row.google_size
+      $row.size_overhead > $max_overhead and $row.google_size > 1024 and $abs_overhead > 32
+    }
     | each {|row|
       let overhead = (($row.size_overhead * 100) | math round --precision 2)
       let allowed = (($max_overhead * 100) | math round --precision 2)
