@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.1.0
 
 ### Added
 
@@ -22,10 +22,12 @@ All notable changes to this project will be documented in this file.
     `BrotliLargeWindowNotSupported`, `BrotliReserved`, `BrotliInvalidPadding`.
   - Options structs `UnbrotliOptions` (with `out`, `max_output_size`,
     `max_input_size`) and `BrotliOptions` (with `quality`, `window_bits`,
-    `mode`, `max_input_size`), each with `::default()` constructors.
-- Static RFC dictionary embedded as Zlib-compressed payload and inflated lazily
-  on first call (`brotli_static_dictionary`); SHA-256 of the source dictionary
-  is recorded in `src/brotli_dictionary_data.mbt`.
+    `max_input_size`), each with `::default()` constructors.
+- Split public imports into `hustcer/fbr/decode`, `hustcer/fbr/encode`, and
+  the root `hustcer/fbr` facade so users can choose decode-only, encode-only,
+  or combined APIs.
+- Static RFC dictionary embedded as chunked bytes and copied into the
+  `FixedArray[Byte]` used by the codec.
 - Tools under `tools/brotli/`:
   - `tools/brotli/bench/ratio.nu`, `tools/brotli/bench/chunk-match.nu`, and
     `tools/brotli/bench/target-perf.nu` for ratio, density, and wasm-gc/native
@@ -39,6 +41,10 @@ All notable changes to this project will be documented in this file.
 
 ### Performance
 
+- Changed the Brotli static dictionary representation from a single large
+  `FixedArray[Byte]` literal to chunked `Bytes` copied into the same public
+  `FixedArray[Byte]` value. This preserves the dictionary data and avoids
+  per-byte wasm-gc initialization code for the large literal.
 - Brotli chunked q3+ encoding now carries the selected candidate's
   recent-distance cache and the previous two decoded bytes into following
   meta-blocks. This fixes multi-meta-block compressed streams whose
@@ -141,9 +147,9 @@ All notable changes to this project will be documented in this file.
 - New `docs/brotli.md` planning document with phased delivery details.
 - New `docs/brotli_benchmarks.md` recording every accepted size/time delta
   for the Brotli encoder/decoder.
-- 466 in-package tests covering Brotli decoder helpers, transforms, fixtures,
-  roundtrips, q0..q11 end-to-end, stream chunking, and security limits, all
-  passing on `wasm`, `wasm-gc`, `js`, and `native`.
+- In-package tests cover Brotli decoder helpers, transforms, fixtures,
+  roundtrips, q0..q11 end-to-end, stream chunking, and security limits across
+  `wasm`, `wasm-gc`, `js`, and `native`.
 - Brotli release-validation checkpoint recorded: q0/q1 2 MiB stored streams
   pass external Google Brotli decode, q2..q9 2 MiB Silesia outputs stay within
   the 5% P3 window, q10/q11 remain valid with a documented P4 ratio exception,
@@ -182,7 +188,7 @@ All notable changes to this project will be documented in this file.
   Brotli-capable release candidate while keeping P4 marked incomplete.
 - Added aggregate Brotli release-candidate Justfile entries for full and smoke
   release-validation gate sets.
-- Recorded a full `just brotli-release-candidate` pass covering the practical
+- Recorded a full `just release-candidate` pass covering the practical
   release gate, generated corpus gate, and bounded full-corpus soak.
 - Brotli soak runner now accepts `--append-log` so interrupted or segmented
   long fuzz soaks can preserve existing JSONL evidence and continue iteration
@@ -197,4 +203,8 @@ All notable changes to this project will be documented in this file.
 - Brotli conformance and target-perf harnesses now use the same owner-PID
   stale-lock recovery as the fuzz runners; target-perf also uses a stable
   ignored placeholder white-box test path.
-
+- `tools/brotli/size/verify.nu` now builds decode-only, encode-only, and full
+  temporary applications. It scans JS artifacts for opposite-side package
+  markers and can also report wasm-gc artifact sizes.
+- Updated `README.md` to document the leaf package imports, root facade, and
+  wasm-gc dictionary representation.

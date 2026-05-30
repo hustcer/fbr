@@ -9,6 +9,22 @@ for their use case:
 - Encode only: import `hustcer/fbr/encode`
 - Full convenience API: import `hustcer/fbr`
 
+## Small Artifacts By Design
+
+`fbr` keeps decode, encode, and the root facade in separate packages. A
+decode-only application can import `hustcer/fbr/decode` without making encoder
+code reachable, and an encode-only application can import `hustcer/fbr/encode`
+without making decoder code reachable. The root `hustcer/fbr` package remains a
+convenience facade for applications that want both sides.
+
+The Brotli static dictionary is also stored in a wasm-friendly form. The RFC
+dictionary is 122,784 bytes; representing it as one huge `FixedArray[Byte]`
+literal can make wasm-gc emit one initialization instruction per byte. `fbr`
+stores the bytes as chunks and blits them into the final `FixedArray[Byte]`,
+so the dictionary is data again instead of a large block of generated startup
+code. This keeps decode-only wasm-gc artifacts close to the real data size
+without changing the public API, the dictionary bytes, or the codec behavior.
+
 ## Installation
 
 ```bash
@@ -62,7 +78,7 @@ import {
 
 ## Full API
 
-The root package re-exports both sides for convenience:
+The root package exposes facade wrappers and type aliases for convenience:
 
 ```moonbit
 let compressed = @fbr.brotli_sync(data)
@@ -99,17 +115,24 @@ stream.push(chunk2, final_=true)
 - `brotli_sync` supports quality levels `0..=11`.
 - `unbrotli_sync` decodes RFC 7932 Brotli streams, including static dictionary
   references and transforms.
-- `decode` imports only `common`.
-- `encode` imports only `common`.
-- The root package imports both leaf packages and contains only facade
-  wrappers.
+- In production builds, `decode` imports only `common`.
+- In production builds, `encode` imports only `common`. Its `moon.pkg` imports
+  `decode` only for white-box tests.
+- The root package imports `common`, `decode`, and `encode`, and contains only
+  facade wrappers, type aliases, and shared error/default aliases.
 
 ## Size Verification
 
-Run the artifact split check before release:
+Run the JS artifact split check before release:
 
 ```bash
 just size
+```
+
+To inspect both JS and wasm-gc artifact sizes:
+
+```bash
+just size js,wasm-gc
 ```
 
 The check builds three temporary release applications:
@@ -121,6 +144,12 @@ The check builds three temporary release applications:
 For the JS target it scans the linked artifact and fails if the decode-only
 artifact contains encode package markers, or the encode-only artifact contains
 decode package markers.
+
+For wasm-gc, the same command reports the linked artifact sizes for the three
+import shapes. This is useful for catching large static-data representation
+regressions during review: the Brotli dictionary should be carried as
+bytes/data plus a small number of chunk copies, not as tens of thousands of
+`array.set` initialization instructions.
 
 See [docs/brotli-pkg.md](docs/brotli-pkg.md) for the package split rationale
 and [docs/brotli_benchmarks.md](docs/brotli_benchmarks.md) for recorded Brotli

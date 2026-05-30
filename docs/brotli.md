@@ -290,20 +290,20 @@ descriptive `FzipError`.
 
 ### File Map (P1)
 
-| MoonBit file                 | Approx. LOC   | Mirrors C source                                | Responsibility                                                                                                                                |
-| ---------------------------- | ------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `brotli_constants.mbt`       | ~200          | `common/constants.{c,h}` + new error codes      | All numeric constants: max window bits, code-length alphabets, ring-buffer sizes, distance-postfix limits.                                    |
-| `brotli_tables.mbt`          | ~450          | `common/context.c`, `dec/prefix_inc.h`          | Context lookup tables (LUT0/1/2), insert-and-copy code base lengths, distance code postfix tables, code-length code-length permutation order. |
-| `brotli_transform.mbt`       | ~280          | `common/transform.{c,h}`                        | Prefix/suffix string table, 121 transform definitions, `apply_transform(word, transform_id, out_buf, out_pos)`.                               |
-| `brotli_dict.mbt`            | ~3,000 (data) | `common/dictionary_inc.h` (5,847 lines of data) | Embedded static dictionary (122,784 bytes) plus the offset/length index arrays. See "Static Dictionary Embedding" below.                      |
-| `brotli_bit_reader.mbt`      | ~320          | `dec/bit_reader.{c,h}`                          | `BitReader` struct + accessors. Refill 32 bits at a time. Provide both consuming reads (`take_bits`) and non-consuming peeks (`peek_bits`).   |
-| `brotli_huffman.mbt`         | ~380          | `dec/huffman.{c,h}`                             | Build canonical Huffman tables; read complex and simple Huffman codes; fast-table lookup.                                                     |
-| `brotli_state.mbt`           | ~480          | `dec/state.{c,h}`                               | `BrotliDecoderState` struct, sub-state enums, ring-buffer container, allocation helpers.                                                      |
-| `brotli_decode.mbt`          | ~1,600        | `dec/decode.c` (3,023 LOC condensed)            | The main state machine plus its sub-state pump.                                                                                               |
-| `brotli.mbt`                 | ~120          | `include/brotli/decode.h`                       | Public `unbrotli_sync` entry point, options handling, allocation policy.                                                                      |
+| MoonBit file                 | Approx. LOC   | Mirrors C source                                | Responsibility                                                                                                                                 |
+| ---------------------------- | ------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `brotli_constants.mbt`       | ~200          | `common/constants.{c,h}` + new error codes      | All numeric constants: max window bits, code-length alphabets, ring-buffer sizes, distance-postfix limits.                                     |
+| `brotli_tables.mbt`          | ~450          | `common/context.c`, `dec/prefix_inc.h`          | Context lookup tables (LUT0/1/2), insert-and-copy code base lengths, distance code postfix tables, code-length code-length permutation order.  |
+| `brotli_transform.mbt`       | ~280          | `common/transform.{c,h}`                        | Prefix/suffix string table, 121 transform definitions, `apply_transform(word, transform_id, out_buf, out_pos)`.                                |
+| `brotli_dict.mbt`            | ~3,000 (data) | `common/dictionary_inc.h` (5,847 lines of data) | Embedded static dictionary (122,784 bytes) plus the offset/length index arrays. See "Static Dictionary Embedding" below.                       |
+| `brotli_bit_reader.mbt`      | ~320          | `dec/bit_reader.{c,h}`                          | `BitReader` struct + accessors. Refill 32 bits at a time. Provide both consuming reads (`take_bits`) and non-consuming peeks (`peek_bits`).    |
+| `brotli_huffman.mbt`         | ~380          | `dec/huffman.{c,h}`                             | Build canonical Huffman tables; read complex and simple Huffman codes; fast-table lookup.                                                      |
+| `brotli_state.mbt`           | ~480          | `dec/state.{c,h}`                               | `BrotliDecoderState` struct, sub-state enums, ring-buffer container, allocation helpers.                                                       |
+| `brotli_decode.mbt`          | ~1,600        | `dec/decode.c` (3,023 LOC condensed)            | The main state machine plus its sub-state pump.                                                                                                |
+| `brotli.mbt`                 | ~120          | `include/brotli/decode.h`                       | Public `unbrotli_sync` entry point, options handling, allocation policy.                                                                       |
 | `src/*/*_wbtest.mbt`         | n/a           | —                                               | Package-local white-box tests in `common`, `decode`, and `encode` for bit reader, Huffman, transforms, dictionary access, and encoder helpers. |
-| `brotli_test.mbt`            | ~500          | —                                               | Black-box roundtrip and conformance tests through `unbrotli_sync`.                                                                            |
-| `src/tests/brotli_fixtures/` | n/a           | —                                               | Compressed test inputs and expected outputs.                                                                                                  |
+| `brotli_test.mbt`            | ~500          | —                                               | Black-box roundtrip and conformance tests through `unbrotli_sync`.                                                                             |
+| `src/tests/brotli_fixtures/` | n/a           | —                                               | Compressed test inputs and expected outputs.                                                                                                   |
 
 P1 totals roughly 6,500 LOC of MoonBit, with the static dictionary accounting
 for the bulk of `brotli_dict.mbt`.
@@ -1873,7 +1873,7 @@ Risk Register.
 
 | Risk                                              | Probability | Impact | Mitigation                                                                                           |
 | ------------------------------------------------- | ----------- | ------ | ---------------------------------------------------------------------------------------------------- |
-| Static dictionary embedding bloats source tree    | Low         | Low    | Choose Option C (Zlib-wrapped compressed embed).                                                      |
+| Static dictionary embedding bloats source tree    | Low         | Low    | Choose Option C (Zlib-wrapped compressed embed).                                                     |
 | Bit reader performance is the bottleneck          | High        | Medium | Maintain 32-bit accumulator; pre-refill in command loop; benchmark every phase.                      |
 | Huffman table memory exceeds expectations         | Medium      | Medium | Pre-size arena at construction; arena exceeds the C reference's `HUFFMAN_TABLE_SIZE`.                |
 | State-machine bug surfaces only on rare RFC paths | High        | High   | Run the full reference test corpus; gate P3 entry on the dedicated fuzz harness (see Fuzz Strategy). |

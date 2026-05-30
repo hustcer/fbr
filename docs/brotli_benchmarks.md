@@ -31,8 +31,8 @@ nu -c 'for q in 3..8 {
 
 1 MiB ratio results:
 
-| Quality | MoonBit bytes | Google bytes | Size overhead | MoonBit SHA-256 |
-| ------- | ------------- | ------------ | ------------- | --------------- |
+| Quality | MoonBit bytes | Google bytes | Size overhead | MoonBit SHA-256                                                    |
+| ------- | ------------- | ------------ | ------------- | ------------------------------------------------------------------ |
 | 3       | 313,577       | 313,727      | -0.05%        | `fde02b28aae84889340c2291e031a45ccbfb5d9534d1711a92cc774d5351d715` |
 | 4       | 313,577       | 292,364      | 7.26%         | `fde02b28aae84889340c2291e031a45ccbfb5d9534d1711a92cc774d5351d715` |
 | 5       | 313,577       | 274,088      | 14.41%        | `fde02b28aae84889340c2291e031a45ccbfb5d9534d1711a92cc774d5351d715` |
@@ -444,8 +444,7 @@ runtime.
 
 ## 2026-05-28 — Rejected q10/q11 384-Check Parser Trial
 
-This P4 trial increased q10/q11 high-quality hash-chain checks from 256 to
-384. A follow-up narrowed the change to q10 only after q11 showed a native
+This P4 trial increased q10/q11 high-quality hash-chain checks from 256 to 384. A follow-up narrowed the change to q10 only after q11 showed a native
 small-input regression, but q10's medium-input target-perf also moved backward.
 
 Validation commands:
@@ -473,16 +472,16 @@ nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-128k.bin \
 
 Trial result:
 
-| Corpus       | Quality | Target  | Baseline bytes | Trial bytes | Google bytes | Baseline ms | Trial ms  | Decision |
-| ------------ | ------- | ------- | -------------- | ----------- | ------------ | ----------- | --------- | -------- |
-| silesia-1m   | 10      | ratio   | 264,422        | 263,700     | 242,485      | 63,742.891  | 80,391.065 | reject  |
-| silesia-1m   | 11      | ratio   | 264,422        | 263,700     | 239,314      | 63,038.589  | 74,624.034 | reject  |
-| silesia-64k  | 10      | wasm-gc | 21,415         | 21,408      | 19,566       | 510.253     | 499.135   | reject  |
-| silesia-64k  | 10      | native  | 21,415         | 21,408      | 19,566       | 121.332     | 91.720    | reject  |
-| silesia-64k  | 11      | wasm-gc | 21,415         | 21,408      | 19,258       | 547.539     | 523.260   | reject  |
-| silesia-64k  | 11      | native  | 21,415         | 21,408      | 19,258       | 75.297      | 117.263   | reject  |
-| silesia-128k | 10      | wasm-gc | 38,713         | 38,686      | 35,624       | 172.893     | 660.508   | reject  |
-| silesia-128k | 10      | native  | 38,713         | 38,686      | 35,624       | 91.262      | 143.997   | reject  |
+| Corpus       | Quality | Target  | Baseline bytes | Trial bytes | Google bytes | Baseline ms | Trial ms   | Decision |
+| ------------ | ------- | ------- | -------------- | ----------- | ------------ | ----------- | ---------- | -------- |
+| silesia-1m   | 10      | ratio   | 264,422        | 263,700     | 242,485      | 63,742.891  | 80,391.065 | reject   |
+| silesia-1m   | 11      | ratio   | 264,422        | 263,700     | 239,314      | 63,038.589  | 74,624.034 | reject   |
+| silesia-64k  | 10      | wasm-gc | 21,415         | 21,408      | 19,566       | 510.253     | 499.135    | reject   |
+| silesia-64k  | 10      | native  | 21,415         | 21,408      | 19,566       | 121.332     | 91.720     | reject   |
+| silesia-64k  | 11      | wasm-gc | 21,415         | 21,408      | 19,258       | 547.539     | 523.260    | reject   |
+| silesia-64k  | 11      | native  | 21,415         | 21,408      | 19,258       | 75.297      | 117.263    | reject   |
+| silesia-128k | 10      | wasm-gc | 38,713         | 38,686      | 35,624       | 172.893     | 660.508    | reject   |
+| silesia-128k | 10      | native  | 38,713         | 38,686      | 35,624       | 91.262      | 143.997    | reject   |
 
 Conclusion: the 384-check parser bought a real but small 1 MiB q10/q11 size
 win, and the 64 KiB q10 sample looked favorable. It was still rejected because
@@ -598,11 +597,11 @@ nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
 
 Correctness and ratio result:
 
-| Corpus      | Quality | MoonBit bytes | Google bytes | Overhead | Google decode |
-| ----------- | ------- | ------------- | ------------ | -------- | ------------- |
-| silesia-2m  | 3       | 629,531       | n/a          | n/a      | pass          |
-| silesia-2m  | 5       | 555,326       | 538,906      | +3.05%   | pass          |
-| silesia-2m  | 9       | 542,335       | 511,433      | +6.04%   | pass          |
+| Corpus     | Quality | MoonBit bytes | Google bytes | Overhead | Google decode |
+| ---------- | ------- | ------------- | ------------ | -------- | ------------- |
+| silesia-2m | 3       | 629,531       | n/a          | n/a      | pass          |
+| silesia-2m | 5       | 555,326       | 538,906      | +3.05%   | pass          |
+| silesia-2m | 9       | 542,335       | 511,433      | +6.04%   | pass          |
 
 Target-perf result:
 
@@ -822,20 +821,20 @@ Result: passed. The test matrix reported 458 passed / 0 failed on each of
 
 External Google Brotli decode validation:
 
-| Corpus      | Quality | MoonBit bytes | Google bytes | Size overhead | Google decode |
-| ----------- | ------- | ------------- | ------------ | ------------- | ------------- |
-| silesia-2m  | 0       | 2,097,157     | n/a          | n/a           | pass          |
-| silesia-2m  | 1       | 2,097,157     | n/a          | n/a           | pass          |
-| silesia-2m  | 2       | 652,695       | 637,343      | +2.41%        | pass          |
-| silesia-2m  | 3       | 617,687       | 623,577      | -0.94%        | pass          |
-| silesia-2m  | 4       | 566,718       | 569,163      | -0.43%        | pass          |
-| silesia-2m  | 5       | 549,625       | 538,906      | +1.99%        | pass          |
-| silesia-2m  | 6       | 549,625       | 527,485      | +4.20%        | pass          |
-| silesia-2m  | 7       | 537,621       | 520,020      | +3.38%        | pass          |
-| silesia-2m  | 8       | 537,621       | 514,598      | +4.47%        | pass          |
-| silesia-2m  | 9       | 535,421       | 511,433      | +4.69%        | pass          |
-| silesia-1m  | 10      | 264,422       | 242,485      | +9.05%        | pass          |
-| silesia-1m  | 11      | 264,422       | 239,314      | +10.49%       | pass          |
+| Corpus     | Quality | MoonBit bytes | Google bytes | Size overhead | Google decode |
+| ---------- | ------- | ------------- | ------------ | ------------- | ------------- |
+| silesia-2m | 0       | 2,097,157     | n/a          | n/a           | pass          |
+| silesia-2m | 1       | 2,097,157     | n/a          | n/a           | pass          |
+| silesia-2m | 2       | 652,695       | 637,343      | +2.41%        | pass          |
+| silesia-2m | 3       | 617,687       | 623,577      | -0.94%        | pass          |
+| silesia-2m | 4       | 566,718       | 569,163      | -0.43%        | pass          |
+| silesia-2m | 5       | 549,625       | 538,906      | +1.99%        | pass          |
+| silesia-2m | 6       | 549,625       | 527,485      | +4.20%        | pass          |
+| silesia-2m | 7       | 537,621       | 520,020      | +3.38%        | pass          |
+| silesia-2m | 8       | 537,621       | 514,598      | +4.47%        | pass          |
+| silesia-2m | 9       | 535,421       | 511,433      | +4.69%        | pass          |
+| silesia-1m | 10      | 264,422       | 242,485      | +9.05%        | pass          |
+| silesia-1m | 11      | 264,422       | 239,314      | +10.49%       | pass          |
 
 Representative 64 KiB encode target-perf:
 
@@ -854,8 +853,8 @@ Representative 64 KiB encode target-perf:
 
 Representative decode target-perf:
 
-| Input stream              | Target  | Encoded bytes | Decoded bytes | MoonBit ms | Google ms | Slowdown |
-| ------------------------- | ------- | ------------- | ------------- | ---------- | --------- | -------- |
+| Input stream                | Target  | Encoded bytes | Decoded bytes | MoonBit ms | Google ms | Slowdown |
+| --------------------------- | ------- | ------------- | ------------- | ---------- | --------- | -------- |
 | silesia-1m Google q11 `.br` | wasm-gc | 239,314       | 1,048,576     | 709.926    | 80.475    | 8.82x    |
 | silesia-1m Google q11 `.br` | native  | 239,314       | 1,048,576     | 142.882    | 80.475    | 1.78x    |
 
@@ -883,11 +882,11 @@ bounds failures still fail the run.
 
 Fuzz-runner timing on the current corpus:
 
-| Command | Inputs | Batch size | Result | Wall time |
-| ------- | ------ | ---------- | ------ | --------- |
-| `nu tools/brotli/fuzz/run.nu --limit 25` before batching | 25 | 1 | pass | 54.73s |
-| `nu tools/brotli/fuzz/run.nu --limit 25` after batching | 25 | 25 | pass | 2.19s |
-| `nu tools/brotli/fuzz/run.nu` after batching | 58 | 25 | pass | 7.00s |
+| Command                                                  | Inputs | Batch size | Result | Wall time |
+| -------------------------------------------------------- | ------ | ---------- | ------ | --------- |
+| `nu tools/brotli/fuzz/run.nu --limit 25` before batching | 25     | 1          | pass   | 54.73s    |
+| `nu tools/brotli/fuzz/run.nu --limit 25` after batching  | 25     | 25         | pass   | 2.19s     |
+| `nu tools/brotli/fuzz/run.nu` after batching             | 58     | 25         | pass   | 7.00s     |
 
 The 25-input local gate is 25.0x faster by wall clock, and the full checked-in
 corpus now runs comfortably as a local release gate. This does not replace the
@@ -904,11 +903,11 @@ while allowing release validation to run the same generated fuzz tests on
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
+| Command                                                                | Result     |
+| ---------------------------------------------------------------------- | ---------- |
 | `nu tools/brotli/fuzz/run.nu --limit 2 --batch-size 1 --target native` | 2/2 passed |
-| `nu tools/brotli/fuzz/run.nu --limit 5 --target wasm-gc` | 5/5 passed |
-| `nu tools/brotli/fuzz/run.nu --limit 3 --target all` | 3/3 passed |
+| `nu tools/brotli/fuzz/run.nu --limit 5 --target wasm-gc`               | 5/5 passed |
+| `nu tools/brotli/fuzz/run.nu --limit 3 --target all`                   | 3/3 passed |
 
 This is a release-readiness tooling change only. It does not change Brotli
 encode/decode behavior or the recorded codec target-perf baseline.
@@ -930,11 +929,11 @@ Default release-oriented coverage:
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 2 --qualities 0,2 --target native --batch-size 2` | 4/4 passed |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --target native` | 20/20 passed |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 3 --max-len 256 --qualities 2,11 --target wasm-gc` | 6/6 passed |
+| Command                                                                                       | Result       |
+| --------------------------------------------------------------------------------------------- | ------------ |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 2 --qualities 0,2 --target native --batch-size 2`  | 4/4 passed   |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --target native`                   | 20/20 passed |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 3 --max-len 256 --qualities 2,11 --target wasm-gc` | 6/6 passed   |
 
 This expands release-readiness coverage without changing Brotli encode/decode
 implementation or the recorded codec target-perf baseline.
@@ -948,11 +947,11 @@ removed, and reacquired.
 
 Validation:
 
-| Scenario | Command | Result |
-| -------- | ------- | ------ |
-| Stale lock recovery | create `.harness-lock/pid` with dead PID `999999`, then run `nu tools/brotli/fuzz/run.nu --limit 1 --target native` | 1/1 passed |
-| Active lock protection | create `.harness-lock/pid` from a live `sleep` process, then run `nu tools/brotli/fuzz/run.nu --limit 1 --target native` | rejected with owner PID |
-| Roundtrip harness normal lock path | `nu tools/brotli/fuzz/roundtrip.nu --count 2 --qualities 2,11 --target native --batch-size 2` | 4/4 passed |
+| Scenario                           | Command                                                                                                                  | Result                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
+| Stale lock recovery                | create `.harness-lock/pid` with dead PID `999999`, then run `nu tools/brotli/fuzz/run.nu --limit 1 --target native`      | 1/1 passed              |
+| Active lock protection             | create `.harness-lock/pid` from a live `sleep` process, then run `nu tools/brotli/fuzz/run.nu --limit 1 --target native` | rejected with owner PID |
+| Roundtrip harness normal lock path | `nu tools/brotli/fuzz/roundtrip.nu --count 2 --qualities 2,11 --target native --batch-size 2`                            | 4/4 passed              |
 
 This makes local release validation more robust after intentional interrupts
 without weakening the mutual exclusion around temporary generated MoonBit
@@ -974,9 +973,9 @@ The script runs the same categories currently used for the release checkpoint:
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `nu --ide-check 0 tools/brotli/release/validate.nu` | parsed successfully |
+| Command                                                                                                                                                                            | Result                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `nu --ide-check 0 tools/brotli/release/validate.nu`                                                                                                                                | parsed successfully                                          |
 | `nu tools/brotli/release/validate.nu --skip-moon --skip-ratio --decoder-fuzz-limit 2 --roundtrip-count 1 --roundtrip-max-len 16 --roundtrip-qualities 2 --roundtrip-target native` | conformance, decoder fuzz, and encoder roundtrip fuzz passed |
 
 The release runner intentionally does not call `target-perf.nu` by default.
@@ -1003,11 +1002,11 @@ passed.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `just --list` | lists `brotli-release`, `brotli-release-smoke`, and `brotli-release-package` |
-| `just brotli-release-smoke` | decoder fuzz corpus and encoder roundtrip fuzz passed |
-| `just brotli-release-package` | `moon package` and `moon publish --dry-run` package verification passed |
+| Command                       | Result                                                                       |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| `just --list`                 | lists `brotli-release`, `brotli-release-smoke`, and `brotli-release-package` |
+| `just brotli-release-smoke`   | decoder fuzz corpus and encoder roundtrip fuzz passed                        |
+| `just brotli-release-package` | `moon package` and `moon publish --dry-run` package verification passed      |
 
 This is release-readiness tooling only; it does not change Brotli encode/decode
 behavior or the recorded codec target-perf baseline.
@@ -1028,11 +1027,11 @@ Justfile entries:
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `nu --ide-check 0 tools/brotli/fuzz/soak.nu` | parsed successfully |
-| `just --list` | lists `brotli-fuzz-soak` and `brotli-fuzz-soak-smoke` |
-| `just brotli-fuzz-soak-smoke` | one decoder fuzz iteration and one encoder roundtrip fuzz iteration passed |
+| Command                                      | Result                                                                     |
+| -------------------------------------------- | -------------------------------------------------------------------------- |
+| `nu --ide-check 0 tools/brotli/fuzz/soak.nu` | parsed successfully                                                        |
+| `just --list`                                | lists `brotli-fuzz-soak` and `brotli-fuzz-soak-smoke`                      |
+| `just brotli-fuzz-soak-smoke`                | one decoder fuzz iteration and one encoder roundtrip fuzz iteration passed |
 
 This scripts the long fuzz requirement but does not claim that a 24-hour soak
 has already completed.
@@ -1051,11 +1050,11 @@ and avoiding ad hoc mutable random loops.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `nu --ide-check 0 tools/brotli/fuzz/gen-corpus.nu` | parsed successfully |
-| generate two corpora with `--count 12 --seed 12345` under separate `target/` directories and compare sorted SHA-256 manifests | identical |
-| `nu tools/brotli/fuzz/run.nu --corpus-dir target/brotli-fuzz-determinism-a --target native --batch-size 10` | 20/20 passed |
+| Command                                                                                                                       | Result              |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `nu --ide-check 0 tools/brotli/fuzz/gen-corpus.nu`                                                                            | parsed successfully |
+| generate two corpora with `--count 12 --seed 12345` under separate `target/` directories and compare sorted SHA-256 manifests | identical           |
+| `nu tools/brotli/fuzz/run.nu --corpus-dir target/brotli-fuzz-determinism-a --target native --batch-size 10`                   | 20/20 passed        |
 
 This improves release-validation reproducibility without changing Brotli
 encode/decode behavior or the recorded codec target-perf baseline.
@@ -1079,10 +1078,10 @@ just brotli-release-generated-fuzz
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `nu --ide-check 0 tools/brotli/release/validate.nu` | parsed successfully |
-| `just --list` | lists `brotli-release-generated-fuzz` |
+| Command                                                                                                                                                                                                                   | Result                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `nu --ide-check 0 tools/brotli/release/validate.nu`                                                                                                                                                                       | parsed successfully                                                                  |
+| `just --list`                                                                                                                                                                                                             | lists `brotli-release-generated-fuzz`                                                |
 | `nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-package --generated-fuzz-count 12 --generated-fuzz-seed 12345 --roundtrip-count 1 --roundtrip-max-len 16 --roundtrip-qualities 2` | generated 20 decoder fuzz inputs, decoder fuzz passed, encoder roundtrip fuzz passed |
 
 This wires the reproducible corpus generator into release validation without
@@ -1100,11 +1099,11 @@ just brotli-release-generated-fuzz
 
 Result:
 
-| Step | Result | Elapsed ms |
-| ---- | ------ | ---------- |
-| generate deterministic decoder fuzz corpus | pass | 210.55 |
-| decoder fuzz corpus | pass | 90,822.64 |
-| encoder roundtrip fuzz | pass | 14,357.89 |
+| Step                                       | Result | Elapsed ms |
+| ------------------------------------------ | ------ | ---------- |
+| generate deterministic decoder fuzz corpus | pass   | 210.55     |
+| decoder fuzz corpus                        | pass   | 90,822.64  |
+| encoder roundtrip fuzz                     | pass   | 14,357.89  |
 
 This generated 1,000 deterministic mutations with seed `1`, copied the 8
 checked-in `.br` seed fixtures into `target/brotli-release-fuzz-corpus`, ran
@@ -1125,10 +1124,10 @@ just brotli-fuzz-soak-bounded
 
 Result:
 
-| Phase | Iterations | Result |
-| ----- | ---------- | ------ |
-| decoder fuzz | 3 | pass |
-| encoder roundtrip fuzz | 3 | pass |
+| Phase                  | Iterations | Result |
+| ---------------------- | ---------- | ------ |
+| decoder fuzz           | 3          | pass   |
+| encoder roundtrip fuzz | 3          | pass   |
 
 The soak log contained 6 successful JSONL rows in
 `target/brotli-fuzz-soak/soak.jsonl`, and no temporary harness lock or
@@ -1155,10 +1154,10 @@ validated without rerunning the full ratio matrix.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `just brotli-release-candidate-smoke` | release smoke, generated-corpus smoke, and soak smoke passed |
-| `just brotli-release-candidate` | full practical gate, generated deterministic corpus gate, and bounded full-corpus soak passed |
+| Command                               | Result                                                                                        |
+| ------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `just brotli-release-candidate-smoke` | release smoke, generated-corpus smoke, and soak smoke passed                                  |
+| `just brotli-release-candidate`       | full practical gate, generated deterministic corpus gate, and bounded full-corpus soak passed |
 
 The full candidate run passed the q2..q9 2 MiB ratio/decode matrix, q10/q11
 ratio-exception decode, package verification, 1,000-mutation generated decoder
@@ -1201,10 +1200,10 @@ unchanged by this encoder-only change: wasm-gc 70.856 ms/op and native
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes versus Google 35,624/35,164 |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
+| Command                                                                                          | Result                                                                                                       |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json`   | q10/q11 remain 38,713 bytes versus Google 35,624/35,164                                                      |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native`    | 8/8 encoder roundtrips passed                                                                                |
 | `moon fmt && moon check --target all && moon test --target all && moon info && git diff --check` | all-target check passed; 469 tests passed on wasm, wasm-gc, js, and native; generated interface check passed |
 
 ## 2026-05-30 — Large Single-Copy Periodic Fast Path
@@ -1255,11 +1254,11 @@ Silesia 128 KiB spot checks after the change:
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `moon test --target native --filter '*large 256-byte periodic*'` | passed; covers >64 KiB periodic q2/q9 roundtrip and compact output |
+| Command                                                                                                             | Result                                                                  |
+| ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `moon test --target native --filter '*large 256-byte periodic*'`                                                    | passed; covers >64 KiB periodic q2/q9 roundtrip and compact output      |
 | `nu tools/brotli/bench/ratio.nu target/brotli-encode/periodic-allbytes-200k.bin --qualities 2,3,4,5,6,7,8,9 --json` | q2 improves from 350 to 301 bytes; q3..q9 improve from 350 to 272 bytes |
-| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 2,5,9 --json` | q2/q5/q9 Silesia sizes unchanged |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 2,5,9 --json`                      | q2/q5/q9 Silesia sizes unchanged                                        |
 
 ## 2026-05-29 — q10/q11 Bounded Shortest-Path Seed
 
@@ -1276,12 +1275,12 @@ exception in place.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `moon test --target native --filter '*bounded shortest-path*'` | passed; the bounded candidate writes a decodable final meta-block and q10 public roundtrip passes |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
+| Command                                                                                        | Result                                                                                                                   |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `moon test --target native --filter '*bounded shortest-path*'`                                 | passed; the bounded candidate writes a decodable final meta-block and q10 public roundtrip passes                        |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native`  | 8/8 encoder roundtrips passed                                                                                            |
 | `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged |
-| `moon check --target all && moon test --target all` | all-target check passed; 461 tests passed on wasm, wasm-gc, js, and native |
+| `moon check --target all && moon test --target all`                                            | all-target check passed; 461 tests passed on wasm, wasm-gc, js, and native                                               |
 
 `target-perf.nu` was not rerun for this increment per the latest maintainer
 instruction; the 128 KiB Silesia sample is larger than the 32 KiB candidate
@@ -1301,12 +1300,12 @@ suffix-tree/Zopfli backend.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `moon test --target native --filter '*bounded shortest-path*'` | passed; 2/2 tests cover bounded command roundtrip and multiple previous-match enumeration |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
+| Command                                                                                        | Result                                                                                                                   |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `moon test --target native --filter '*bounded shortest-path*'`                                 | passed; 2/2 tests cover bounded command roundtrip and multiple previous-match enumeration                                |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native`  | 8/8 encoder roundtrips passed                                                                                            |
 | `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged |
-| `moon check --target all` | passed |
+| `moon check --target all`                                                                      | passed                                                                                                                   |
 
 `target-perf.nu` was not rerun for this increment per maintainer instruction.
 
@@ -1324,11 +1323,11 @@ costing before it can win chunk selection.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `moon test --target native --filter '*bounded shortest-path*'` | passed; 3/3 tests cover bounded command roundtrip, multiple previous-match enumeration, and recent-distance copy-cost modeling |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
-| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged |
+| Command                                                                                        | Result                                                                                                                         |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `moon test --target native --filter '*bounded shortest-path*'`                                 | passed; 3/3 tests cover bounded command roundtrip, multiple previous-match enumeration, and recent-distance copy-cost modeling |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native`  | 8/8 encoder roundtrips passed                                                                                                  |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged       |
 
 `target-perf.nu` was not rerun for this increment per maintainer instruction.
 
@@ -1347,11 +1346,11 @@ slightly more expensive path with a better recent-distance cache.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `moon test --target native --filter '*bounded shortest-path*'` | passed; 4/4 tests cover bounded command roundtrip, multiple previous-match enumeration, recent-distance copy-cost modeling, and two-state beam retention |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
-| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged |
+| Command                                                                                        | Result                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `moon test --target native --filter '*bounded shortest-path*'`                                 | passed; 4/4 tests cover bounded command roundtrip, multiple previous-match enumeration, recent-distance copy-cost modeling, and two-state beam retention |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native`  | 8/8 encoder roundtrips passed                                                                                                                            |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged                                 |
 
 `target-perf.nu` was not rerun for this increment per maintainer instruction.
 
@@ -1369,11 +1368,11 @@ This remains a bounded seed, not the full suffix-tree/Zopfli backend.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `moon test --target native --filter '*bounded shortest-path*'` | passed; 5/5 tests cover bounded command roundtrip, multiple-match enumeration, recent-distance costs, cost-model histograms, and two-state beam retention |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
-| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged |
+| Command                                                                                        | Result                                                                                                                                                    |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `moon test --target native --filter '*bounded shortest-path*'`                                 | passed; 5/5 tests cover bounded command roundtrip, multiple-match enumeration, recent-distance costs, cost-model histograms, and two-state beam retention |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native`  | 8/8 encoder roundtrips passed                                                                                                                             |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged                                  |
 
 `target-perf.nu` was not rerun for this increment per maintainer instruction.
 
@@ -1388,11 +1387,11 @@ through exact meta-block costing before selection.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `moon test --target native --filter '*bounded*'` | passed; 6/6 tests cover bounded command roundtrip, hash-chain multi-match enumeration, suffix-tree match enumeration, recent-distance costs, cost-model histograms, and beam retention |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
-| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged |
+| Command                                                                                        | Result                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `moon test --target native --filter '*bounded*'`                                               | passed; 6/6 tests cover bounded command roundtrip, hash-chain multi-match enumeration, suffix-tree match enumeration, recent-distance costs, cost-model histograms, and beam retention |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native`  | 8/8 encoder roundtrips passed                                                                                                                                                          |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged                                                               |
 
 `target-perf.nu` was not rerun for this increment per maintainer instruction.
 
@@ -1407,11 +1406,11 @@ unchanged.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `moon test --target native --filter '*bounded*'` | passed; 6/6 tests cover bounded command roundtrip, hash-chain multi-match enumeration, suffix-tree match enumeration, recent-distance costs, cost-model histograms, and beam retention |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
-| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged |
+| Command                                                                                        | Result                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `moon test --target native --filter '*bounded*'`                                               | passed; 6/6 tests cover bounded command roundtrip, hash-chain multi-match enumeration, suffix-tree match enumeration, recent-distance costs, cost-model histograms, and beam retention |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native`  | 8/8 encoder roundtrips passed                                                                                                                                                          |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes; Google q10/q11 are 35,624/35,164 bytes, keeping the documented P4 ratio exception unchanged                                                               |
 
 `target-perf.nu` was not rerun for this behavior-preserving cleanup per
 maintainer instruction.
@@ -1429,14 +1428,14 @@ block layout rather than only literal block or literal context layout.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `moon test --target native --filter 'brotli_sync splits LZ77 command blocks by command histograms'` | passed; synthetic command-skew candidate beats the weighted single-command-tree writer and round-trips through `unbrotli_sync` |
-| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json` | q5 40,328 bytes vs Google 40,515 (-0.46%); q9 39,081 bytes vs Google 39,695 (-1.55%) |
-| `nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin --mode encode --quality 5 --targets wasm-gc,native --repeats 3 --samples 3 --json` | q5 output 22,336 bytes vs Google 22,271; wasm-gc/native min encode 81.122/52.656 ms |
-| `nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin --mode encode --quality 9 --targets wasm-gc,native --repeats 3 --samples 3 --json` | q9 output 21,514 bytes vs Google 22,063; wasm-gc/native min encode 77.966/45.555 ms |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native` | 12/12 encoder roundtrips passed |
-| `moon check --target all && moon test --target all && moon info` | all-target check passed; 459 tests passed on wasm, wasm-gc, js, and native; public interface generation unchanged |
+| Command                                                                                                                                                      | Result                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `moon test --target native --filter 'brotli_sync splits LZ77 command blocks by command histograms'`                                                          | passed; synthetic command-skew candidate beats the weighted single-command-tree writer and round-trips through `unbrotli_sync` |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json`                                                                 | q5 40,328 bytes vs Google 40,515 (-0.46%); q9 39,081 bytes vs Google 39,695 (-1.55%)                                           |
+| `nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin --mode encode --quality 5 --targets wasm-gc,native --repeats 3 --samples 3 --json` | q5 output 22,336 bytes vs Google 22,271; wasm-gc/native min encode 81.122/52.656 ms                                            |
+| `nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin --mode encode --quality 9 --targets wasm-gc,native --repeats 3 --samples 3 --json` | q9 output 21,514 bytes vs Google 22,063; wasm-gc/native min encode 77.966/45.555 ms                                            |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native`                                                                | 12/12 encoder roundtrips passed                                                                                                |
+| `moon check --target all && moon test --target all && moon info`                                                                                             | all-target check passed; 459 tests passed on wasm, wasm-gc, js, and native; public interface generation unchanged              |
 
 The Silesia 64 KiB and 128 KiB outputs are unchanged for the measured q5/q9
 samples; the accepted value is structural coverage for command-block histogram
@@ -1454,14 +1453,14 @@ overhead guard used by the command-block split.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `moon test --target native --filter 'brotli_sync splits LZ77 distance blocks by distance histograms'` | passed; synthetic distance-skew candidate beats the weighted single-distance-tree writer and round-trips through `unbrotli_sync` |
-| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json` | q5 40,328 bytes vs Google 40,515 (-0.46%); q9 39,081 bytes vs Google 39,695 (-1.55%) |
-| `nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin --mode encode --quality 5 --targets wasm-gc,native --repeats 3 --samples 3 --json` | q5 output 22,336 bytes vs Google 22,271; wasm-gc/native min encode 82.182/53.730 ms |
-| `nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin --mode encode --quality 9 --targets wasm-gc,native --repeats 3 --samples 3 --json` | q9 output 21,514 bytes vs Google 22,063; wasm-gc/native min encode 79.780/47.608 ms |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native` | 12/12 encoder roundtrips passed |
-| `moon check --target all && moon test --target all && moon info` | all-target check passed; 460 tests passed on wasm, wasm-gc, js, and native; public interface generation unchanged |
+| Command                                                                                                                                                      | Result                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `moon test --target native --filter 'brotli_sync splits LZ77 distance blocks by distance histograms'`                                                        | passed; synthetic distance-skew candidate beats the weighted single-distance-tree writer and round-trips through `unbrotli_sync` |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json`                                                                 | q5 40,328 bytes vs Google 40,515 (-0.46%); q9 39,081 bytes vs Google 39,695 (-1.55%)                                             |
+| `nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin --mode encode --quality 5 --targets wasm-gc,native --repeats 3 --samples 3 --json` | q5 output 22,336 bytes vs Google 22,271; wasm-gc/native min encode 82.182/53.730 ms                                              |
+| `nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin --mode encode --quality 9 --targets wasm-gc,native --repeats 3 --samples 3 --json` | q9 output 21,514 bytes vs Google 22,063; wasm-gc/native min encode 79.780/47.608 ms                                              |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native`                                                                | 12/12 encoder roundtrips passed                                                                                                  |
+| `moon check --target all && moon test --target all && moon info`                                                                                             | all-target check passed; 460 tests passed on wasm, wasm-gc, js, and native; public interface generation unchanged                |
 
 The measured Silesia q5/q9 outputs remain unchanged; this increment extends P3
 block clustering to the distance tree dimension with bounded extra search cost.
@@ -1478,11 +1477,11 @@ distance-only split candidates.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `moon test --target native --filter '*splits LZ77*blocks*'` | passed; 4/4 tests cover literal, command, distance, and combined command+distance block split writers |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native` | 12/12 encoder roundtrips passed |
-| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json` | q5 remains 40,328 bytes versus Google 40,515; q9 remains 39,081 bytes versus Google 39,695 |
+| Command                                                                                       | Result                                                                                                |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `moon test --target native --filter '*splits LZ77*blocks*'`                                   | passed; 4/4 tests cover literal, command, distance, and combined command+distance block split writers |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native` | 12/12 encoder roundtrips passed                                                                       |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json`  | q5 remains 40,328 bytes versus Google 40,515; q9 remains 39,081 bytes versus Google 39,695            |
 
 `target-perf.nu` was not rerun for this structural block-layout increment per
 maintainer instruction.
@@ -1499,11 +1498,11 @@ literal/command/distance joint split or the rejected three-literal-block trial.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `moon test --target native --filter '*splits LZ77*blocks*'` | passed; 5/5 tests cover literal, command, distance, literal+command, and command+distance block split writers |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native` | 12/12 encoder roundtrips passed |
-| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json` | q5 remains 40,328 bytes versus Google 40,515; q9 remains 39,081 bytes versus Google 39,695 |
+| Command                                                                                       | Result                                                                                                        |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `moon test --target native --filter '*splits LZ77*blocks*'`                                   | passed; 5/5 tests cover literal, command, distance, literal+command, and command+distance block split writers |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native` | 12/12 encoder roundtrips passed                                                                               |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json`  | q5 remains 40,328 bytes versus Google 40,515; q9 remains 39,081 bytes versus Google 39,695                    |
 
 `target-perf.nu` was not rerun for this structural block-layout increment per
 maintainer instruction.
@@ -1520,11 +1519,11 @@ still avoiding the rejected three-stream joint split.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `moon test --target native --filter '*splits LZ77*blocks*'` | passed; 6/6 tests cover literal, command, distance, literal+command, literal+distance, and command+distance block split writers |
-| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native` | 12/12 encoder roundtrips passed |
-| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json` | q5 remains 40,328 bytes versus Google 40,515; q9 remains 39,081 bytes versus Google 39,695 |
+| Command                                                                                       | Result                                                                                                                          |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `moon test --target native --filter '*splits LZ77*blocks*'`                                   | passed; 6/6 tests cover literal, command, distance, literal+command, literal+distance, and command+distance block split writers |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 4,5,9 --target native` | 12/12 encoder roundtrips passed                                                                                                 |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 5,9 --json`  | q5 remains 40,328 bytes versus Google 40,515; q9 remains 39,081 bytes versus Google 39,695                                      |
 
 `target-perf.nu` was not rerun for this structural block-layout increment per
 maintainer instruction.
@@ -1545,11 +1544,11 @@ without weakening the default local-validation behavior.
 
 Validation:
 
-| Command | Result |
-| ------- | ------ |
-| `nu --ide-check 0 tools/brotli/fuzz/soak.nu` | parsed successfully |
-| `nu tools/brotli/fuzz/soak.nu --log target/brotli-fuzz-soak-append-test/soak.jsonl --duration-min 0 --max-iterations 1 --decoder-limit 1 --roundtrip-count 1 --roundtrip-max-len 8 --roundtrip-qualities 2` | clean run wrote two iteration-1 rows |
-| same command with `--append-log --max-iterations 2` | appended two iteration-2 rows, leaving four total rows |
+| Command                                                                                                                                                                                                     | Result                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `nu --ide-check 0 tools/brotli/fuzz/soak.nu`                                                                                                                                                                | parsed successfully                                    |
+| `nu tools/brotli/fuzz/soak.nu --log target/brotli-fuzz-soak-append-test/soak.jsonl --duration-min 0 --max-iterations 1 --decoder-limit 1 --roundtrip-count 1 --roundtrip-max-len 8 --roundtrip-qualities 2` | clean run wrote two iteration-1 rows                   |
+| same command with `--append-log --max-iterations 2`                                                                                                                                                         | appended two iteration-2 rows, leaving four total rows |
 
 This is release-validation tooling only; it does not change Brotli
 encode/decode behavior or the recorded codec target-perf baseline.
