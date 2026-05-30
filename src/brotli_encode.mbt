@@ -5612,21 +5612,13 @@ fn brotli_try_compressed_chunk(
           initial_previous_byte_1,
           initial_previous_byte_2,
         )
-        let mixed_commands = brotli_build_mixed_dictionary_lz77_commands(
-          data, hq_config, base_offset, window_bits,
+        let mixed_candidate = brotli_build_mixed_dictionary_lz77_command_candidate(
+          data, hq_config, base_offset, window_bits, distance_cache,
         )
-        match mixed_commands {
+        match mixed_candidate {
           Some(_) =>
             return brotli_try_compressed_command_candidate(
-              data,
-              brotli_build_mixed_dictionary_lz77_command_candidate(
-                data, hq_config, base_offset, window_bits, distance_cache,
-              ),
-              is_last,
-              best,
-              quality,
-              allow_contexts,
-              initial_previous_byte_1,
+              data, mixed_candidate, is_last, best, quality, allow_contexts, initial_previous_byte_1,
               initial_previous_byte_2,
             )
           None =>

@@ -3268,6 +3268,45 @@ soak log contained 6 successful rows and left no temporary harness files.
 This is release-validation tooling only; it does not change Brotli
 encode/decode behavior or the recorded codec target-perf baseline.
 
+## 2026-05-30 — q10/q11 Chunked Mixed-Candidate Dedup
+
+The chunked q10/q11 path no longer builds the mixed static-dictionary LZ77
+command stream twice. Previously it first built a default-cache command list
+only to test whether mixed dictionary work might apply, then rebuilt the same
+candidate with the real carried distance cache. The encoder now builds the
+real `BrotliCommandCandidate` once and exact-costs that candidate directly.
+
+This is an encode-performance change for q10/q11 chunks larger than 64 KiB.
+It does not change the measured output stream on the 128 KiB Silesia sample.
+
+128 KiB q10/q11 ratio:
+
+| Quality | MoonBit bytes | Google bytes | Overhead |
+| ------- | ------------- | ------------ | -------- |
+| q10     | 38,713        | 35,624       | +8.67%   |
+| q11     | 38,713        | 35,164       | +10.09%  |
+
+128 KiB encode target-perf, before -> after:
+
+| Quality | Target  | Before ms/op | After ms/op | MoonBit bytes |
+| ------- | ------- | ------------ | ----------- | ------------- |
+| q10     | wasm-gc | 217.776      | 172.439     | 38,713        |
+| q10     | native  | 456.867      | 295.990     | 38,713        |
+| q11     | wasm-gc | 225.682      | 169.021     | 38,713        |
+| q11     | native  | 454.461      | 314.528     | 38,713        |
+
+Representative decode target-perf on the Google q11 128 KiB stream is
+unchanged by this encoder-only change: wasm-gc 70.856 ms/op and native
+`cc-o0` 79.969 ms/op, both versus Google 44.710 ms/op.
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 10,11 --json` | q10/q11 remain 38,713 bytes versus Google 35,624/35,164 |
+| `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
+| `moon fmt && moon check --target all && moon test --target all && moon info && git diff --check` | all-target check passed; 469 tests passed on wasm, wasm-gc, js, and native; generated interface check passed |
+
 ## 2026-05-29 — q10/q11 Bounded Shortest-Path Seed
 
 The q10/q11 encoder now tries a small-input bounded shortest-path command
