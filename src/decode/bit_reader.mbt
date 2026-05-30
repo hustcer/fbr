@@ -28,6 +28,20 @@ fn BrotliBitReader::refill_to(
   self : BrotliBitReader,
   n : Int,
 ) -> Unit raise @common.FbrError {
+  if self.bits_avail >= n {
+    return
+  }
+  if self.bits_avail == 0 && self.byte_pos + 3 < self.byte_end {
+    let p = self.byte_pos
+    let buf = self.buf
+    self.bit_buf = buf[p].to_uint() |
+      (buf[p + 1].to_uint() << 8) |
+      (buf[p + 2].to_uint() << 16) |
+      (buf[p + 3].to_uint() << 24)
+    self.byte_pos = p + 4
+    self.bits_avail = 32
+    return
+  }
   // Fast path: when at least one byte of room remains in the accumulator
   // (bits_avail <= 24) and at least 3 bytes of input are available, fill
   // three bytes at once. Branch-free, no EOF check needed for the fast

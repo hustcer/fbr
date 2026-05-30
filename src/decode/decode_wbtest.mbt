@@ -184,6 +184,14 @@ test "BrotliBitReader reads and aligns LSB-first bits" {
 }
 
 ///|
+test "BrotliBitReader zero-width read does not prefetch" {
+  let reader = BrotliBitReader::new([0x01, 0x02, 0x03, 0x04], 0, 4)
+  inspect(reader.take_bits(0), content="0")
+  inspect(reader.byte_pos, content="0")
+  inspect(reader.bits_avail, content="0")
+}
+
+///|
 test "BrotliBitReader align_to_byte rejects non-zero padding" {
   let reader = BrotliBitReader::new([0x09], 0, 1)
   inspect(reader.take_bits(1), content="1")
