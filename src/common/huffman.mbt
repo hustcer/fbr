@@ -1,19 +1,31 @@
 ///|
-/// One decoded Brotli Huffman table entry.
-pub(all) struct BrotliHuffmanCode {
-  bits : Int
-  value : Int
+/// A decoded Brotli Huffman table entry, packed into a single `Int`.
+///
+/// Tables are stored as `FixedArray[Int]` rather than `FixedArray` of a boxed
+/// struct so each lookup is one contiguous load instead of a pointer
+/// dereference plus two field loads. The low 16 bits hold the code length as a
+/// signed value (`-1` marks an unfilled entry); the high 16 bits hold the
+/// symbol or sub-table offset. Code lengths fit in a few bits and values stay
+/// well under 2^15, so the layout is lossless for every table Brotli builds.
+pub fn brotli_huffman_code(bits : Int, value : Int) -> Int {
+  (value << 16) | (bits & 0xffff)
 }
 
 ///|
-pub fn BrotliHuffmanCode::empty() -> BrotliHuffmanCode {
-  { bits: -1, value: 0 }
+/// Extract the code length from a packed Huffman entry (sign-extended).
+pub fn brotli_huffman_code_bits(code : Int) -> Int {
+  code << 16 >> 16
 }
 
 ///|
-pub fn BrotliHuffmanCode::new(bits : Int, value : Int) -> BrotliHuffmanCode {
-  { bits, value }
+/// Extract the symbol / sub-table offset from a packed Huffman entry.
+pub fn brotli_huffman_code_value(code : Int) -> Int {
+  code >> 16
 }
+
+///|
+/// Packed value for an unfilled Huffman table entry (`bits = -1`).
+pub let brotli_huffman_code_empty : Int = brotli_huffman_code(-1, 0)
 
 ///|
 pub fn brotli_reverse_bits(code : Int, len : Int) -> Int {
@@ -59,7 +71,7 @@ pub fn brotli_build_huffman_table(
   code_lengths : FixedArray[Byte],
   alphabet_size : Int,
   root_bits : Int,
-) -> FixedArray[BrotliHuffmanCode] raise FbrError {
+) -> FixedArray[Int] raise FbrError {
   if alphabet_size < 1 || alphabet_size > code_lengths.length() {
     raise fbr_err(BrotliInvalidHuffman, msg="invalid Huffman alphabet size")
   }
@@ -82,9 +94,9 @@ pub fn brotli_build_huffman_table(
   }
   brotli_validate_huffman_lengths(count, nonzero)
   let table_size = 1 << root_bits
-  let table = FixedArray::make(table_size, BrotliHuffmanCode::empty())
   if nonzero == 1 {
-    let code = BrotliHuffmanCode::new(0, single_symbol)
+    let table = FixedArray::make(table_size, brotli_huffman_code_empty)
+    let code = brotli_huffman_code(0, single_symbol)
     for i in 0..<table_size {
       table[i] = code
     }
@@ -126,10 +138,10 @@ pub fn brotli_build_huffman_table(
       msg="Brotli Huffman table exceeds arena limit",
     )
   }
-  let table = FixedArray::make(total_size, BrotliHuffmanCode::empty())
+  let table = FixedArray::make(total_size, brotli_huffman_code_empty)
   for root in 0..<table_size {
     if sub_bits_by_root[root] > 0 {
-      table[root] = BrotliHuffmanCode::new(
+      table[root] = brotli_huffman_code(
         root_bits + sub_bits_by_root[root],
         sub_offsets[root],
       )
@@ -148,7 +160,7 @@ pub fn brotli_build_huffman_table(
     if len != 0 {
       let reversed = brotli_reverse_bits(next_code[len], len)
       next_code[len] += 1
-      let entry = BrotliHuffmanCode::new(len, symbol)
+      let entry = brotli_huffman_code(len, symbol)
       if len <= root_bits {
         let step = 1 << len
         let mut index = reversed
@@ -163,7 +175,7 @@ pub fn brotli_build_huffman_table(
         let sub_offset = sub_offsets[root]
         let sub_index = reversed >> root_bits
         let sub_step = 1 << (len - root_bits)
-        let sub_entry = BrotliHuffmanCode::new(len - root_bits, symbol)
+        let sub_entry = brotli_huffman_code(len - root_bits, symbol)
         let mut index = sub_index
         while index < sub_size {
           table[sub_offset + index] = sub_entry
@@ -180,33 +192,33 @@ pub fn brotli_build_simple_huffman_table(
   symbols : FixedArray[Int],
   num_symbols_code : Int,
   root_bits : Int,
-) -> FixedArray[BrotliHuffmanCode] raise FbrError {
+) -> FixedArray[Int] raise FbrError {
   let table_size = 1 << root_bits
-  let table = FixedArray::make(table_size, BrotliHuffmanCode::empty())
+  let table = FixedArray::make(table_size, brotli_huffman_code_empty)
   let base_size = match num_symbols_code {
     0 => {
-      table[0] = BrotliHuffmanCode::new(0, symbols[0])
+      table[0] = brotli_huffman_code(0, symbols[0])
       1
     }
     1 => {
       if symbols[1] > symbols[0] {
-        table[0] = BrotliHuffmanCode::new(1, symbols[0])
-        table[1] = BrotliHuffmanCode::new(1, symbols[1])
+        table[0] = brotli_huffman_code(1, symbols[0])
+        table[1] = brotli_huffman_code(1, symbols[1])
       } else {
-        table[0] = BrotliHuffmanCode::new(1, symbols[1])
-        table[1] = BrotliHuffmanCode::new(1, symbols[0])
+        table[0] = brotli_huffman_code(1, symbols[1])
+        table[1] = brotli_huffman_code(1, symbols[0])
       }
       2
     }
     2 => {
-      table[0] = BrotliHuffmanCode::new(1, symbols[0])
-      table[2] = BrotliHuffmanCode::new(1, symbols[0])
+      table[0] = brotli_huffman_code(1, symbols[0])
+      table[2] = brotli_huffman_code(1, symbols[0])
       if symbols[2] > symbols[1] {
-        table[1] = BrotliHuffmanCode::new(2, symbols[1])
-        table[3] = BrotliHuffmanCode::new(2, symbols[2])
+        table[1] = brotli_huffman_code(2, symbols[1])
+        table[3] = brotli_huffman_code(2, symbols[2])
       } else {
-        table[1] = BrotliHuffmanCode::new(2, symbols[2])
-        table[3] = BrotliHuffmanCode::new(2, symbols[1])
+        table[1] = brotli_huffman_code(2, symbols[2])
+        table[3] = brotli_huffman_code(2, symbols[1])
       }
       4
     }
@@ -224,10 +236,10 @@ pub fn brotli_build_simple_huffman_table(
           }
         }
       }
-      table[0] = BrotliHuffmanCode::new(2, vals[0])
-      table[2] = BrotliHuffmanCode::new(2, vals[1])
-      table[1] = BrotliHuffmanCode::new(2, vals[2])
-      table[3] = BrotliHuffmanCode::new(2, vals[3])
+      table[0] = brotli_huffman_code(2, vals[0])
+      table[2] = brotli_huffman_code(2, vals[1])
+      table[1] = brotli_huffman_code(2, vals[2])
+      table[3] = brotli_huffman_code(2, vals[3])
       4
     }
     4 => {
@@ -240,14 +252,14 @@ pub fn brotli_build_simple_huffman_table(
         vals[3] = vals[2]
         vals[2] = t
       }
-      table[0] = BrotliHuffmanCode::new(1, vals[0])
-      table[1] = BrotliHuffmanCode::new(2, vals[1])
-      table[2] = BrotliHuffmanCode::new(1, vals[0])
-      table[3] = BrotliHuffmanCode::new(3, vals[2])
-      table[4] = BrotliHuffmanCode::new(1, vals[0])
-      table[5] = BrotliHuffmanCode::new(2, vals[1])
-      table[6] = BrotliHuffmanCode::new(1, vals[0])
-      table[7] = BrotliHuffmanCode::new(3, vals[3])
+      table[0] = brotli_huffman_code(1, vals[0])
+      table[1] = brotli_huffman_code(2, vals[1])
+      table[2] = brotli_huffman_code(1, vals[0])
+      table[3] = brotli_huffman_code(3, vals[2])
+      table[4] = brotli_huffman_code(1, vals[0])
+      table[5] = brotli_huffman_code(2, vals[1])
+      table[6] = brotli_huffman_code(1, vals[0])
+      table[7] = brotli_huffman_code(3, vals[3])
       8
     }
     _ => raise fbr_err(BrotliInvalidHuffman, msg="invalid simple Huffman size")

@@ -814,13 +814,14 @@ fn brotli_simple_huffman_payload(
   )
   for index in 0..<(1 << @common.brotli_huffman_table_bits) {
     let entry = table[index]
-    if entry.value == target {
-      let mask = if entry.bits == 0 { 0 } else { (1 << entry.bits) - 1 }
+    let entry_bits = @common.brotli_huffman_code_bits(entry)
+    if @common.brotli_huffman_code_value(entry) == target {
+      let mask = if entry_bits == 0 { 0 } else { (1 << entry_bits) - 1 }
       return {
         symbol: target,
         insert_extra: index & mask,
         copy_extra: 0,
-        insert_extra_bits: entry.bits,
+        insert_extra_bits: entry_bits,
         copy_extra_bits: 0,
       }
     }

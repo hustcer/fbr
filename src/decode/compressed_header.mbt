@@ -1,8 +1,8 @@
 ///|
 priv struct BrotliBlockSwitchHeader {
   num_types : Int
-  type_tree : FixedArray[@common.BrotliHuffmanCode]?
-  length_tree : FixedArray[@common.BrotliHuffmanCode]?
+  type_tree : FixedArray[Int]?
+  length_tree : FixedArray[Int]?
   first_length : Int
 }
 

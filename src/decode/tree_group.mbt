@@ -1,13 +1,13 @@
 ///|
 priv struct BrotliHuffmanTreeGroup {
-  trees : Array[FixedArray[@common.BrotliHuffmanCode]]
+  trees : Array[FixedArray[Int]]
 }
 
 ///|
 fn BrotliHuffmanTreeGroup::tree(
   self : BrotliHuffmanTreeGroup,
   index : Int,
-) -> FixedArray[@common.BrotliHuffmanCode] raise @common.FbrError {
+) -> FixedArray[Int] raise @common.FbrError {
   if index < 0 || index >= self.trees.length() {
     raise @common.fbr_err(
       @common.BrotliInvalidHuffman,
@@ -37,7 +37,7 @@ fn brotli_read_huffman_tree_group(
       msg="invalid Brotli Huffman tree group alphabet",
     )
   }
-  let trees : Array[FixedArray[@common.BrotliHuffmanCode]] = []
+  let trees : Array[FixedArray[Int]] = []
   for _ in 0..<num_trees {
     trees.push(
       brotli_read_huffman_code(

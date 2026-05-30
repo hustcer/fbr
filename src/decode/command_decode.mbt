@@ -9,7 +9,7 @@ priv struct BrotliCommand {
 ///|
 fn brotli_read_command(
   reader : BrotliBitReader,
-  command_tree : FixedArray[@common.BrotliHuffmanCode],
+  command_tree : FixedArray[Int],
 ) -> BrotliCommand raise @common.FbrError {
   let symbol = brotli_read_symbol(
     reader, command_tree, @common.brotli_huffman_table_bits,

@@ -65,9 +65,26 @@ test "brotli distance formula decodes direct and postfix distances" {
 }
 
 ///|
+test "brotli_huffman_code packs bits and value losslessly" {
+  // Round-trip a spread of (bits, value) pairs spanning the ranges Brotli
+  // builds: code lengths 0..15 and values up to the largest sub-table offset.
+  for bits in [0, 1, 8, 15] {
+    for value in [0, 1, 65, 255, 704, 2080] {
+      let code = brotli_huffman_code(bits, value)
+      assert_eq(brotli_huffman_code_bits(code), bits)
+      assert_eq(brotli_huffman_code_value(code), value)
+    }
+  }
+  // The empty sentinel carries a negative length so callers can detect
+  // unfilled entries.
+  assert_eq(brotli_huffman_code_bits(brotli_huffman_code_empty), -1)
+  assert_eq(brotli_huffman_code_value(brotli_huffman_code_empty), 0)
+}
+
+///|
 test "brotli_build_huffman_table rejects malformed length sets" {
   let empty : FixedArray[Byte] = [0, 0, 0, 0]
-  let empty_result : Result[FixedArray[BrotliHuffmanCode], FbrError] = try? brotli_build_huffman_table(
+  let empty_result : Result[FixedArray[Int], FbrError] = try? brotli_build_huffman_table(
     empty, 4, 3,
   )
   guard empty_result is Err(FbrError(code=empty_code, ..)) else {
@@ -76,7 +93,7 @@ test "brotli_build_huffman_table rejects malformed length sets" {
   assert_eq(empty_code, BrotliInvalidHuffman)
 
   let over : FixedArray[Byte] = [1, 1, 1]
-  let over_result : Result[FixedArray[BrotliHuffmanCode], FbrError] = try? brotli_build_huffman_table(
+  let over_result : Result[FixedArray[Int], FbrError] = try? brotli_build_huffman_table(
     over, 3, 3,
   )
   guard over_result is Err(FbrError(code=over_code, ..)) else {
@@ -85,7 +102,7 @@ test "brotli_build_huffman_table rejects malformed length sets" {
   assert_eq(over_code, BrotliInvalidHuffman)
 
   let under : FixedArray[Byte] = [2, 2, 0, 0]
-  let under_result : Result[FixedArray[BrotliHuffmanCode], FbrError] = try? brotli_build_huffman_table(
+  let under_result : Result[FixedArray[Int], FbrError] = try? brotli_build_huffman_table(
     under, 4, 3,
   )
   guard under_result is Err(FbrError(code=under_code, ..)) else {

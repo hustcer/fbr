@@ -5,9 +5,6 @@ type FbrErrorCode = @common.FbrErrorCode
 type FbrError = @common.FbrError
 
 ///|
-type BrotliHuffmanCode = @common.BrotliHuffmanCode
-
-///|
 type BrotliDistanceRing = @common.BrotliDistanceRing
 
 ///|
@@ -52,7 +49,7 @@ fn brotli_build_huffman_table(
   lengths : FixedArray[Byte],
   alphabet_size : Int,
   root_bits : Int,
-) -> FixedArray[BrotliHuffmanCode] raise FbrError {
+) -> FixedArray[Int] raise FbrError {
   @common.brotli_build_huffman_table(lengths, alphabet_size, root_bits)
 }
 

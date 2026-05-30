@@ -16,9 +16,9 @@ pub let brotli_block_size_cap : Int
 
 pub fn brotli_build_command_info(Int) -> BrotliCommandInfo
 
-pub fn brotli_build_huffman_table(FixedArray[Byte], Int, Int) -> FixedArray[BrotliHuffmanCode] raise FbrError
+pub fn brotli_build_huffman_table(FixedArray[Byte], Int, Int) -> FixedArray[Int] raise FbrError
 
-pub fn brotli_build_simple_huffman_table(FixedArray[Int], Int, Int) -> FixedArray[BrotliHuffmanCode] raise FbrError
+pub fn brotli_build_simple_huffman_table(FixedArray[Int], Int, Int) -> FixedArray[Int] raise FbrError
 
 pub let brotli_code_length_code_order : FixedArray[Int]
 
@@ -53,6 +53,14 @@ pub fn brotli_distance_extra_bits(Int, Int, Int) -> Int raise FbrError
 pub fn brotli_distance_offset(Int, Int, Int) -> Int raise FbrError
 
 pub fn brotli_distance_ring_slot(Int) -> Int
+
+pub fn brotli_huffman_code(Int, Int) -> Int
+
+pub fn brotli_huffman_code_bits(Int) -> Int
+
+pub let brotli_huffman_code_empty : Int
+
+pub fn brotli_huffman_code_value(Int) -> Int
 
 pub let brotli_huffman_max_code_length : Int
 
@@ -192,13 +200,6 @@ pub fn BrotliDistanceRing::compensate_dictionary_copy(Self) -> Unit
 pub fn BrotliDistanceRing::new() -> Self
 pub fn BrotliDistanceRing::record(Self, Int) -> Unit raise FbrError
 pub fn BrotliDistanceRing::take_short_code(Self, Int) -> Int raise FbrError
-
-pub(all) struct BrotliHuffmanCode {
-  bits : Int
-  value : Int
-}
-pub fn BrotliHuffmanCode::empty() -> Self
-pub fn BrotliHuffmanCode::new(Int, Int) -> Self
 
 pub(all) enum FbrErrorCode {
   UnexpectedEOF

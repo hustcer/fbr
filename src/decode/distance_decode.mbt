@@ -1,7 +1,7 @@
 ///|
 fn brotli_read_distance(
   reader : BrotliBitReader,
-  distance_tree : FixedArray[@common.BrotliHuffmanCode],
+  distance_tree : FixedArray[Int],
   distance_ring : @common.BrotliDistanceRing,
   npostfix : Int,
   ndirect : Int,

@@ -4,7 +4,7 @@ fn brotli_read_simple_huffman_code(
   alphabet_size_max : Int,
   alphabet_size_limit : Int,
   root_bits : Int,
-) -> FixedArray[@common.BrotliHuffmanCode] raise @common.FbrError {
+) -> FixedArray[Int] raise @common.FbrError {
   let num_symbols_code = reader.take_bits(2).reinterpret_as_int()
   let num_symbols_to_read = num_symbols_code + 1
   let max_bits = @common.brotli_log2_floor_plus_one(alphabet_size_max - 1)
@@ -80,7 +80,7 @@ fn brotli_read_code_length_code_lengths(
 ///|
 fn brotli_decode_symbol_code_lengths(
   reader : BrotliBitReader,
-  code_length_table : FixedArray[@common.BrotliHuffmanCode],
+  code_length_table : FixedArray[Int],
   alphabet_size : Int,
 ) -> FixedArray[Byte] raise @common.FbrError {
   let lengths = FixedArray::make(alphabet_size, b'\x00')
@@ -172,7 +172,7 @@ fn brotli_read_complex_huffman_code(
   marker : Int,
   alphabet_size_limit : Int,
   root_bits : Int,
-) -> FixedArray[@common.BrotliHuffmanCode] raise @common.FbrError {
+) -> FixedArray[Int] raise @common.FbrError {
   let code_length_code_lengths = brotli_read_code_length_code_lengths(
     reader, marker,
   )
@@ -193,7 +193,7 @@ fn brotli_read_huffman_code(
   alphabet_size_max : Int,
   alphabet_size_limit : Int,
   root_bits : Int,
-) -> FixedArray[@common.BrotliHuffmanCode] raise @common.FbrError {
+) -> FixedArray[Int] raise @common.FbrError {
   let marker = reader.take_bits(2).reinterpret_as_int()
   if marker == 1 {
     brotli_read_simple_huffman_code(
@@ -209,11 +209,18 @@ fn brotli_read_huffman_code(
 ///|
 fn brotli_read_symbol(
   reader : BrotliBitReader,
-  table : FixedArray[@common.BrotliHuffmanCode],
+  table : FixedArray[Int],
   root_bits : Int,
 ) -> Int raise @common.FbrError {
-  if table[0].bits == 0 {
-    return table[0].value
+  // Table entries are packed ints: code length in the low 16 bits (signed),
+  // symbol / sub-table offset in the high 16 bits. Extraction is inlined as
+  // shifts so the hot path never makes a call (the C backend at -O0 would not
+  // inline a helper). `>> 16` recovers the value; `<< 16 >> 16` sign-extends
+  // the length so the `-1` empty sentinel stays negative.
+  let entry0 = table[0]
+  if (entry0 & 0xffff) == 0 {
+    // Single-symbol table: length 0, value in the high bits.
+    return entry0 >> 16
   }
   // Inlined fast path: refill until we have root_bits, or tolerate
   // running short at end of stream when an existing prefix can still
@@ -232,15 +239,11 @@ fn brotli_read_symbol(
     }
   }
   let mask_root = brotli_low_mask_lut[root_bits]
+  // index < 2^root_bits <= table.length(), so no separate bound check is
+  // needed: the root table always spans the first 2^root_bits entries.
   let index = (reader.bit_buf & mask_root).reinterpret_as_int()
-  if index >= table.length() {
-    raise @common.fbr_err(
-      @common.BrotliInvalidHuffman,
-      msg="Huffman lookup out of range",
-    )
-  }
   let entry = table[index]
-  let entry_bits = entry.bits
+  let entry_bits = entry << 16 >> 16
   if entry_bits < 0 {
     raise @common.fbr_err(
       @common.BrotliInvalidHuffman,
@@ -257,7 +260,7 @@ fn brotli_read_symbol(
     // Inlined drop_bits: bit_buf >>= entry_bits; bits_avail -= entry_bits
     reader.bit_buf = reader.bit_buf >> entry_bits
     reader.bits_avail -= entry_bits
-    return entry.value
+    return entry >> 16
   }
   // Sub-table path: drop root_bits, refill for the extra bits, lookup.
   reader.bit_buf = reader.bit_buf >> root_bits
@@ -268,14 +271,15 @@ fn brotli_read_symbol(
   }
   let mask_extra = brotli_low_mask_lut[extra_bits]
   let sub_index = (reader.bit_buf & mask_extra).reinterpret_as_int()
-  let sub_entry = table[entry.value + sub_index]
-  if sub_entry.bits < 0 {
+  let sub_entry = table[(entry >> 16) + sub_index]
+  let sub_bits = sub_entry << 16 >> 16
+  if sub_bits < 0 {
     raise @common.fbr_err(
       @common.BrotliInvalidHuffman,
       msg="uninitialized Brotli Huffman sub-table entry",
     )
   }
-  reader.bit_buf = reader.bit_buf >> sub_entry.bits
-  reader.bits_avail -= sub_entry.bits
-  sub_entry.value
+  reader.bit_buf = reader.bit_buf >> sub_bits
+  reader.bits_avail -= sub_bits
+  sub_entry >> 16
 }

@@ -99,7 +99,7 @@ fn write_window10_final_metablock_header(
 fn make_one_symbol_tree(
   symbol : Int,
   alphabet_size : Int,
-) -> FixedArray[BrotliHuffmanCode] raise FbrError {
+) -> FixedArray[Int] raise FbrError {
   let lengths = FixedArray::make(alphabet_size, b'\x00')
   lengths[symbol] = b'\x01'
   brotli_build_huffman_table(lengths, alphabet_size, brotli_huffman_table_bits)
@@ -108,7 +108,7 @@ fn make_one_symbol_tree(
 ///|
 fn make_tree_group(
   alphabet_size : Int,
-  trees : Array[FixedArray[BrotliHuffmanCode]],
+  trees : Array[FixedArray[Int]],
 ) -> BrotliHuffmanTreeGroup {
   ignore(alphabet_size)
   { trees, }
@@ -119,13 +119,13 @@ fn make_single_block_body_header(
   command_symbol : Int,
   distance_symbol : Int,
 ) -> BrotliCompressedMetablockHeader raise FbrError {
-  let literal_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  let literal_trees : Array[FixedArray[Int]] = []
   literal_trees.push(make_one_symbol_tree(65, brotli_num_literal_symbols))
-  let command_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  let command_trees : Array[FixedArray[Int]] = []
   command_trees.push(
     make_one_symbol_tree(command_symbol, brotli_num_command_symbols),
   )
-  let distance_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  let distance_trees : Array[FixedArray[Int]] = []
   distance_trees.push(
     make_one_symbol_tree(
       distance_symbol,
@@ -293,7 +293,7 @@ test "brotli_read_huffman_code rejects malformed simple tables" {
   pos += 2
   wbits(duplicate, pos, 1)
   let duplicate_reader = BrotliBitReader::new(duplicate, 0, duplicate.length())
-  let duplicate_result : Result[FixedArray[BrotliHuffmanCode], FbrError] = try? brotli_read_huffman_code(
+  let duplicate_result : Result[FixedArray[Int], FbrError] = try? brotli_read_huffman_code(
     duplicate_reader, 4, 4, 3,
   )
   guard duplicate_result is Err(FbrError(code=duplicate_code, ..)) else {
@@ -313,7 +313,7 @@ test "brotli_read_huffman_code rejects malformed simple tables" {
     0,
     out_of_range.length(),
   )
-  let out_of_range_result : Result[FixedArray[BrotliHuffmanCode], FbrError] = try? brotli_read_huffman_code(
+  let out_of_range_result : Result[FixedArray[Int], FbrError] = try? brotli_read_huffman_code(
     out_of_range_reader, 4, 3, 3,
   )
   guard out_of_range_result is Err(FbrError(code=range_code, ..)) else {
@@ -361,7 +361,7 @@ test "brotli_read_huffman_code rejects complex repeat overflow" {
   }
   wbits(encoded, pos, 7) // repeat-zero extra bits: 10 zeros for alphabet 4
   let reader = BrotliBitReader::new(encoded, 0, encoded.length())
-  let result : Result[FixedArray[BrotliHuffmanCode], FbrError] = try? brotli_read_huffman_code(
+  let result : Result[FixedArray[Int], FbrError] = try? brotli_read_huffman_code(
     reader, 4, 4, 2,
   )
   guard result is Err(FbrError(code~, ..)) else {
@@ -660,12 +660,12 @@ test "compressed body switches literal blocks" {
   for i in (1 << brotli_literal_context_bits)..<literal_map.length() {
     literal_map[i] = b'\x01'
   }
-  let literal_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  let literal_trees : Array[FixedArray[Int]] = []
   literal_trees.push(make_one_symbol_tree(65, brotli_num_literal_symbols))
   literal_trees.push(make_one_symbol_tree(66, brotli_num_literal_symbols))
-  let command_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  let command_trees : Array[FixedArray[Int]] = []
   command_trees.push(make_one_symbol_tree(16, brotli_num_command_symbols))
-  let distance_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  let distance_trees : Array[FixedArray[Int]] = []
   distance_trees.push(
     make_one_symbol_tree(0, brotli_distance_alphabet_size(0, 0, 24)),
   )
@@ -735,12 +735,12 @@ test "brotli literal context modes match reference categories" {
 test "compressed body selects literal tree by LSB context" {
   let literal_map = FixedArray::make(1 << brotli_literal_context_bits, b'\x00')
   literal_map[1] = b'\x01'
-  let literal_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  let literal_trees : Array[FixedArray[Int]] = []
   literal_trees.push(make_one_symbol_tree(65, brotli_num_literal_symbols))
   literal_trees.push(make_one_symbol_tree(66, brotli_num_literal_symbols))
-  let command_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  let command_trees : Array[FixedArray[Int]] = []
   command_trees.push(make_one_symbol_tree(16, brotli_num_command_symbols))
-  let distance_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  let distance_trees : Array[FixedArray[Int]] = []
   distance_trees.push(
     make_one_symbol_tree(0, brotli_distance_alphabet_size(0, 0, 24)),
   )
@@ -1016,15 +1016,15 @@ test "compressed body fast path decodes single-tree literals" {
   let literal_lengths = FixedArray::make(brotli_num_literal_symbols, b'\x00')
   literal_lengths[65] = b'\x01' // 'A', 1-bit code 0
   literal_lengths[66] = b'\x01' // 'B', 1-bit code 1
-  let literal_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  let literal_trees : Array[FixedArray[Int]] = []
   literal_trees.push(
     brotli_build_huffman_table(
       literal_lengths, brotli_num_literal_symbols, brotli_huffman_table_bits,
     ),
   )
-  let command_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  let command_trees : Array[FixedArray[Int]] = []
   command_trees.push(make_one_symbol_tree(24, brotli_num_command_symbols))
-  let distance_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  let distance_trees : Array[FixedArray[Int]] = []
   distance_trees.push(
     make_one_symbol_tree(0, brotli_distance_alphabet_size(0, 0, 24)),
   )

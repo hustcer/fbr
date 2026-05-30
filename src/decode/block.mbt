@@ -24,7 +24,7 @@ fn brotli_read_block_type_count(
 ///|
 fn brotli_read_block_length(
   reader : BrotliBitReader,
-  table : FixedArray[@common.BrotliHuffmanCode],
+  table : FixedArray[Int],
 ) -> Int raise @common.FbrError {
   let code = brotli_read_symbol(
     reader, table, @common.brotli_huffman_table_bits,
