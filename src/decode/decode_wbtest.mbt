@@ -1077,3 +1077,68 @@ test "compressed body fast path decodes single-tree literals" {
   )
   inspect(str_from_u8(output.finish()), content="ABA")
 }
+
+///|
+test "compressed body general path tracks context across literals" {
+  // Multiple literal trees (num_trees == 2) drive the general path. Context
+  // mode 0 maps `prev_byte & 0x3f` to a tree, so each decoded literal changes
+  // the tree used for the next one. This exercises the inlined context-map
+  // lookup and the register-tracked previous byte across context transitions.
+  let literal_map = FixedArray::make(1 << brotli_literal_context_bits, b'\x00')
+  literal_map[1] = b'\x01' // context 1 -> tree 1
+  let literal_trees : Array[FixedArray[Int]] = []
+  literal_trees.push(make_one_symbol_tree(65, brotli_num_literal_symbols)) // 'A'
+  literal_trees.push(make_one_symbol_tree(66, brotli_num_literal_symbols)) // 'B'
+  let command_trees : Array[FixedArray[Int]] = []
+  command_trees.push(make_one_symbol_tree(24, brotli_num_command_symbols)) // insert 3
+  let distance_trees : Array[FixedArray[Int]] = []
+  distance_trees.push(
+    make_one_symbol_tree(0, brotli_distance_alphabet_size(0, 0, 24)),
+  )
+  let header : BrotliCompressedMetablockHeader = {
+    literal_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    command_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    distance_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    distance_postfix_bits: 0,
+    num_direct_distance_codes: 0,
+    context_modes: [0],
+    literal_context_map: { num_trees: 2, map: literal_map },
+    distance_context_map: {
+      num_trees: 1,
+      map: FixedArray::make(1 << brotli_distance_context_bits, b'\x00'),
+    },
+    literal_trees: make_tree_group(brotli_num_literal_symbols, literal_trees),
+    command_trees: make_tree_group(brotli_num_command_symbols, command_trees),
+    distance_trees: make_tree_group(
+      brotli_distance_alphabet_size(0, 0, 24),
+      distance_trees,
+    ),
+  }
+  // prev=0   -> ctx 0 -> tree0 -> 'A'; prev='A'(65) -> ctx 1 -> tree1 -> 'B';
+  // prev='B'(66) -> ctx 2 -> tree0 -> 'A'.  One-symbol trees consume no bits.
+  let reader = BrotliBitReader::new([0x00, 0x00], 0, 2)
+  let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
+  brotli_decode_compressed_metablock_body(
+    reader,
+    header,
+    output,
+    3,
+    BrotliDecoderState::new_with_window_bits(24),
+  )
+  inspect(str_from_u8(output.finish()), content="ABA")
+}
