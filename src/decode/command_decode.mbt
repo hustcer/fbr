@@ -1,16 +1,25 @@
 ///|
+/// A decoded Brotli command. Fields are mutable so the meta-block loop can
+/// reuse a single instance across every command (filling it in place via
+/// `read_into`) instead of heap-allocating one per command — the decode loop
+/// runs this once per match, so eliminating the per-command allocation removes
+/// a `malloc`/GC cost from the hot path.
 priv struct BrotliCommand {
-  insert_length : Int
-  copy_length : Int
-  distance_code : Int
-  distance_context : Int
+  mut insert_length : Int
+  mut copy_length : Int
+  mut distance_code : Int
+  mut distance_context : Int
 }
 
 ///|
-fn brotli_read_command(
+/// Decode one command from `command_tree` into `self`, overwriting all four
+/// fields. The caller reuses the same `BrotliCommand` every iteration, so this
+/// performs no allocation.
+fn BrotliCommand::read_into(
+  self : BrotliCommand,
   reader : BrotliBitReader,
   command_tree : FixedArray[Int],
-) -> BrotliCommand raise @common.FbrError {
+) -> Unit raise @common.FbrError {
   let symbol = brotli_read_symbol(
     reader, command_tree, @common.brotli_huffman_table_bits,
   )
@@ -25,12 +34,10 @@ fn brotli_read_command(
   } else {
     reader.take_bits(info.copy_len_extra_bits).reinterpret_as_int()
   }
-  {
-    insert_length: info.insert_len_offset + insert_extra,
-    copy_length: info.copy_len_offset + copy_extra,
-    distance_code: info.distance_code,
-    distance_context: info.distance_context,
-  }
+  self.insert_length = info.insert_len_offset + insert_extra
+  self.copy_length = info.copy_len_offset + copy_extra
+  self.distance_code = info.distance_code
+  self.distance_context = info.distance_context
 }
 
 ///|
@@ -61,10 +68,18 @@ fn brotli_decode_compressed_metablock_body(
   // because the tree group is built with at least one tree.
   let single_literal_tree = header.literal_context_map.num_trees == 1
   let literal_tree0 = header.literal_trees.tree(0)
+  // Reuse one command record for the whole meta-block; `read_into` overwrites
+  // every field each iteration, so the loop performs no per-command allocation.
+  let command = BrotliCommand::{
+    insert_length: 0,
+    copy_length: 0,
+    distance_code: 0,
+    distance_context: 0,
+  }
   let mut remaining = length
   while remaining > 0 {
     command_blocks.ensure_ready(reader, header.command_block)
-    let command = brotli_read_command(
+    command.read_into(
       reader,
       header.command_trees.tree(command_blocks.current_type),
     )

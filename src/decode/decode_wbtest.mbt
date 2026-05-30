@@ -610,6 +610,24 @@ test "brotli_command_info matches reference lookup cases" {
 }
 
 ///|
+/// Test helper: decode a single command into a fresh record. The decode loop
+/// itself reuses one `BrotliCommand` via `read_into`, but tests find a
+/// value-returning wrapper more convenient.
+fn brotli_read_command(
+  reader : BrotliBitReader,
+  command_tree : FixedArray[Int],
+) -> BrotliCommand raise @common.FbrError {
+  let command = BrotliCommand::{
+    insert_length: 0,
+    copy_length: 0,
+    distance_code: 0,
+    distance_context: 0,
+  }
+  command.read_into(reader, command_tree)
+  command
+}
+
+///|
 test "brotli_read_command applies insert and copy extra bits" {
   let lengths = FixedArray::make(brotli_num_command_symbols, b'\x00')
   lengths[48] = b'\x01'
@@ -632,6 +650,39 @@ test "brotli_read_command skips zero-width extra bits" {
   inspect(command.insert_length, content="0")
   inspect(command.copy_length, content="2")
   inspect(reader.byte_pos * 8 - reader.bits_avail, content="0")
+}
+
+///|
+test "BrotliCommand::read_into overwrites every field when a record is reused" {
+  // The meta-block loop reuses one command record across all commands, filling
+  // it via `read_into`. A stale field surviving from a previous command would
+  // silently corrupt the stream, so verify a second read fully replaces the
+  // first. Eight zero bytes give the insert/copy extra-bit reads enough room to
+  // resolve to 0, so each length equals its base offset from the info table.
+  let command = BrotliCommand::{
+    insert_length: -99,
+    copy_length: -99,
+    distance_code: -99,
+    distance_context: -99,
+  }
+  // Symbol 64 selects an implicit (last-distance) command with context 3.
+  let tree_a = make_one_symbol_tree(64, brotli_num_command_symbols)
+  let info_a = brotli_command_info(64)
+  command.read_into(BrotliBitReader::new([0, 0, 0, 0, 0, 0, 0, 0], 0, 8), tree_a)
+  assert_eq(command.insert_length, info_a.insert_len_offset)
+  assert_eq(command.copy_length, info_a.copy_len_offset)
+  assert_eq(command.distance_code, info_a.distance_code)
+  assert_eq(command.distance_context, info_a.distance_context)
+  // Symbol 128 selects an explicit distance (distance_code -1). Reading it into
+  // the same record must overwrite the previous distance_code and context.
+  let tree_b = make_one_symbol_tree(128, brotli_num_command_symbols)
+  let info_b = brotli_command_info(128)
+  command.read_into(BrotliBitReader::new([0, 0, 0, 0, 0, 0, 0, 0], 0, 8), tree_b)
+  assert_eq(command.distance_code, -1)
+  assert_eq(command.distance_code, info_b.distance_code)
+  assert_eq(command.distance_context, info_b.distance_context)
+  assert_eq(command.insert_length, info_b.insert_len_offset)
+  assert_eq(command.copy_length, info_b.copy_len_offset)
 }
 
 ///|
