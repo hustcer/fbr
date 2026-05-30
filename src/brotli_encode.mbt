@@ -3160,6 +3160,40 @@ fn brotli_encode_single_copy_match(
 }
 
 ///|
+fn brotli_encode_prefix_stored_single_copy_match(
+  data : FixedArray[Byte],
+  opts : BrotliOptions,
+  match_ : BrotliSingleCopyMatch,
+) -> FixedArray[Byte]? raise FzipError {
+  if match_.insert_length <= 0 || match_.copy_length <= 0 {
+    return None
+  }
+  let command_result : Result[BrotliEncodeCommand, FzipError] = try? brotli_make_encode_command(
+    0,
+    0,
+    match_.copy_length,
+    match_.distance,
+    true,
+  )
+  let command = match command_result {
+    Ok(command) => command
+    Err(_) => return None
+  }
+  let commands : Array[BrotliEncodeCommand] = []
+  commands.push(command)
+  let suffix = slc(data, match_.insert_length, e=data.length())
+  let body = BrotliBitWriter::new(
+    128 + suffix.length() * 4 + commands.length() * 8,
+  )
+  brotli_write_simple_lz77_metablock(body, suffix, commands, true, true)
+  let writer = BrotliBitWriter::new(data.length() + 32 + body.buf.length())
+  brotli_encode_window_bits(writer, opts.window_bits)
+  brotli_write_uncompressed_metablock(writer, data, 0, match_.insert_length)
+  writer.write_from_bits(body.buf, body.bit_pos)
+  Some(writer.finish())
+}
+
+///|
 fn brotli_write_simple_lz77_metablock(
   writer : BrotliBitWriter,
   data : FixedArray[Byte],
@@ -5847,6 +5881,27 @@ fn brotli_encode_standard(
   data : FixedArray[Byte],
   opts : BrotliOptions,
 ) -> FixedArray[Byte] raise FzipError {
+  if data.length() <= 262144 {
+    match brotli_find_single_copy_match(data) {
+      Some(match_) => {
+        let compressed = brotli_encode_single_copy_match(data, opts, match_)
+        if opts.quality <= 2 {
+          return compressed
+        }
+        match
+          brotli_encode_prefix_stored_single_copy_match(data, opts, match_) {
+          Some(split) =>
+            if split.length() < compressed.length() {
+              return split
+            } else {
+              return compressed
+            }
+          None => return compressed
+        }
+      }
+      None => ()
+    }
+  }
   if data.length() > 65536 {
     return brotli_encode_chunked_standard(data, opts)
   }

@@ -3307,6 +3307,60 @@ Validation:
 | `nu tools/brotli/fuzz/roundtrip.nu --count 4 --max-len 512 --qualities 10,11 --target native` | 8/8 encoder roundtrips passed |
 | `moon fmt && moon check --target all && moon test --target all && moon info && git diff --check` | all-target check passed; 469 tests passed on wasm, wasm-gc, js, and native; generated interface check passed |
 
+## 2026-05-30 — Large Single-Copy Periodic Fast Path
+
+Inputs up to 256 KiB now try the existing single-copy periodic detector before
+falling into the chunked standard encoder. For high-diversity periodic prefixes
+the encoder exact-costs the existing single compressed block against a split
+form: a stored prefix meta-block followed by a copy-only compressed meta-block.
+This avoids paying a full 256-symbol literal Huffman tree for the prefix.
+
+The motivating broad-corpus sample is `periodic-allbytes-200k.bin`, a 200 KiB
+cycle over all 256 byte values. The output remains externally decodable and
+the Silesia 128 KiB q2/q5/q9 sizes are unchanged.
+
+Periodic 200 KiB ratio, before -> after:
+
+| Quality | Before bytes | After bytes | Google bytes | After overhead |
+| ------- | ------------ | ----------- | ------------ | -------------- |
+| q2      | 350          | 301         | 293          | +2.73%         |
+| q3      | 350          | 272         | 281          | -3.20%         |
+| q4      | 350          | 272         | 260          | +4.62%         |
+| q5      | 350          | 272         | 260          | +4.62%         |
+| q6      | 350          | 272         | 260          | +4.62%         |
+| q7      | 350          | 272         | 260          | +4.62%         |
+| q8      | 350          | 272         | 260          | +4.62%         |
+| q9      | 350          | 272         | 259          | +5.02%         |
+
+Periodic 200 KiB encode target-perf, before -> after:
+
+| Quality | Target  | Before ms/op | After ms/op | Before bytes | After bytes |
+| ------- | ------- | ------------ | ----------- | ------------ | ----------- |
+| q2      | wasm-gc | 121.193      | 113.285     | 350          | 301         |
+| q2      | native  | 91.339       | 73.513      | 350          | 301         |
+| q9      | wasm-gc | 212.056      | 116.976     | 350          | 272         |
+| q9      | native  | 666.810      | 72.173      | 350          | 272         |
+
+Representative decode target-perf on the Google q9 periodic stream is
+unchanged by this encoder-only change: wasm-gc 57.084 ms/op and native
+`cc-o0` 86.281 ms/op, both versus Google 40.694 ms/op.
+
+Silesia 128 KiB spot checks after the change:
+
+| Quality | MoonBit bytes | Google bytes | Overhead | wasm-gc ms/op | native ms/op |
+| ------- | ------------- | ------------ | -------- | ------------- | ------------ |
+| q2      | 46,509        | 44,794       | +3.83%   | 120.632       | 142.666      |
+| q5      | 40,328        | 40,515       | -0.46%   | not rerun     | not rerun    |
+| q9      | 39,081        | 39,695       | -1.55%   | 195.853       | 380.678      |
+
+Validation:
+
+| Command | Result |
+| ------- | ------ |
+| `moon test --target native --filter '*large 256-byte periodic*'` | passed; covers >64 KiB periodic q2/q9 roundtrip and compact output |
+| `nu tools/brotli/bench/ratio.nu target/brotli-encode/periodic-allbytes-200k.bin --qualities 2,3,4,5,6,7,8,9 --json` | q2 improves from 350 to 301 bytes; q3..q9 improve from 350 to 272 bytes |
+| `nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-128k.bin --qualities 2,5,9 --json` | q2/q5/q9 Silesia sizes unchanged |
+
 ## 2026-05-29 — q10/q11 Bounded Shortest-Path Seed
 
 The q10/q11 encoder now tries a small-input bounded shortest-path command

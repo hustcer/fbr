@@ -1054,6 +1054,38 @@ test "brotli_sync q2 compresses short periodic input with LZ77 copy" {
 }
 
 ///|
+test "brotli_sync q2 compresses large 256-byte periodic input with one copy" {
+  let input = FixedArray::make(70000, b'\x00')
+  for i in 0..<input.length() {
+    input[i] = (i & 255).to_byte()
+  }
+  let q1 = brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q2 = brotli_sync(input, opts={
+    quality: 2,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  let q9 = brotli_sync(input, opts={
+    quality: 9,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  assert_true(q2.length() < 400)
+  assert_true(q9.length() < 400)
+  assert_true(q2.length() < q1.length())
+  assert_true(q9.length() < q1.length())
+  let decoded = unbrotli_sync(q9)
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<decoded.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
 test "brotli_sync q2 writes implicit last-distance commands" {
   let input = FixedArray::make(20, b'\x00')
   let pattern : FixedArray[Byte] = [b'A', b'B', b'C', b'D']
