@@ -1,5 +1,5 @@
 # Description:
-#   - FZip build & test Check
+#   - Fbr build & test Check
 
 name: CI
 on:
@@ -13,7 +13,7 @@ on:
       - "**.md"
 
 jobs:
-  fzip-check:
+  fbr-check:
     strategy:
       fail-fast: false
       matrix:
@@ -28,7 +28,7 @@ jobs:
       - name: Setup Moonbit
         uses: hustcer/setup-moonbit@main
 
-      - name: Check FZip Build & Test
+      - name: Check Fbr Build & Test
         run: |
           moon version --all
           moon check --target all

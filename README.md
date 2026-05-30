@@ -1,4 +1,4 @@
-# fzip – High-performance compression library for MoonBit
+# fbr – High-performance compression library for MoonBit
 
 `fzip` (short for _fast zip_) is a high-performance, in-memory compression library for MoonBit, ported from the [fflate](https://github.com/101arrowz/fflate) JavaScript library.
 

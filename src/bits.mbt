@@ -5,89 +5,9 @@ fn shft(p : Int) -> Int {
 }
 
 ///|
-/// Write bits to data at bit position p
-fn wbits(d : FixedArray[Byte], p : Int, v : Int) -> Unit {
-  let v = v << (p & 7)
-  let o = p / 8
-  d[o] = (d[o].to_int() | v).to_byte()
-  if o + 1 < d.length() {
-    d[o + 1] = (d[o + 1].to_int() | (v >> 8)).to_byte()
-  }
-}
-
-///|
-/// Write 16+ bits to data at bit position p
-fn wbits16(d : FixedArray[Byte], p : Int, v : Int) -> Unit {
-  let v = v << (p & 7)
-  let o = p / 8
-  d[o] = (d[o].to_int() | v).to_byte()
-  if o + 1 < d.length() {
-    d[o + 1] = (d[o + 1].to_int() | (v >> 8)).to_byte()
-  }
-  if o + 2 < d.length() {
-    d[o + 2] = (d[o + 2].to_int() | (v >> 16)).to_byte()
-  }
-}
-
-///|
-/// Read 2 bytes (little-endian) from data at offset b
-fn b2(d : FixedArray[Byte], b : Int) -> Int raise FzipError {
-  if b + 1 >= d.length() {
-    raise fzip_err(UnexpectedEOF, msg="not enough bytes for b2")
-  }
-  d[b].to_int() | (d[b + 1].to_int() << 8)
-}
-
-///|
-/// Read 4 bytes (little-endian unsigned) from data at offset b
-fn b4(d : FixedArray[Byte], b : Int) -> UInt raise FzipError {
-  if b + 3 >= d.length() {
-    raise fzip_err(UnexpectedEOF, msg="not enough bytes for b4")
-  }
-  (d[b].to_int() |
-  (d[b + 1].to_int() << 8) |
-  (d[b + 2].to_int() << 16) |
-  (d[b + 3].to_int() << 24)).reinterpret_as_uint()
-}
-
-///|
-/// Write bytes (little-endian) to data at offset b
-fn wbytes(d : FixedArray[Byte], b : Int, v : Int) -> Unit {
-  let mut v = v.reinterpret_as_uint()
-  let mut b = b
-  while v > 0U {
-    d[b] = v.to_byte()
-    v = v >> 8
-    b += 1
-  }
-}
-
-///|
-/// Write a 2-byte little-endian value, always emitting both bytes (including
-/// any leading zero byte). Caller must ensure value fits in `0..=0xffff`;
-/// `Int::to_byte()` truncates to the low 8 bits.
-fn w2(d : FixedArray[Byte], offset : Int, value : Int) -> Unit {
-  d[offset] = value.to_byte()
-  d[offset + 1] = (value >> 8).to_byte()
-}
-
-///|
-/// Write a 4-byte little-endian unsigned value, always emitting four bytes.
-/// Takes `UInt` because `0xffffffff` does not fit in a 32-bit signed `Int`.
-fn w4(d : FixedArray[Byte], offset : Int, value : UInt) -> Unit {
-  d[offset] = value.to_byte()
-  d[offset + 1] = (value >> 8).to_byte()
-  d[offset + 2] = (value >> 16).to_byte()
-  d[offset + 3] = (value >> 24).to_byte()
-}
-
-///|
-/// Write an 8-byte little-endian value, always emitting eight bytes (including
-/// any leading zero bytes). Raw — does not validate. ZIP metadata callers must
-/// validate via `write_zip64_int` before calling this directly.
-fn w8(d : FixedArray[Byte], offset : Int, value : Int64) -> Unit {
-  w4(d, offset, value.to_int().reinterpret_as_uint())
-  w4(d, offset + 4, (value >> 32).to_int().reinterpret_as_uint())
+/// Largest positive Int value, used to clamp capacity math before allocation
+fn max_int_val() -> Int {
+  ((-1).reinterpret_as_uint() >> 1).reinterpret_as_int()
 }
 
 ///|
@@ -106,36 +26,6 @@ fn slc(
   let result = FixedArray::make(len, b'\x00')
   v.blit_to(result, len~, src_offset=start, dst_offset=0)
   result
-}
-
-///|
-/// Copy from src to dst at offset
-fn fa_set(
-  dst : FixedArray[Byte],
-  src : FixedArray[Byte],
-  offset? : Int = 0,
-) -> Unit {
-  let len = if src.length() > dst.length() - offset {
-    dst.length() - offset
-  } else {
-    src.length()
-  }
-  if len > 0 {
-    src.blit_to(dst, len~, src_offset=0, dst_offset=offset)
-  }
-}
-
-///|
-/// Find max value in FixedArray
-fn max_val(a : FixedArray[Byte]) -> Int {
-  a.fold(init=a[0].to_int(), fn(m, b) {
-    let v = b.to_int()
-    if v > m {
-      v
-    } else {
-      m
-    }
-  })
 }
 
 ///|

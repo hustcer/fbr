@@ -1,10 +1,13 @@
+// Shared white-box test helpers for the Brotli decoder tests.
+//
+// These functions are only used by `*_wbtest.mbt` files (e.g. to build raw
+// Brotli bitstreams and to render decoded output as a `String`), so they live
+// in a test file rather than in package source to avoid unused-symbol warnings
+// in non-test builds.
+
 ///|
-/// Encode a `String` into bytes.
-///
-/// By default this returns UTF-8 bytes. When `latin1` is `true`, each UTF-16
-/// code unit is truncated to one byte, which is useful for legacy ZIP metadata
-/// that is explicitly stored as Latin-1 compatible byte data.
-pub fn str_to_u8(s : String, latin1? : Bool = false) -> FixedArray[Byte] {
+/// Encode a `String` into UTF-8 (or latin1) bytes (test helper).
+fn str_to_u8(s : String, latin1? : Bool = false) -> FixedArray[Byte] {
   if latin1 {
     let ar = FixedArray::make(s.length(), b'\x00')
     for i in 0..<s.length() {
@@ -32,7 +35,6 @@ pub fn str_to_u8(s : String, latin1? : Bool = false) -> FixedArray[Byte] {
       ar[ai] = (128 | (c & 63)).to_byte()
       ai += 1
     } else if c > 55295 && c < 57344 {
-      // surrogate pair: combine high + low surrogate into a single codepoint
       i += 1
       let low = if i < l { s[i].to_int() } else { 0 }
       c = (65536 + ((c & 1023) << 10)) | (low & 1023)
@@ -58,26 +60,37 @@ pub fn str_to_u8(s : String, latin1? : Bool = false) -> FixedArray[Byte] {
 }
 
 ///|
-/// Decode bytes into a `String`.
+/// Write bits to data at bit position p (test helper).
+fn wbits(d : FixedArray[Byte], p : Int, v : Int) -> Unit {
+  let v = v << (p & 7)
+  let o = p / 8
+  d[o] = (d[o].to_int() | v).to_byte()
+  if o + 1 < d.length() {
+    d[o + 1] = (d[o + 1].to_int() | (v >> 8)).to_byte()
+  }
+}
+
+///|
+/// Write 16+ bits to data at bit position p (test helper).
+fn wbits16(d : FixedArray[Byte], p : Int, v : Int) -> Unit {
+  let v = v << (p & 7)
+  let o = p / 8
+  d[o] = (d[o].to_int() | v).to_byte()
+  if o + 1 < d.length() {
+    d[o + 1] = (d[o + 1].to_int() | (v >> 8)).to_byte()
+  }
+  if o + 2 < d.length() {
+    d[o + 2] = (d[o + 2].to_int() | (v >> 16)).to_byte()
+  }
+}
+
+///|
+/// Decode bytes into a `String` as strict UTF-8 (test helper).
 ///
-/// The selected byte range is decoded as strict UTF-8 per RFC 3629. Any of the
-/// following raise `InvalidUTF8`:
-///
-/// * continuation bytes (`0x80`-`0xBF`) appearing as a sequence start;
-/// * overlong encodings (`0xC0 0x80` → U+0000, etc.);
-/// * a continuation byte without the `10xxxxxx` prefix;
-/// * surrogate code points (`U+D800`-`U+DFFF`);
-/// * code points above `U+10FFFF`;
-/// * 5- or 6-byte legacy UTF-8 sequences (start byte `>= 0xF5`).
-///
-/// Earlier versions of this function silently accepted these patterns, which
-/// produced fzip-specific decoder output that disagreed with standard
-/// libraries — a parser-differential risk for ZIP filenames where strict
-/// rejection is preferred over silent corruption.
-///
-/// When `latin1` is `true`, every byte is mapped directly to the same Unicode
-/// code point. `offset` and `len` select the input range.
-pub fn str_from_u8(
+/// Mirrors the strict RFC 3629 decoding used by the original fzip helper so the
+/// decoder tests can render output text. Raises `FzipError(InvalidUTF8)` on any
+/// invalid sequence.
+fn str_from_u8(
   data : FixedArray[Byte],
   latin1? : Bool = false,
   offset? : Int = 0,
@@ -97,15 +110,11 @@ pub fn str_from_u8(
   while i < end {
     let c = data[i].to_int()
     if c < 0x80 {
-      // ASCII
       buf.write_char(c.unsafe_to_char())
       i += 1
     } else if c < 0xC2 {
-      // 0x80-0xBF: continuation bytes cannot start a sequence.
-      // 0xC0, 0xC1: would be overlong encodings of <= U+007F.
       raise fzip_err(InvalidUTF8)
     } else if c < 0xE0 {
-      // 2-byte sequence: 0xC2-0xDF.
       if i + 1 >= end {
         raise fzip_err(InvalidUTF8)
       }
@@ -117,7 +126,6 @@ pub fn str_from_u8(
       buf.write_char(cp.unsafe_to_char())
       i += 2
     } else if c < 0xF0 {
-      // 3-byte sequence: 0xE0-0xEF.
       if i + 2 >= end {
         raise fzip_err(InvalidUTF8)
       }
@@ -127,15 +135,12 @@ pub fn str_from_u8(
         raise fzip_err(InvalidUTF8)
       }
       let cp = ((c & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F)
-      // Reject overlong encodings (codepoint < U+0800) and UTF-16 surrogate
-      // code points (U+D800 .. U+DFFF) which are not valid Unicode scalars.
       if cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF) {
         raise fzip_err(InvalidUTF8)
       }
       buf.write_char(cp.unsafe_to_char())
       i += 3
     } else if c < 0xF5 {
-      // 4-byte sequence: 0xF0-0xF4.
       if i + 3 >= end {
         raise fzip_err(InvalidUTF8)
       }
@@ -149,17 +154,14 @@ pub fn str_from_u8(
         ((c1 & 0x3F) << 12) |
         ((c2 & 0x3F) << 6) |
         (c3 & 0x3F)
-      // 4-byte minimum is U+10000; max is U+10FFFF.
       if cp < 0x10000 || cp > 0x10FFFF {
         raise fzip_err(InvalidUTF8)
       }
-      // Emit as a UTF-16 surrogate pair.
       let v = cp - 0x10000
       buf.write_char((0xD800 | (v >> 10)).unsafe_to_char())
       buf.write_char((0xDC00 | (v & 0x3FF)).unsafe_to_char())
       i += 4
     } else {
-      // 0xF5-0xFF: outside RFC 3629 (legacy 5/6-byte starts or invalid).
       raise fzip_err(InvalidUTF8)
     }
   }

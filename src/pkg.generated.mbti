@@ -1,79 +1,18 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "hustcer/fzip"
+package "hustcer/fbr"
 
 import {
   "moonbitlang/core/debug",
 }
 
 // Values
-pub fn adler32(FixedArray[Byte]) -> UInt
-
 pub fn brotli_sync(FixedArray[Byte], opts? : BrotliOptions) -> FixedArray[Byte] raise FzipError
-
-pub fn compress_sync(FixedArray[Byte], opts? : GzipOptions) -> FixedArray[Byte]
-
-pub fn crc32(FixedArray[Byte]) -> UInt
-
-pub fn decompress_sync(FixedArray[Byte], opts? : InflateOptions) -> FixedArray[Byte] raise FzipError
 
 pub let default_max_input_size : Int
 
 pub let default_max_output_size : Int
 
-pub fn deflate_sync(FixedArray[Byte], opts? : DeflateOptions) -> FixedArray[Byte]
-
-pub let freq_skew_shift : Int
-
-pub let full_scan_threshold : Int
-
-pub fn gunzip_sync(FixedArray[Byte], opts? : GunzipOptions) -> FixedArray[Byte] raise FzipError
-
-pub fn gzip_sync(FixedArray[Byte], opts? : GzipOptions) -> FixedArray[Byte]
-
-pub let high_entropy_unique_threshold : Int
-
-pub fn inflate_sync(FixedArray[Byte], opts? : InflateOptions) -> FixedArray[Byte] raise FzipError
-
-pub let max_filename_length : Int
-
-pub let min_compressibility_check_len : Int
-
-pub let periodicity_check_samples : Int
-
-pub let sampling_entropy_threshold : Int
-
-pub let sampling_stride : Int
-
-pub let small_data_mem_threshold : Int
-
-pub fn str_from_u8(FixedArray[Byte], latin1? : Bool, offset? : Int, len? : Int) -> String raise FzipError
-
-pub fn str_to_u8(String, latin1? : Bool) -> FixedArray[Byte]
-
 pub fn unbrotli_sync(FixedArray[Byte], opts? : UnbrotliOptions) -> FixedArray[Byte] raise FzipError
-
-pub fn unzip_list(FixedArray[Byte]) -> Array[UnzipFileInfo] raise FzipError
-
-pub fn unzip_sync(FixedArray[Byte], opts? : UnzipOptions) -> Array[(String, FixedArray[Byte])] raise FzipError
-
-pub fn unzlib_sync(FixedArray[Byte], opts? : UnzlibOptions) -> FixedArray[Byte] raise FzipError
-
-#alias(zip64_eocd_locator_signature, deprecated)
-pub let zip64_eocd_signature : UInt
-
-pub let zip64_locator_signature : UInt
-
-pub let zip_cd_signature : UInt
-
-pub let zip_eocd_signature : UInt
-
-pub let zip_local_signature : UInt
-
-pub fn zip_sync(Array[(String, FixedArray[Byte])], opts? : ZipEntryOptions) -> FixedArray[Byte]
-
-pub fn zip_sync_checked(Array[(String, FixedArray[Byte])], opts? : ZipEntryOptions) -> FixedArray[Byte] raise FzipError
-
-pub fn zlib_sync(FixedArray[Byte], opts? : ZlibOptions) -> FixedArray[Byte]
 
 // Errors
 pub(all) suberror FzipError {
@@ -95,47 +34,12 @@ pub(all) struct BrotliStream {
 pub fn BrotliStream::new(opts? : BrotliOptions) -> Self
 pub fn BrotliStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise FzipError
 
-pub(all) struct DecompressStream {
-  mut ondata : FlateStreamHandler?
-  // private fields
-}
-pub fn DecompressStream::new(opts? : InflateOptions) -> Self
-pub fn DecompressStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise FzipError
-
-pub(all) struct DeflateOptions {
-  level : Int
-  mem : Int
-  dictionary : FixedArray[Byte]?
-} derive(@debug.Debug)
-pub fn DeflateOptions::default() -> Self
-
-pub(all) struct DeflateStream {
-  mut ondata : FlateStreamHandler?
-  // private fields
-}
-pub fn DeflateStream::new(opts? : DeflateOptions) -> Self
-pub fn DeflateStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit
-
 pub(all) struct FlateStreamHandler((FixedArray[Byte], Bool) -> Unit)
 
 pub(all) enum FzipErrorCode {
   UnexpectedEOF
-  InvalidBlockType
-  InvalidLengthLiteral
-  InvalidDistance
-  StreamFinished
-  NoStreamHandler
-  InvalidHeader
-  NoCallback
   InvalidUTF8
-  ExtraFieldTooLong
-  InvalidDate
-  FilenameTooLong
-  StreamFinishing
   InvalidZipData
-  UnknownCompressionMethod
-  InvalidChecksum
-  Zip64ValueTooLarge
   BrotliInvalidWindowBits
   BrotliInvalidMetablock
   BrotliInvalidHuffman
@@ -148,53 +52,6 @@ pub(all) enum FzipErrorCode {
   BrotliInvalidPadding
 } derive(Eq, @debug.Debug)
 pub impl Show for FzipErrorCode
-
-pub(all) struct GunzipOptions {
-  out : FixedArray[Byte]?
-  dictionary : FixedArray[Byte]?
-  max_output_size : Int
-  max_input_size : Int
-  verify_checksum : Bool
-} derive(@debug.Debug)
-pub fn GunzipOptions::default() -> Self
-
-pub(all) struct GunzipStream {
-  mut ondata : FlateStreamHandler?
-  // private fields
-}
-pub fn GunzipStream::new(opts? : GunzipOptions) -> Self
-pub fn GunzipStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise FzipError
-
-pub(all) struct GzipOptions {
-  level : Int
-  mem : Int
-  dictionary : FixedArray[Byte]?
-  mtime : Int
-  filename : String
-} derive(@debug.Debug)
-pub fn GzipOptions::default() -> Self
-
-pub(all) struct GzipStream {
-  mut ondata : FlateStreamHandler?
-  // private fields
-}
-pub fn GzipStream::new(opts? : GzipOptions) -> Self
-pub fn GzipStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit
-
-pub(all) struct InflateOptions {
-  out : FixedArray[Byte]?
-  dictionary : FixedArray[Byte]?
-  max_output_size : Int
-  max_input_size : Int
-} derive(@debug.Debug)
-pub fn InflateOptions::default() -> Self
-
-pub(all) struct InflateStream {
-  mut ondata : FlateStreamHandler?
-  // private fields
-}
-pub fn InflateStream::new(opts? : InflateOptions) -> Self
-pub fn InflateStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise FzipError
 
 pub(all) struct UnbrotliOptions {
   out : FixedArray[Byte]?
@@ -209,59 +66,6 @@ pub(all) struct UnbrotliStream {
 }
 pub fn UnbrotliStream::new(opts? : UnbrotliOptions) -> Self
 pub fn UnbrotliStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise FzipError
-
-pub(all) struct UnzipFileInfo {
-  name : String
-  size : Int
-  original_size : Int
-  compression : Int
-} derive(@debug.Debug)
-
-pub(all) struct UnzipOptions {
-  verify_checksum : Bool
-} derive(@debug.Debug)
-pub fn UnzipOptions::default() -> Self
-
-pub(all) struct UnzlibOptions {
-  out : FixedArray[Byte]?
-  dictionary : FixedArray[Byte]?
-  max_output_size : Int
-  max_input_size : Int
-  verify_checksum : Bool
-} derive(@debug.Debug)
-pub fn UnzlibOptions::default() -> Self
-
-pub(all) struct UnzlibStream {
-  mut ondata : FlateStreamHandler?
-  // private fields
-}
-pub fn UnzlibStream::new(opts? : UnzlibOptions) -> Self
-pub fn UnzlibStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise FzipError
-
-pub(all) struct ZipEntryOptions {
-  level : Int
-  mem : Int
-  os : Int
-  attrs : Int
-  extra : Array[(Int, FixedArray[Byte])]
-  comment : String
-  mtime : Int
-} derive(@debug.Debug)
-pub fn ZipEntryOptions::default() -> Self
-
-pub(all) struct ZlibOptions {
-  level : Int
-  mem : Int
-  dictionary : FixedArray[Byte]?
-} derive(@debug.Debug)
-pub fn ZlibOptions::default() -> Self
-
-pub(all) struct ZlibStream {
-  mut ondata : FlateStreamHandler?
-  // private fields
-}
-pub fn ZlibStream::new(opts? : ZlibOptions) -> Self
-pub fn ZlibStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit
 
 // Type aliases
 
