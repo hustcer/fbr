@@ -53,6 +53,14 @@ fn brotli_decode_compressed_metablock_body(
     header.distance_block.num_types,
     header.distance_block.first_length,
   )
+  // When the literal context map resolves to a single Huffman tree, every
+  // literal decodes from that one tree regardless of context. Detect this once
+  // per meta-block so the inner loop can skip the per-literal context-id and
+  // context-map work entirely (the dominant cost for low-quality streams, which
+  // are literal-heavy and almost always single-tree). `tree(0)` is always valid
+  // because the tree group is built with at least one tree.
+  let single_literal_tree = header.literal_context_map.num_trees == 1
+  let literal_tree0 = header.literal_trees.tree(0)
   let mut remaining = length
   while remaining > 0 {
     command_blocks.ensure_ready(reader, header.command_block)
@@ -68,43 +76,68 @@ fn brotli_decode_compressed_metablock_body(
       )
     }
     output.ensure(command.insert_length)
-    for _ in 0..<command.insert_length {
-      literal_blocks.ensure_ready(reader, header.literal_block)
-      let previous_byte_1 = if output.len > 0 {
-        output.buf[output.len - 1].to_int()
-      } else {
-        0
-      }
-      let previous_byte_2 = if output.len > 1 {
-        output.buf[output.len - 2].to_int()
-      } else {
-        0
-      }
-      let literal_context = @common.brotli_literal_context_id(
-        header.context_modes[literal_blocks.current_type].to_int(),
-        previous_byte_1,
-        previous_byte_2,
-      )
-      let literal_tree_index = brotli_context_map_tree_index(
-        header.literal_context_map,
-        literal_blocks.current_type,
-        @common.brotli_literal_context_bits,
-        literal_context,
-      )
-      let literal = brotli_read_symbol(
-        reader,
-        header.literal_trees.tree(literal_tree_index),
-        @common.brotli_huffman_table_bits,
-      )
-      if literal < 0 || literal > 255 {
-        raise @common.fbr_err(
-          @common.BrotliInvalidMetablock,
-          msg="Brotli literal out of byte range",
+    if single_literal_tree {
+      // Fast path: the literal context map has a single tree, so every literal
+      // decodes from `literal_tree0` regardless of context. Skip the per-byte
+      // context-id, context-map lookup and tree indexing entirely, and write
+      // straight into the buffer through locals (`ensure` reserved the run).
+      let buf = output.buf
+      let mut pos = output.len
+      for _ in 0..<command.insert_length {
+        literal_blocks.ensure_ready(reader, header.literal_block)
+        let literal = brotli_read_symbol(
+          reader, literal_tree0, @common.brotli_huffman_table_bits,
         )
+        if literal < 0 || literal > 255 {
+          raise @common.fbr_err(
+            @common.BrotliInvalidMetablock,
+            msg="Brotli literal out of byte range",
+          )
+        }
+        buf[pos] = literal.to_byte()
+        pos += 1
+        literal_blocks.remaining -= 1
       }
-      output.buf[output.len] = literal.to_byte()
-      output.len += 1
-      literal_blocks.remaining -= 1
+      output.len = pos
+    } else {
+      for _ in 0..<command.insert_length {
+        literal_blocks.ensure_ready(reader, header.literal_block)
+        let previous_byte_1 = if output.len > 0 {
+          output.buf[output.len - 1].to_int()
+        } else {
+          0
+        }
+        let previous_byte_2 = if output.len > 1 {
+          output.buf[output.len - 2].to_int()
+        } else {
+          0
+        }
+        let literal_context = @common.brotli_literal_context_id(
+          header.context_modes[literal_blocks.current_type].to_int(),
+          previous_byte_1,
+          previous_byte_2,
+        )
+        let literal_tree_index = brotli_context_map_tree_index(
+          header.literal_context_map,
+          literal_blocks.current_type,
+          @common.brotli_literal_context_bits,
+          literal_context,
+        )
+        let literal = brotli_read_symbol(
+          reader,
+          header.literal_trees.tree(literal_tree_index),
+          @common.brotli_huffman_table_bits,
+        )
+        if literal < 0 || literal > 255 {
+          raise @common.fbr_err(
+            @common.BrotliInvalidMetablock,
+            msg="Brotli literal out of byte range",
+          )
+        }
+        output.buf[output.len] = literal.to_byte()
+        output.len += 1
+        literal_blocks.remaining -= 1
+      }
     }
     remaining -= command.insert_length
     if remaining == 0 {

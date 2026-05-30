@@ -1006,3 +1006,74 @@ test "UnbrotliStream buffers chunks until final push" {
   assert_true(finals[0])
   assert_eq(output[0].length(), 0)
 }
+
+///|
+test "compressed body fast path decodes single-tree literals" {
+  // A single literal tree (num_trees == 1) with two symbols 'A'/'B' exercises
+  // the single-literal-tree fast path: it must skip context modeling yet still
+  // decode distinct literals straight from the one tree. Command symbol 24 sets
+  // insert_length = 3, so the whole 3-byte meta-block is literals.
+  let literal_lengths = FixedArray::make(brotli_num_literal_symbols, b'\x00')
+  literal_lengths[65] = b'\x01' // 'A', 1-bit code 0
+  literal_lengths[66] = b'\x01' // 'B', 1-bit code 1
+  let literal_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  literal_trees.push(
+    brotli_build_huffman_table(
+      literal_lengths, brotli_num_literal_symbols, brotli_huffman_table_bits,
+    ),
+  )
+  let command_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  command_trees.push(make_one_symbol_tree(24, brotli_num_command_symbols))
+  let distance_trees : Array[FixedArray[BrotliHuffmanCode]] = []
+  distance_trees.push(
+    make_one_symbol_tree(0, brotli_distance_alphabet_size(0, 0, 24)),
+  )
+  let header : BrotliCompressedMetablockHeader = {
+    literal_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    command_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    distance_block: {
+      num_types: 1,
+      type_tree: None,
+      length_tree: None,
+      first_length: brotli_block_size_cap,
+    },
+    distance_postfix_bits: 0,
+    num_direct_distance_codes: 0,
+    context_modes: [0],
+    literal_context_map: {
+      num_trees: 1,
+      map: FixedArray::make(1 << brotli_literal_context_bits, b'\x00'),
+    },
+    distance_context_map: {
+      num_trees: 1,
+      map: FixedArray::make(1 << brotli_distance_context_bits, b'\x00'),
+    },
+    literal_trees: make_tree_group(brotli_num_literal_symbols, literal_trees),
+    command_trees: make_tree_group(brotli_num_command_symbols, command_trees),
+    distance_trees: make_tree_group(
+      brotli_distance_alphabet_size(0, 0, 24),
+      distance_trees,
+    ),
+  }
+  // Literal bits (LSB-first): 0 -> 'A', 1 -> 'B', 0 -> 'A'  =>  byte 0x02.
+  let reader = BrotliBitReader::new([0x02], 0, 1)
+  let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
+  brotli_decode_compressed_metablock_body(
+    reader,
+    header,
+    output,
+    3,
+    BrotliDecoderState::new_with_window_bits(24),
+  )
+  inspect(str_from_u8(output.finish()), content="ABA")
+}
