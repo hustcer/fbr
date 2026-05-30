@@ -20,7 +20,7 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-latest]
         # os: [windows-latest, ubuntu-latest, macos-latest, macos-15-intel]
     runs-on: ${{ matrix.os }}
-    name: Setup MoonBit@${{ matrix.os }}
+    name: CI@${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
