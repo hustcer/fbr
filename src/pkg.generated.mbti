@@ -2,72 +2,42 @@
 package "hustcer/fbr"
 
 import {
-  "moonbitlang/core/debug",
+  "hustcer/fbr/common",
+  "hustcer/fbr/decode",
+  "hustcer/fbr/encode",
 }
 
 // Values
-pub fn brotli_sync(FixedArray[Byte], opts? : BrotliOptions) -> FixedArray[Byte] raise FzipError
+pub fn brotli_sync(FixedArray[Byte], opts? : @encode.BrotliOptions) -> FixedArray[Byte] raise @common.FzipError
 
 pub let default_max_input_size : Int
 
 pub let default_max_output_size : Int
 
-pub fn unbrotli_sync(FixedArray[Byte], opts? : UnbrotliOptions) -> FixedArray[Byte] raise FzipError
+pub fn fzip_err(@common.FzipErrorCode, msg? : String) -> @common.FzipError
+
+pub fn fzip_error_code_to_int(@common.FzipErrorCode) -> Int
+
+pub fn unbrotli_sync(FixedArray[Byte], opts? : @decode.UnbrotliOptions) -> FixedArray[Byte] raise @common.FzipError
 
 // Errors
-pub(all) suberror FzipError {
-  FzipError(code~ : FzipErrorCode, message~ : String)
-}
 
 // Types and methods
-pub(all) struct BrotliOptions {
-  quality : Int
-  window_bits : Int
-  max_input_size : Int
-} derive(@debug.Debug)
-pub fn BrotliOptions::default() -> Self
-
-pub(all) struct BrotliStream {
-  mut ondata : FlateStreamHandler?
-  // private fields
-}
-pub fn BrotliStream::new(opts? : BrotliOptions) -> Self
-pub fn BrotliStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise FzipError
-
-pub(all) struct FlateStreamHandler((FixedArray[Byte], Bool) -> Unit)
-
-pub(all) enum FzipErrorCode {
-  UnexpectedEOF
-  InvalidUTF8
-  InvalidZipData
-  BrotliInvalidWindowBits
-  BrotliInvalidMetablock
-  BrotliInvalidHuffman
-  BrotliInvalidContextMap
-  BrotliInvalidDistance
-  BrotliInvalidTransform
-  BrotliDictionaryNotSupported
-  BrotliLargeWindowNotSupported
-  BrotliReserved
-  BrotliInvalidPadding
-} derive(Eq, @debug.Debug)
-pub impl Show for FzipErrorCode
-
-pub(all) struct UnbrotliOptions {
-  out : FixedArray[Byte]?
-  max_output_size : Int
-  max_input_size : Int
-} derive(@debug.Debug)
-pub fn UnbrotliOptions::default() -> Self
-
-pub(all) struct UnbrotliStream {
-  mut ondata : FlateStreamHandler?
-  // private fields
-}
-pub fn UnbrotliStream::new(opts? : UnbrotliOptions) -> Self
-pub fn UnbrotliStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise FzipError
 
 // Type aliases
+pub using @encode {type BrotliOptions}
+
+pub using @encode {type BrotliStream}
+
+pub using @common {type FlateStreamHandler}
+
+pub using @common {type FzipError}
+
+pub using @common {type FzipErrorCode}
+
+pub using @decode {type UnbrotliOptions}
+
+pub using @decode {type UnbrotliStream}
 
 // Traits
 

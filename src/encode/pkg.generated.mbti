@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hustcer/fbr/encode"
+
+import {
+  "hustcer/fbr/common",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn brotli_sync(FixedArray[Byte], opts? : BrotliOptions) -> FixedArray[Byte] raise @common.FzipError
+
+// Errors
+
+// Types and methods
+pub(all) struct BrotliOptions {
+  quality : Int
+  window_bits : Int
+  max_input_size : Int
+} derive(@debug.Debug)
+pub fn BrotliOptions::default() -> Self
+
+pub(all) struct BrotliStream {
+  mut ondata : @common.FlateStreamHandler?
+  // private fields
+}
+pub fn BrotliStream::new(opts? : BrotliOptions) -> Self
+pub fn BrotliStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise @common.FzipError
+pub fn BrotliStream::set_ondata(Self, (FixedArray[Byte], Bool) -> Unit) -> Unit
+
+// Type aliases
+
+// Traits
+

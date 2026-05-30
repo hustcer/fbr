@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hustcer/fbr/decode"
+
+import {
+  "hustcer/fbr/common",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn unbrotli_sync(FixedArray[Byte], opts? : UnbrotliOptions) -> FixedArray[Byte] raise @common.FzipError
+
+// Errors
+
+// Types and methods
+pub(all) struct UnbrotliOptions {
+  out : FixedArray[Byte]?
+  max_output_size : Int
+  max_input_size : Int
+} derive(@debug.Debug)
+pub fn UnbrotliOptions::default() -> Self
+
+pub(all) struct UnbrotliStream {
+  mut ondata : @common.FlateStreamHandler?
+  // private fields
+}
+pub fn UnbrotliStream::new(opts? : UnbrotliOptions) -> Self
+pub fn UnbrotliStream::push(Self, FixedArray[Byte], final_? : Bool) -> Unit raise @common.FzipError
+pub fn UnbrotliStream::set_ondata(Self, (FixedArray[Byte], Bool) -> Unit) -> Unit
+
+// Type aliases
+
+// Traits
+

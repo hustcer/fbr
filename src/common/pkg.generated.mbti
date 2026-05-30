@@ -1,0 +1,225 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hustcer/fbr/common"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn brotli_ascii_upper(Byte) -> Byte
+
+pub let brotli_block_length_bases : FixedArray[Int]
+
+pub let brotli_block_length_extra_bits : FixedArray[Int]
+
+pub let brotli_block_size_cap : Int
+
+pub fn brotli_build_command_info(Int) -> BrotliCommandInfo
+
+pub fn brotli_build_huffman_table(FixedArray[Byte], Int, Int) -> FixedArray[BrotliHuffmanCode] raise FzipError
+
+pub fn brotli_build_simple_huffman_table(FixedArray[Int], Int, Int) -> FixedArray[BrotliHuffmanCode] raise FzipError
+
+pub let brotli_code_length_code_order : FixedArray[Int]
+
+pub let brotli_code_length_prefix_length : FixedArray[Int]
+
+pub let brotli_code_length_prefix_value : FixedArray[Int]
+
+pub let brotli_command_cell_pos : FixedArray[Int]
+
+pub fn brotli_command_info(Int) -> BrotliCommandInfo raise FzipError
+
+pub let brotli_command_info_table : FixedArray[BrotliCommandInfo]
+
+pub let brotli_copy_length_extra_bits : FixedArray[Int]
+
+pub let brotli_dictionary_data : FixedArray[Byte]
+
+pub let brotli_dictionary_max_word_length : Int
+
+pub let brotli_dictionary_min_word_length : Int
+
+pub let brotli_dictionary_offsets_by_length : FixedArray[Int]
+
+pub let brotli_dictionary_size_bits_by_length : FixedArray[Int]
+
+pub fn brotli_distance_alphabet_size(Int, Int, Int) -> Int
+
+pub let brotli_distance_context_bits : Int
+
+pub fn brotli_distance_extra_bits(Int, Int, Int) -> Int raise FzipError
+
+pub fn brotli_distance_offset(Int, Int, Int) -> Int raise FzipError
+
+pub fn brotli_distance_ring_slot(Int) -> Int
+
+pub let brotli_huffman_max_code_length : Int
+
+pub let brotli_huffman_max_code_length_code_length : Int
+
+pub let brotli_huffman_max_table_size : Int
+
+pub let brotli_huffman_table_bits : Int
+
+pub let brotli_initial_repeated_code_length : Int
+
+pub let brotli_insert_length_extra_bits : FixedArray[Int]
+
+pub let brotli_literal_context_bits : Int
+
+pub fn brotli_literal_context_id(Int, Int, Int) -> Int raise FzipError
+
+pub fn brotli_log2_floor_plus_one(Int) -> Int
+
+pub let brotli_max_distance_bits : Int
+
+pub let brotli_max_metablock_bytes : Int
+
+pub let brotli_max_window_bits : Int
+
+pub let brotli_min_window_bits : Int
+
+pub let brotli_num_block_length_symbols : Int
+
+pub let brotli_num_code_length_codes : Int
+
+pub let brotli_num_command_symbols : Int
+
+pub let brotli_num_distance_short_codes : Int
+
+pub let brotli_num_literal_symbols : Int
+
+pub fn brotli_prefix_offset(FixedArray[Int], Int, Int) -> Int
+
+pub let brotli_repeat_previous_code_length : Int
+
+pub let brotli_repeat_zero_code_length : Int
+
+pub fn brotli_reverse_bits(Int, Int) -> Int
+
+pub let brotli_signed_lut1 : FixedArray[Int]
+
+pub let brotli_signed_lut2 : FixedArray[Int]
+
+pub fn brotli_transform_count() -> Int
+
+pub let brotli_transform_identity : Int
+
+pub let brotli_transform_omit_first_1 : Int
+
+pub let brotli_transform_omit_first_9 : Int
+
+pub let brotli_transform_omit_last_9 : Int
+
+pub let brotli_transform_prefix_suffix : FixedArray[Byte]
+
+pub let brotli_transform_prefix_suffix_map : FixedArray[Int]
+
+pub let brotli_transform_shift_all : Int
+
+pub let brotli_transform_shift_first : Int
+
+pub fn brotli_transform_string_length(Int) -> Int raise FzipError
+
+pub fn brotli_transform_string_offset(Int) -> Int raise FzipError
+
+pub let brotli_transform_triplets : FixedArray[Int]
+
+pub let brotli_transform_uppercase_all : Int
+
+pub let brotli_transform_uppercase_first : Int
+
+pub fn brotli_uppercase_all(FixedArray[Byte], Int, Int) -> Unit
+
+pub fn brotli_uppercase_first(FixedArray[Byte], Int, Int) -> Unit
+
+pub let brotli_utf8_lut1 : FixedArray[Int]
+
+pub let brotli_utf8_lut2 : FixedArray[Int]
+
+pub fn brotli_validate_huffman_lengths(FixedArray[Int], Int) -> Unit raise FzipError
+
+pub fn brotli_validate_window_bits(Int) -> Unit raise FzipError
+
+pub let brotli_window_gap : Int
+
+pub fn call_handler(FlateStreamHandler, FixedArray[Byte], Bool) -> Unit
+
+pub fn concat_chunks(Array[FixedArray[Byte]]) -> FixedArray[Byte]
+
+pub let default_max_input_size : Int
+
+pub let default_max_output_size : Int
+
+pub let error_messages : Array[String]
+
+pub fn fzip_err(FzipErrorCode, msg? : String) -> FzipError
+
+pub fn fzip_error_code_to_int(FzipErrorCode) -> Int
+
+pub fn max_int_val() -> Int
+
+pub let rev : FixedArray[Int]
+
+pub fn shft(Int) -> Int
+
+pub fn slc(FixedArray[Byte], Int, e? : Int) -> FixedArray[Byte]
+
+pub fn trim_buf(FixedArray[Byte], Int) -> FixedArray[Byte]
+
+// Errors
+pub(all) suberror FzipError {
+  FzipError(code~ : FzipErrorCode, message~ : String)
+}
+
+// Types and methods
+pub(all) struct BrotliCommandInfo {
+  insert_len_extra_bits : Int
+  copy_len_extra_bits : Int
+  distance_code : Int
+  distance_context : Int
+  insert_len_offset : Int
+  copy_len_offset : Int
+}
+
+pub(all) struct BrotliDistanceRing {
+  distances : FixedArray[Int]
+  mut index : Int
+  mut last_distance_context : Int
+}
+pub fn BrotliDistanceRing::compensate_dictionary_copy(Self) -> Unit
+pub fn BrotliDistanceRing::new() -> Self
+pub fn BrotliDistanceRing::record(Self, Int) -> Unit raise FzipError
+pub fn BrotliDistanceRing::take_short_code(Self, Int) -> Int raise FzipError
+
+pub(all) struct BrotliHuffmanCode {
+  bits : Int
+  value : Int
+}
+pub fn BrotliHuffmanCode::empty() -> Self
+pub fn BrotliHuffmanCode::new(Int, Int) -> Self
+
+pub(all) struct FlateStreamHandler((FixedArray[Byte], Bool) -> Unit)
+
+pub(all) enum FzipErrorCode {
+  UnexpectedEOF
+  InvalidUTF8
+  InvalidZipData
+  BrotliInvalidWindowBits
+  BrotliInvalidMetablock
+  BrotliInvalidHuffman
+  BrotliInvalidContextMap
+  BrotliInvalidDistance
+  BrotliInvalidTransform
+  BrotliDictionaryNotSupported
+  BrotliLargeWindowNotSupported
+  BrotliReserved
+  BrotliInvalidPadding
+} derive(Eq, @debug.Debug)
+pub impl Show for FzipErrorCode
+
+// Type aliases
+
+// Traits
+
