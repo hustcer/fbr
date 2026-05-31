@@ -713,6 +713,56 @@ Rejected strategies. Do not retry these unchanged:
   `distance <= max_distance`. It passed tests but made the checked wrapper
   unused and screened slower on native `cc-o0` across q0/q5/q9/q11. Keep the
   existing single checked helper.
+- **Remove per-literal byte-range checks:** deleted `literal < 0 || literal >
+  255` checks from the literal decode loops, relying on the 256-symbol literal
+  alphabet and Huffman-table validation. It passed tests/check but screened
+  slower on q0/q5/q9/q11, likely due to backend code-layout effects. Keep the
+  explicit checks.
+- **Early return from `BrotliOutputBuilder::ensure(0)`:** added a zero-size
+  fast return to avoid capacity checks for zero-insert commands without adding
+  a branch in the decode loop. Same-time baseline showed native `cc-o0` slower
+  on q0/q5/q9/q11. Keep the existing uniform `ensure` path.
+- **Lower initial output capacity hint from 5.0x to 4.5x compressed size:**
+  changed `brotli_initial_output_capacity` to reserve `input_len * 9 / 2`
+  instead of `input_len * 5`. It passed decode tests/check after updating the
+  white-box expectation, but same-time baseline comparison was not a stable
+  win: q0 native, q5 wasm-gc/native, q9 native, and q11 native were slower.
+  Keep the 5.0x hint unless a future candidate changes the larger allocation
+  and final trim behavior together with broader evidence.
+- **Normal-copy `remaining` bookkeeping split:** moved the normal
+  `distance <= max_distance` path to precheck `command.copy_length <=
+  remaining` and subtract `command.copy_length` directly, leaving
+  `output.len - output_before_copy` only for dictionary copies. It passed
+  tests/check but immediately regressed q0 in same-time screening
+  (wasm-gc/native both slower), so the uniform post-copy length-delta path is
+  better for current backends.
+- **Remove redundant `bits_avail < n` condition in the 24-bit refill branch:**
+  `BrotliBitReader::refill_to` already returns when `bits_avail >= n`, so the
+  later 24-bit refill branch can be written with only `bits_avail <= 8` and
+  input-room checks. It passed tests/check, but q0 screening was only tied on
+  wasm-gc and slower on native `cc-o0`; keep the old condition because its code
+  shape is faster on the current native backend.
+- **Combine command insert/copy extra-bit reads when total width <= 24:**
+  read both command extra fields with one `take_bits(total)` and split the
+  lower insert bits from the higher copy bits, falling back to separate reads
+  for wider commands. It passed tests/check and q0 wasm-gc was slightly better,
+  but q0 native `cc-o0` regressed, so the added branching is not worthwhile.
+- **Skip `take_bits(0)` for zero-width block/distance extra bits:** added
+  branches in `brotli_read_block_length` and `brotli_read_distance` to return
+  the base/offset directly when `extra_bits == 0`. It passed tests/check, but
+  q0 same-time screening regressed on both wasm-gc and native `cc-o0`; the
+  extra branch costs more than the empty read path on the current hot streams.
+- **Replace the hottest single-literal range `for` loop with a `while pos <
+  end` loop:** changed only the single literal tree + single literal block path
+  to avoid range-loop bookkeeping. It passed tests/check, but q0 native
+  `cc-o0` regressed immediately, so the existing `for _ in 0..<insert_length`
+  code shape is better.
+- **Inline command decode into the compressed-body loop:** replaced the reused
+  mutable `BrotliCommand` record and `read_into` method call with local command
+  variables in the loop. It passed tests/check and q0 improved slightly, but
+  q5 wasm-gc/native and q9/q11 native regressed in same-time baseline
+  comparison. Keep the reused command record; the local-variable code shape is
+  not a stable cross-quality win.
 
 Screening commands used for these negative trials:
 

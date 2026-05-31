@@ -4667,3 +4667,54 @@ info`, `git diff --check`, and `git diff --cached --check` passed.
   and capacity checks inside the decode loop. It passed tests/check but made
   the original helper unused and screened slower on native `cc-o0`, so it was
   reverted and recorded as rejected.
+- Tried removing the repeated literal byte-range checks from the hot literal
+  loops. It passed tests/check but screened slower across the q0/q5/q9/q11 set,
+  so it was reverted and recorded as rejected.
+- Tried an early return from `BrotliOutputBuilder::ensure(0)` to reduce
+  zero-insert command overhead. It passed tests/check but same-time baseline
+  showed native `cc-o0` slower across q0/q5/q9/q11, so it was reverted and
+  recorded as rejected.
+- Reinforced the plan-level decode performance guardrail in
+  `.planning/brotli-support/task_plan.md`: future agents must treat the full
+  `findings.md` rejected-trials section as a negative cache, including the
+  later failed literal range-check, `ensure(0)`, checked-copy, context-map, and
+  command/distance shortcut trials.
+- Tried lowering `brotli_initial_output_capacity` from a 5.0x compressed-size
+  hint to 4.5x. After updating the white-box test, `moon test src/decode
+  --target all` and `moon check --target all` passed, but q0/q5/q9/q11
+  targeted decode screening against `/tmp/fbr-baseline` was mixed to worse:
+  q5 was slower on both wasm-gc and native `cc-o0`, and native regressed on
+  q0/q9/q11. Reverted the source/test change and recorded it as rejected.
+- Tried splitting normal-copy `remaining` bookkeeping so non-dictionary
+  back-references subtract `command.copy_length` directly instead of measuring
+  `output.len - output_before_copy`. It passed `moon test src/decode --target
+  all` and `moon check --target all`, but q0 same-time screening regressed
+  from baseline 42.389/67.837 ms to 46.289/69.586 ms on wasm-gc/native
+  `cc-o0`. Reverted and recorded it as rejected without spending time on q5+.
+- Tried removing the redundant `bits_avail < n` condition from the 24-bit
+  refill branch in `BrotliBitReader::refill_to`. It passed `moon test
+  src/decode --target all` and `moon check --target all`, but q0 same-time
+  screening was not better: wasm-gc tied baseline and native `cc-o0` regressed
+  from 67.572 ms to 69.396 ms. Reverted and recorded it as rejected.
+- Tried combining command insert/copy extra-bit reads when their total width is
+  <=24, with a fallback to the old two-read path for wider commands. It passed
+  `moon test src/decode --target all` and `moon check --target all`; q0
+  wasm-gc improved only marginally, but native `cc-o0` regressed to 69.194 ms
+  versus the recent baseline around 67.572 ms. Reverted and recorded it as
+  rejected.
+- Tried skipping `take_bits(0)` in block-length and distance extra-bit readers.
+  It passed `moon test src/decode --target all` and `moon check --target all`,
+  but q0 same-time screening regressed versus `/tmp/fbr-baseline`: wasm-gc
+  42.635 vs 42.219 ms and native `cc-o0` 69.682 vs 67.800 ms. Reverted and
+  recorded it as rejected.
+- Tried replacing the hottest single literal tree + single literal block
+  `for _ in 0..<command.insert_length` loop with a `while pos < end` loop. It
+  passed `moon test src/decode --target all` and `moon check --target all`, but
+  q0 native `cc-o0` regressed to 69.838 ms, so it was reverted and recorded as
+  rejected.
+- Tried inlining `BrotliCommand::read_into` into the compressed-body loop as
+  local command variables. It passed `moon test src/decode --target all` and
+  `moon check --target all` (with temporary unused-command warnings before
+  cleanup). Same-time screening showed q0 improved slightly, but q5 regressed
+  on wasm-gc/native and q9/q11 native regressed, so it was reverted and
+  recorded as rejected.

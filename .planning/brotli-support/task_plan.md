@@ -33,12 +33,14 @@ implementations are available at `/Users/hustcer/iWork/refs/brotli` and
     encoded-size evidence in the commit body.
 - Decode performance guardrail as of 2026-05-31: before retrying decode hot-path
   ideas, read `.planning/brotli-support/findings.md`, section
-  `2026-05-31 — Rejected decode performance trials`. In particular, do not
-  repeat unchanged versions of the single-distance-tree fast path,
-  distance-1 exponential copy fill, final meta-block exact-capacity fitting,
-  root-8 Huffman specialization, or two-byte bit-reader refill trials. Future
-  decode candidates should improve both `wasm-gc` and native `cc-o0` on
-  q0/q5/q9/q11 before full `just bench`.
+  `2026-05-31 — Rejected decode performance trials`, and treat the full list
+  there as a negative cache. Do not repeat unchanged versions of any listed
+  trial, including single-tree/block fast paths, copy-loop rewrites, Huffman or
+  bit-reader micro-specializations, command/distance inline shortcuts,
+  context-map allocation changes, output-capacity/`ensure(0)` tweaks, literal
+  range-check removal, or checked-copy splitting. Future decode candidates
+  should improve both `wasm-gc` and native `cc-o0` on q0/q5/q9/q11 before full
+  `just bench`.
 
 ## Phase Checklist
 
