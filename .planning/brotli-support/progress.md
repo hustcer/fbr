@@ -69,6 +69,23 @@
     out of the worktree so they will not be committed.
   - Encode output sizes from the generated `docs/current-bench/encode.jsonl`
     matched HEAD exactly.
+- Accepted follow-up trial: switched `BrotliCommand::read_into` from the
+  checked `brotli_command_info(symbol)` helper to direct access of the existing
+  `brotli_command_info_table`, relying on command Huffman table validation.
+  - Screening q0/q5/q9/q11 Google 1 MiB streams with `wasm-gc,native`,
+    repeats=5, samples=3 improved aggregate eight-row min time from 353.828 to
+    347.499 ms/op, +1.79%.
+  - Individual min-time rows: q0 wasm/native 40.555 -> 39.856 and
+    65.456 -> 63.737; q5 32.275 -> 32.229 and 53.824 -> 52.165; q9
+    31.174 -> 30.884 and 51.893 -> 50.641; q11 28.973 -> 28.737 and
+    49.677 -> 49.251.
+  - Added white-box coverage that direct command info table entries match the
+    checked helper for representative command symbols.
+  - `just bench` passed; benchmark artifacts were saved under
+    `target/brotli-perf-notes/2026-06-01-command-info-table/` and then restored
+    out of the worktree so they will not be committed.
+  - Encode output sizes from the generated `docs/current-bench/encode.jsonl`
+    matched HEAD exactly.
 
 ## 2026-05-30 — P3 5% ratio release gate enforced
 

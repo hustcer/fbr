@@ -23,7 +23,7 @@ fn BrotliCommand::read_into(
   let symbol = brotli_read_symbol(
     reader, command_tree, @common.brotli_huffman_table_bits,
   )
-  let info = @common.brotli_command_info(symbol)
+  let info = @common.brotli_command_info_table[symbol]
   let insert_extra = if info.insert_len_extra_bits == 0 {
     0
   } else {

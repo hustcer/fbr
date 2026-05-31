@@ -200,6 +200,12 @@ implementations are available at `/Users/hustcer/iWork/refs/brotli` and
   wasm-gc/native min time by 2.87%; `just bench` passed and was saved under
   `target/brotli-perf-notes/2026-06-01-distance-formula/` instead of being
   committed.
+- Follow-up accepted decode increment: command decode now reads the existing
+  command info table directly after command Huffman validation instead of
+  calling the checked helper. q0/q5/q9/q11 screening improved aggregate
+  wasm-gc/native min time by 1.79%; `just bench` passed and was saved under
+  `target/brotli-perf-notes/2026-06-01-command-info-table/` instead of being
+  committed.
 
 ## Current Increment
 

@@ -622,6 +622,20 @@ test "brotli_command_info matches reference lookup cases" {
 }
 
 ///|
+test "brotli_command_info_table matches checked helper cases" {
+  for symbol in [0, 48, 64, 128] {
+    let checked = brotli_command_info(symbol)
+    let direct = @common.brotli_command_info_table[symbol]
+    assert_eq(direct.insert_len_extra_bits, checked.insert_len_extra_bits)
+    assert_eq(direct.copy_len_extra_bits, checked.copy_len_extra_bits)
+    assert_eq(direct.distance_code, checked.distance_code)
+    assert_eq(direct.distance_context, checked.distance_context)
+    assert_eq(direct.insert_len_offset, checked.insert_len_offset)
+    assert_eq(direct.copy_len_offset, checked.copy_len_offset)
+  }
+}
+
+///|
 /// Test helper: decode a single command into a fresh record. The decode loop
 /// itself reuses one `BrotliCommand` via `read_into`, but tests find a
 /// value-returning wrapper more convenient.

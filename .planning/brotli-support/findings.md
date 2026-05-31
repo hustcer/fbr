@@ -836,3 +836,15 @@ wasm-gc, treat it as a failed narrow optimization and revert.
   `target/brotli-perf-notes/2026-06-01-distance-formula/` rather than
   committed. Encode output sizes were unchanged versus the checked-in
   `docs/current-bench/encode.jsonl`.
+- **Direct command info table lookup:** changed the command decode hot path
+  from the checked `brotli_command_info(symbol)` helper to direct access of
+  the same `brotli_command_info_table`, relying on command Huffman table
+  construction to constrain symbols to the command alphabet. This is distinct
+  from the rejected packed-table representation: it keeps the existing record
+  table and only removes the redundant public-helper range check. Same-session
+  q0/q5/q9/q11 screening with `wasm-gc,native`, repeats=5, samples=3 improved
+  aggregate min time from 353.828 to 347.499 ms/op, a 1.79% decode speedup.
+  Each screened row improved. `just bench` completed, and its results were
+  saved under `target/brotli-perf-notes/2026-06-01-command-info-table/` rather
+  than committed. Encode output sizes were unchanged versus the checked-in
+  `docs/current-bench/encode.jsonl`.
