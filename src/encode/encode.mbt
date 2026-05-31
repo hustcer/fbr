@@ -5979,6 +5979,11 @@ fn brotli_use_natural_four_byte_candidate(
 }
 
 ///|
+fn brotli_use_mixed_dictionary_lz77_candidate(quality : Int) -> Bool {
+  quality >= 10
+}
+
+///|
 fn brotli_encode_uncompressed(
   data : FixedArray[Byte],
   opts : BrotliOptions,
@@ -6155,7 +6160,8 @@ fn brotli_try_compressed_chunk(
         initial_previous_byte_2,
       )
       let hq_config_4 = brotli_four_byte_hash_config(hq_config)
-      if brotli_mixed_dictionary_may_pay(data) {
+      if brotli_use_mixed_dictionary_lz77_candidate(quality) &&
+        brotli_mixed_dictionary_may_pay(data) {
         let mixed = brotli_try_compressed_command_candidate(
           data,
           brotli_build_mixed_dictionary_lz77_command_candidate(
