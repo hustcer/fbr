@@ -26,6 +26,13 @@
   - `moon test src/decode --target native` passed, 53/53.
   - `moon fmt && moon info && moon check --target all && moon test --target all
     && git diff --check` passed; all four targets report 122/122 tests.
+- Follow-up storage decision: benchmark artifacts from this run were moved out
+  of git history and saved under
+  `target/brotli-perf-notes/2026-06-01-tree-lookup/` for local comparison.
+- Rejected follow-up trial: direct distance context-map access in the
+  explicit-distance path. It passed native check and decode tests but failed
+  q0/q5/q9/q11 same-time screening because q5 wasm-gc regressed from 33.412 to
+  33.785 ms/op. Source was reverted and the failure was added to findings.
 
 ## 2026-05-30 — P3 5% ratio release gate enforced
 

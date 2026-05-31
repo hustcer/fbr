@@ -763,6 +763,14 @@ Rejected strategies. Do not retry these unchanged:
   q5 wasm-gc/native and q9/q11 native regressed in same-time baseline
   comparison. Keep the reused command record; the local-variable code shape is
   not a stable cross-quality win.
+- **Direct distance context-map access in the explicit-distance path:** replaced
+  `brotli_context_map_tree_index(...)` with direct indexing into
+  `header.distance_context_map.map` after block/context validation. This passed
+  `moon check --target native` and `moon test src/decode --target native`, but
+  made the checked helper unused and failed same-time screening: q0/q9/q11 were
+  mostly faster, but q5 wasm-gc regressed from 33.412 to 33.785 ms/op. Reverted;
+  do not retry this exact direct-index substitution unless it is paired with a
+  broader structure that also protects q5 wasm-gc.
 
 Screening commands used for these negative trials:
 
