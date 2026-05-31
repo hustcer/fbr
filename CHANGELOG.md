@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.5.0
+
+### Performance
+
+- Improved Brotli q4-q8 encode time by pruning expensive candidate passes,
+  reusing match-chain tables, disabling lazy matching for those qualities, and
+  preferring the context8 writer when applicable.
+- In the `5591fe6` `target-perf` report, q4-q8 encode min timings improved
+  from v0.3.1 by 2.15x-3.01x on `wasm-gc` and 3.08x-3.95x on native for the
+  Silesia 64 KiB input, and by 2.57x-3.25x on `wasm-gc` and 3.39x-4.88x on
+  native for the Silesia 128 KiB input. The same benchmark rows grew output
+  size by 1.77%-2.63%.
+- The same report shows q2-q3 encode min timings improving by 1.11x-1.34x and
+  q9-q11 by 1.13x-1.77x on the Silesia 64 KiB and 128 KiB inputs, with
+  unchanged output sizes in those rows.
+- Optimized Brotli encoder prefix lookup paths for command lengths and
+  distances, plus context8 literal-tree reuse.
+- Added a decoder fast path for compressed meta-blocks with one literal tree
+  and one literal block type, avoiding per-literal block tracking.
+- Decode benchmark min timings for the 1 MiB Google-produced Silesia streams
+  ranged from 1.6% slower to 3.5% faster than v0.3.1, so no material decode
+  speedup is claimed for this release.
+
+### Tests and docs
+
+- Added white-box coverage for command-prefix tables, distance-prefix mapping,
+  hash-chain boundary pre-checks, candidate gating, shared previous-match
+  tables, and lazy-match deferral.
+- Added roundtrip coverage for literal-heavy streams and lazy-match deferral
+  inputs across multiple Brotli qualities.
+- Regenerated the 0.5.0 Brotli release benchmark report and current benchmark
+  JSONL files.
+
 ## v0.3.0
 
 ### Added
