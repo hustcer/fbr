@@ -8,9 +8,11 @@ on:
     branches:
       - main
       - develop
-
     paths-ignore:
       - "**.md"
+      - "docs/**"
+      
+permissions: read-all
 
 jobs:
   fbr-check:
@@ -18,15 +20,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
-        # os: [windows-latest, ubuntu-latest, macos-latest, macos-15-intel]
     runs-on: ${{ matrix.os }}
     name: CI@${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Setup Moonbit
-        uses: hustcer/setup-moonbit@main
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1.22
 
       - name: Check Fbr Build & Test
         run: |
