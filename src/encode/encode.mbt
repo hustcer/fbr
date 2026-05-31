@@ -5764,15 +5764,17 @@ fn brotli_write_best_lz77_metablock(
     }
   }
   if allow_contexts {
-    match
-      brotli_write_context4_lz77_metablock(
-        data, commands, is_last, initial_previous_byte_1, initial_previous_byte_2,
-      ) {
-      Some(candidate) =>
-        if candidate.bit_pos < best.bit_pos {
-          best = candidate
-        }
-      None => ()
+    if brotli_use_context4_lz77_candidate(quality) {
+      match
+        brotli_write_context4_lz77_metablock(
+          data, commands, is_last, initial_previous_byte_1, initial_previous_byte_2,
+        ) {
+        Some(candidate) =>
+          if candidate.bit_pos < best.bit_pos {
+            best = candidate
+          }
+        None => ()
+      }
     }
     match
       brotli_write_context8_lz77_metablock(
@@ -5798,6 +5800,11 @@ fn brotli_write_best_lz77_metablock(
     }
   }
   best
+}
+
+///|
+fn brotli_use_context4_lz77_candidate(quality : Int) -> Bool {
+  quality < 4 || quality > 8
 }
 
 ///|
