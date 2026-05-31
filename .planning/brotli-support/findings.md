@@ -771,6 +771,13 @@ Rejected strategies. Do not retry these unchanged:
   mostly faster, but q5 wasm-gc regressed from 33.412 to 33.785 ms/op. Reverted;
   do not retry this exact direct-index substitution unless it is paired with a
   broader structure that also protects q5 wasm-gc.
+- **Remove the per-symbol single-symbol Huffman table check:** relied on
+  single-symbol tables being replicated across the root table and let the
+  normal root lookup handle zero-bit entries. This passed native check and
+  decode tests, but failed screening because q0 wasm-gc regressed from 42.017
+  to 44.907 ms/op. Keep the early `table[0]` zero-bit check; q0 literal-heavy
+  streams appear to benefit from it more than higher-quality streams benefit
+  from removing the branch.
 
 Screening commands used for these negative trials:
 

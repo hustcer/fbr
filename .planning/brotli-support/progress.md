@@ -33,6 +33,10 @@
   explicit-distance path. It passed native check and decode tests but failed
   q0/q5/q9/q11 same-time screening because q5 wasm-gc regressed from 33.412 to
   33.785 ms/op. Source was reverted and the failure was added to findings.
+- Rejected follow-up trial: removing the per-symbol single-symbol Huffman
+  table check. It passed native check and decode tests but failed screening
+  because q0 wasm-gc regressed from 42.017 to 44.907 ms/op. Source was
+  reverted and the failure was added to findings.
 
 ## 2026-05-30 — P3 5% ratio release gate enforced
 
