@@ -5818,6 +5818,14 @@ fn brotli_use_command_distance_split_lz77_candidates(quality : Int) -> Bool {
 }
 
 ///|
+fn brotli_use_literal_only_lz77_candidate(
+  quality : Int,
+  data_length : Int,
+) -> Bool {
+  !(quality >= 4 && quality <= 8 && data_length >= 8192)
+}
+
+///|
 fn brotli_try_compressed_commands(
   data : FixedArray[Byte],
   commands : Array[BrotliEncodeCommand]?,
@@ -6024,22 +6032,24 @@ fn brotli_try_compressed_chunk(
     initial_previous_byte_1,
     initial_previous_byte_2,
   )
-  let best = brotli_try_compressed_command_candidate(
-    data,
-    brotli_wrap_command_candidate(
-      brotli_build_literal_only_command(data),
-      distance_cache,
-    ),
-    is_last,
-    best,
-    quality,
-    allow_contexts,
-    initial_previous_byte_1,
-    initial_previous_byte_2,
-  )
-  let best = brotli_try_split_literal_only_chunk(
-    data, is_last, best, distance_cache,
-  )
+  let best = if brotli_use_literal_only_lz77_candidate(quality, data.length()) {
+    let best = brotli_try_compressed_command_candidate(
+      data,
+      brotli_wrap_command_candidate(
+        brotli_build_literal_only_command(data),
+        distance_cache,
+      ),
+      is_last,
+      best,
+      quality,
+      allow_contexts,
+      initial_previous_byte_1,
+      initial_previous_byte_2,
+    )
+    brotli_try_split_literal_only_chunk(data, is_last, best, distance_cache)
+  } else {
+    best
+  }
   let best = brotli_try_compressed_command_candidate(
     data,
     brotli_wrap_command_candidate(
@@ -6401,14 +6411,16 @@ fn brotli_encode_standard(
       best,
       opts.quality,
     )
-    best = brotli_try_compressed_commands(
-      data,
-      brotli_build_literal_only_command(data),
-      true,
-      best,
-      opts.quality,
-    )
-    best = brotli_try_split_literal_only_metablock(data, true, best)
+    if brotli_use_literal_only_lz77_candidate(opts.quality, data.length()) {
+      best = brotli_try_compressed_commands(
+        data,
+        brotli_build_literal_only_command(data),
+        true,
+        best,
+        opts.quality,
+      )
+      best = brotli_try_split_literal_only_metablock(data, true, best)
+    }
     best = brotli_try_compressed_commands(
       data,
       brotli_build_identity_dictionary_commands(

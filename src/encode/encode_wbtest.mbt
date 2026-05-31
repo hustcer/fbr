@@ -1443,6 +1443,11 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   assert_true(brotli_use_natural_four_byte_candidate(4, 65536))
   assert_false(brotli_use_natural_four_byte_candidate(5, 65536))
   assert_true(brotli_use_natural_four_byte_candidate(6, 65536))
+  assert_true(brotli_use_literal_only_lz77_candidate(3, 65536))
+  assert_true(brotli_use_literal_only_lz77_candidate(4, 4096))
+  assert_false(brotli_use_literal_only_lz77_candidate(4, 8192))
+  assert_false(brotli_use_literal_only_lz77_candidate(8, 65536))
+  assert_true(brotli_use_literal_only_lz77_candidate(9, 65536))
   inspect(
     brotli_high_quality_hash_config_for_quality(10).max_match_checks,
     content="256",
