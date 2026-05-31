@@ -1422,3 +1422,32 @@ binary alone drifted ~5% between two separated runs).
   keep `bit_buf : UInt` (32-bit) and only replace the empty-accumulator 4-byte
   byte/shift/OR chain with `Bytes::unsafe_read_uint32_le`. Hypothesis: keeps
   part of the native win without the wasm-gc 64-bit penalty.
+
+## 2026-06-01 — Rejected decode performance trial (L3-alone intrinsic word load)
+
+- **L3-alone: zero-copy `Bytes` view + `unsafe_read_uint32_le` for the
+  empty-accumulator refill, keeping the 32-bit `bit_buf`.** Minimal change:
+  added a `bytes : Bytes` field (`unsafe_reinterpret_as_bytes`, `%identity`)
+  and replaced only the empty-accumulator 4-byte load with one
+  `self.bytes.unsafe_read_uint32_le(p)`; the 3-byte partial path and
+  byte-at-a-time tail were unchanged, and `huffman_decode.mbt` was untouched
+  (accumulator stays `UInt`). Passed `moon check` (both targets) and
+  `moon test src/decode` (56/56).
+- **Same-time `decode-compare` (rounds=4) verdict: FAIL — slower almost
+  everywhere.** Per (quality, target) delta vs HEAD: q0 wasm +0.43% / native
+  +0.31%; q5 wasm -0.60% / native +1.03%; q9 wasm +0.10% / native +1.37%;
+  q11 wasm +0.54% / native +0.21%. 7 of 8 rows regressed, aggregate +0.49%.
+- **Decisive insight — the lever is refill *frequency* (bytes per load), not
+  the load mechanism.** L3-alone still fills only 32 bits per empty refill, so
+  it refills exactly as often as HEAD; the intrinsic read is not cheaper than
+  the byte/shift/OR chain on these backends (the `Bytes` view appears to add a
+  small indirection). The combined L1+L3 native win therefore came entirely
+  from **L1's 64-bit accumulator loading 8 bytes per refill (halved refill
+  frequency)**, and widening the accumulator is exactly what penalizes wasm-gc.
+- **Conclusion: the bit-reader refill avenue is exhausted for a clean
+  cross-target win.** HEAD's 32-bit byte/shift/OR accumulator is the local
+  optimum on the current MoonBit backends. Do not retry intrinsic word loads
+  or accumulator-width changes for the bit reader unless a backend changes or
+  per-target source files are introduced (a 64-bit native-only bit reader could
+  capture the native -0.7%..-3.2% win, but at the cost of two implementations
+  and is native-only — not pursued under the one-implementation guardrail).

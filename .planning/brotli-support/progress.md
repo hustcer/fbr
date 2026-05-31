@@ -5182,3 +5182,12 @@ info`, `git diff --check`, and `git diff --cached --check` passed.
   and the brainstorm + C1 + L1 findings. Next: try L3-alone (keep 32-bit
   accumulator, only swap the empty-accumulator 4-byte chain for
   `unsafe_read_uint32_le`).
+- L3-alone built and tested (56/56, both targets). `decode-compare` rounds=4
+  FAILED 7/8 rows (aggregate +0.49%, slower almost everywhere, including
+  native). Decisive: L3-alone fills only 32 bits per empty refill, so refill
+  frequency equals HEAD and the intrinsic read is not cheaper than the byte
+  chain. The combined L1+L3 native win came entirely from L1's 8-byte/64-bit
+  refill (halved frequency), which is exactly what hurts wasm-gc. Reverted
+  bit_reader to HEAD. The bit-reader refill avenue is exhausted for a clean
+  cross-target win; the 32-bit byte/shift/OR accumulator is the local optimum
+  on current backends.
