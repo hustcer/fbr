@@ -5612,7 +5612,8 @@ fn brotli_write_best_lz77_metablock(
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
 ) -> BrotliBitWriter raise @common.FbrError {
-  if allow_contexts && quality <= 2 && data.length() >= 524288 {
+  if allow_contexts &&
+    brotli_use_context16_first_low_quality_candidate(quality, data.length()) {
     if commands.length() != 1 || commands[0].has_copy {
       match
         brotli_write_context16_lz77_metablock(
@@ -5814,6 +5815,15 @@ fn brotli_write_best_lz77_metablock(
     }
   }
   best
+}
+
+///|
+fn brotli_use_context16_first_low_quality_candidate(
+  quality : Int,
+  data_length : Int,
+) -> Bool {
+  (quality == 2 && data_length >= 8192) ||
+  (quality < 2 && data_length >= 524288)
 }
 
 ///|
