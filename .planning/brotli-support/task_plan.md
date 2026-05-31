@@ -194,6 +194,12 @@ implementations are available at `/Users/hustcer/iWork/refs/brotli` and
   aggregate wasm-gc/native min time by 2.44%; `just bench` passed and was saved
   under `target/brotli-perf-notes/2026-06-01-short-distance/` instead of being
   committed.
+- Follow-up accepted decode increment: decode-private explicit-distance formula
+  fusion avoids two public helper calls and duplicate `xcode` work for
+  non-short distance symbols. q0/q5/q9/q11 screening improved aggregate
+  wasm-gc/native min time by 2.87%; `just bench` passed and was saved under
+  `target/brotli-perf-notes/2026-06-01-distance-formula/` instead of being
+  committed.
 
 ## Current Increment
 

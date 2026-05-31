@@ -824,3 +824,15 @@ wasm-gc, treat it as a failed narrow optimization and revert.
   `target/brotli-perf-notes/2026-06-01-short-distance/` rather than committed.
   Encode output sizes were unchanged versus the checked-in
   `docs/current-bench/encode.jsonl`.
+- **Fused explicit-distance formula in decode-private path:** replaced the
+  non-short explicit-distance path's separate calls to
+  `brotli_distance_extra_bits` and `brotli_distance_offset` with one local
+  calculation after the Huffman code has already established the code range.
+  This avoids duplicate checks and recomputing `xcode`. Same-session
+  q0/q5/q9/q11 screening with `wasm-gc,native`, repeats=5, samples=3 improved
+  aggregate min time from 363.756 to 353.315 ms/op, a 2.87% decode speedup.
+  Each of the eight screened rows improved. `just bench` completed, and its
+  results were saved under
+  `target/brotli-perf-notes/2026-06-01-distance-formula/` rather than
+  committed. Encode output sizes were unchanged versus the checked-in
+  `docs/current-bench/encode.jsonl`.

@@ -49,7 +49,17 @@ fn brotli_read_distance(
   if code < @common.brotli_num_distance_short_codes {
     return brotli_take_short_code_validated(distance_ring, code)
   }
-  let extra_bits = @common.brotli_distance_extra_bits(code, npostfix, ndirect)
-  let offset = @common.brotli_distance_offset(code, npostfix, ndirect)
+  let direct_limit = @common.brotli_num_distance_short_codes + ndirect
+  if code < direct_limit {
+    return code - @common.brotli_num_distance_short_codes + 1
+  }
+  let xcode = code - ndirect - @common.brotli_num_distance_short_codes
+  let extra_bits = 1 + (xcode >> (npostfix + 1))
+  let half = (xcode >> npostfix) & 1
+  let postfix = xcode & ((1 << npostfix) - 1)
+  let offset = ndirect +
+    ((((2 + half) << extra_bits) - 4) << npostfix) +
+    postfix +
+    1
   offset + (reader.take_bits(extra_bits).reinterpret_as_int() << npostfix)
 }

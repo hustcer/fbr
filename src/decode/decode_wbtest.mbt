@@ -736,6 +736,38 @@ test "brotli distance formula decodes direct and postfix distances" {
 }
 
 ///|
+test "brotli_read_distance decodes direct and postfix explicit distances" {
+  let direct_tree = make_one_symbol_tree(
+    17,
+    brotli_distance_alphabet_size(0, 4, 24),
+  )
+  inspect(
+    brotli_read_distance(
+      BrotliBitReader::new([], 0, 0),
+      direct_tree,
+      BrotliDistanceRing::new(),
+      0,
+      4,
+    ),
+    content="2",
+  )
+  let postfix_tree = make_one_symbol_tree(
+    20,
+    brotli_distance_alphabet_size(1, 4, 24),
+  )
+  inspect(
+    brotli_read_distance(
+      BrotliBitReader::new([0x01], 0, 1),
+      postfix_tree,
+      BrotliDistanceRing::new(),
+      1,
+      4,
+    ),
+    content="7",
+  )
+}
+
+///|
 test "compressed body switches literal blocks" {
   let literal_map = FixedArray::make(2 << brotli_literal_context_bits, b'\x00')
   for i in (1 << brotli_literal_context_bits)..<literal_map.length() {

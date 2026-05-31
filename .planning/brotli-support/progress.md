@@ -52,6 +52,23 @@
     out of the worktree so they will not be committed.
   - Encode output sizes from the generated `docs/current-bench/encode.jsonl`
     matched HEAD exactly.
+- Accepted follow-up trial: fused the decode-private non-short explicit-distance
+  formula so `brotli_read_distance` no longer calls both public distance helper
+  functions after a distance Huffman symbol has already provided a valid code.
+  - Screening q0/q5/q9/q11 Google 1 MiB streams with `wasm-gc,native`,
+    repeats=5, samples=3 improved aggregate eight-row min time from 363.756 to
+    353.315 ms/op, +2.87%.
+  - Individual min-time rows: q0 wasm/native 41.115 -> 40.595 and
+    67.422 -> 64.753; q5 32.821 -> 32.152 and 55.503 -> 53.608; q9
+    31.428 -> 31.240 and 54.208 -> 51.935; q11 29.367 -> 29.006 and
+    51.892 -> 50.026.
+  - Added white-box coverage for direct and postfix explicit distances through
+    `brotli_read_distance`.
+  - `just bench` passed; benchmark artifacts were saved under
+    `target/brotli-perf-notes/2026-06-01-distance-formula/` and then restored
+    out of the worktree so they will not be committed.
+  - Encode output sizes from the generated `docs/current-bench/encode.jsonl`
+    matched HEAD exactly.
 
 ## 2026-05-30 — P3 5% ratio release gate enforced
 
