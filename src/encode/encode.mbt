@@ -1933,21 +1933,79 @@ let brotli_command_prefix_table : FixedArray[Int] = {
 }
 
 ///|
-fn brotli_prefix_code_for_length(
+let brotli_insert_length_offsets : FixedArray[Int] = [
+  0, 1, 2, 3, 4, 5, 6, 8, 10, 14, 18, 26, 34, 50, 66, 98, 130, 194, 322, 578, 1090,
+  2114, 6210, 22594,
+]
+
+///|
+let brotli_copy_length_offsets : FixedArray[Int] = [
+  2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 18, 22, 30, 38, 54, 70, 102, 134, 198, 326,
+  582, 1094, 2118,
+]
+
+///|
+fn brotli_length_prefix_from_code(
   extra_bits : FixedArray[Int],
-  initial : Int,
+  offsets : FixedArray[Int],
+  code : Int,
   length : Int,
 ) -> (Int, Int, Int)? {
-  let mut offset = initial
-  for code in 0..<extra_bits.length() {
-    let bits = extra_bits[code]
-    let limit = offset + (1 << bits)
-    if length >= offset && length < limit {
-      return Some((code, bits, length - offset))
-    }
-    offset = limit
+  if code < 0 || code >= extra_bits.length() {
+    return None
   }
-  None
+  let offset = offsets[code]
+  let bits = extra_bits[code]
+  if length >= offset && length < offset + (1 << bits) {
+    Some((code, bits, length - offset))
+  } else {
+    None
+  }
+}
+
+///|
+fn brotli_insert_prefix_code_for_length(length : Int) -> (Int, Int, Int)? {
+  if length < 0 {
+    return None
+  }
+  let code = if length < 6 {
+    length
+  } else if length < 130 {
+    let nbits = @common.brotli_log2_floor_plus_one(length - 2) - 2
+    (nbits << 1) + ((length - 2) >> nbits) + 2
+  } else if length < 2114 {
+    @common.brotli_log2_floor_plus_one(length - 66) + 9
+  } else if length < 6210 {
+    21
+  } else if length < 22594 {
+    22
+  } else {
+    23
+  }
+  brotli_length_prefix_from_code(
+    @common.brotli_insert_length_extra_bits, brotli_insert_length_offsets, code,
+    length,
+  )
+}
+
+///|
+fn brotli_copy_prefix_code_for_length(length : Int) -> (Int, Int, Int)? {
+  if length < 2 {
+    return None
+  }
+  let code = if length < 10 {
+    length - 2
+  } else if length < 134 {
+    let nbits = @common.brotli_log2_floor_plus_one(length - 6) - 2
+    (nbits << 1) + ((length - 6) >> nbits) + 4
+  } else if length < 2118 {
+    @common.brotli_log2_floor_plus_one(length - 70) + 11
+  } else {
+    23
+  }
+  brotli_length_prefix_from_code(
+    @common.brotli_copy_length_extra_bits, brotli_copy_length_offsets, code, length,
+  )
 }
 
 ///|
@@ -1958,12 +2016,8 @@ fn brotli_command_prefix_for_mode(
 ) -> BrotliCommandPrefix raise @common.FbrError {
   match
     (
-      brotli_prefix_code_for_length(
-        @common.brotli_insert_length_extra_bits, 0, insert_length,
-      ),
-      brotli_prefix_code_for_length(
-        @common.brotli_copy_length_extra_bits, 2, copy_length,
-      ),
+      brotli_insert_prefix_code_for_length(insert_length),
+      brotli_copy_prefix_code_for_length(copy_length),
     ) {
     (
       Some((insert_code, insert_bits, insert_extra)),
