@@ -545,6 +545,25 @@ fn brotli_longest_previous_hash_match_with_cache(
   }
   let mut checked = 0
   while candidate >= 0 && checked < max_match_checks {
+    // Boundary-byte pre-check: a candidate can only beat the incumbent if its
+    // common prefix with `position` is at least `best_length + 1` bytes, which
+    // requires the byte at offset `best_length` to match. If it differs the
+    // prefix cannot reach that offset, so the candidate's length is
+    // <= best_length regardless of the earlier bytes; skipping it never
+    // changes the selected match. This one comparison rejects most chain
+    // candidates without the 4-byte prefix test or the byte-by-byte extension.
+    // Once `position + best_length` runs past the data end no remaining
+    // candidate can extend beyond `best_length`, so the walk can stop.
+    if best_length > 0 {
+      if position + best_length >= len {
+        break
+      }
+      if data[candidate + best_length] != data[position + best_length] {
+        candidate = previous[candidate]
+        checked += 1
+        continue
+      }
+    }
     if data[candidate] == b0 &&
       data[candidate + 1] == b1 &&
       data[candidate + 2] == b2 &&

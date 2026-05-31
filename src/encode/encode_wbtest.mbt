@@ -1218,6 +1218,42 @@ test "brotli_sync matcher probes distance-cache candidates" {
 }
 
 ///|
+/// The hash-chain walk uses a boundary-byte pre-check that skips any candidate
+/// whose byte at offset `best_length` differs, since its common prefix cannot
+/// then exceed the incumbent. This must never discard a genuinely longer match
+/// that sits deeper in the chain than a shorter one. Here the most recent chain
+/// entry (distance 12) matches only the 4-byte prefix while the older entry
+/// (distance 32) matches all 16 bytes; the walk sets best_length=4 on the short
+/// one first, so the long one is reached only after the pre-check, which must
+/// pass it through. A regression that wrongly skipped it would return (4, 12).
+test "brotli matcher keeps longer chain match past boundary pre-check" {
+  let input : FixedArray[Byte] = [
+    // [0..15] long source
+    b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M',
+    b'N', b'O', b'P',
+    // [16..19] filler (distinct hash)
+     b'1', b'2', b'3', b'4',
+    // [20..27] short source: ABCD prefix then diverges
+     b'A', b'B', b'C', b'D', b'w', b'x', b'y', b'z',
+    // [28..31] filler
+     b'5', b'6', b'7', b'8',
+    // [32..47] match target, identical to [0..15]
+     b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M',
+    b'N', b'O', b'P',
+  ]
+  let config = brotli_high_quality_hash_config_for_quality(9)
+  let previous = brotli_previous_match_positions(input, config)
+  // All cache distances exceed the position, so no distance-cache candidate
+  // qualifies; the result is determined purely by the hash chain.
+  let distance_cache : FixedArray[Int] = [100, 100, 100, 100]
+  let (length, distance) = brotli_longest_previous_hash_match_with_cache(
+    input, previous, 32, config, distance_cache,
+  )
+  inspect(length, content="16")
+  inspect(distance, content="32")
+}
+
+///|
 test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   let input = FixedArray::make(1400, b'\x00')
   let alphabet : FixedArray[Byte] = [b'A', b'B', b'C', b'D']
