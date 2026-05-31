@@ -1228,11 +1228,12 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context8(
   commands : Array[BrotliEncodeCommand],
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
-) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]])? raise @common.FbrError {
+) -> (Array[BrotliLiteralSet], Array[FixedArray[Int]], FixedArray[Int])? raise @common.FbrError {
   let symbols : Array[FixedArray[Int]] = []
   let seen : Array[FixedArray[Bool]] = []
   let counts = FixedArray::make(8, 0)
   let frequencies : Array[FixedArray[Int]] = []
+  let literal_trees = FixedArray::make(data.length(), -1)
   for _ in 0..<8 {
     symbols.push(FixedArray::make(@common.brotli_num_literal_symbols, 0))
     seen.push(FixedArray::make(@common.brotli_num_literal_symbols, false))
@@ -1245,6 +1246,7 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context8(
       let tree = brotli_command_literal_utf8_context_tree8(
         data, position, initial_previous_byte_1, initial_previous_byte_2,
       )
+      literal_trees[position] = tree
       let literal = data[position].to_int()
       if !seen[tree][literal] {
         seen[tree][literal] = true
@@ -1261,7 +1263,7 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context8(
     }
     literal_sets.push({ symbols: symbols[tree], count: counts[tree] })
   }
-  Some((literal_sets, frequencies))
+  Some((literal_sets, frequencies, literal_trees))
 }
 
 ///|
@@ -5334,7 +5336,7 @@ fn brotli_write_context8_lz77_metablock(
   initial_previous_byte_1 : Int,
   initial_previous_byte_2 : Int,
 ) -> BrotliBitWriter? raise @common.FbrError {
-  let (literal_sets, literal_frequencies) = match
+  let (literal_sets, literal_frequencies, literal_trees) = match
     brotli_collect_command_literals_and_frequencies_by_utf8_context8(
       data, commands, initial_previous_byte_1, initial_previous_byte_2,
     ) {
@@ -5440,9 +5442,7 @@ fn brotli_write_context8_lz77_metablock(
     for j in 0..<command.insert_length {
       let position = command.insert_start + j
       let literal = data[position].to_int()
-      let tree = brotli_command_literal_utf8_context_tree8(
-        data, position, initial_previous_byte_1, initial_previous_byte_2,
-      )
+      let tree = literal_trees[position]
       let literal_payload = literal_payloads[tree][literal]
       writer.write_bits(
         literal_payload.insert_extra_bits,
