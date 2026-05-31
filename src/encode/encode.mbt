@@ -5851,7 +5851,7 @@ fn brotli_use_context8_first_lz77_candidate(
   quality : Int,
   data_length : Int,
 ) -> Bool {
-  quality >= 3 && quality <= 10 && data_length >= 8192
+  quality >= 3 && quality <= 11 && data_length >= 8192
 }
 
 ///|
