@@ -36,7 +36,7 @@ Or add this to `moon.mod.json`:
 ```json
 {
   "deps": {
-    "hustcer/fbr": "0.2.0"
+    "hustcer/fbr": "0.3.0"
   }
 }
 ```
@@ -151,6 +151,6 @@ regressions during review: the Brotli dictionary should be carried as
 bytes/data plus a small number of chunk copies, not as tens of thousands of
 `array.set` initialization instructions.
 
-See [docs/brotli-pkg.md](docs/brotli-pkg.md) for the package split rationale
-and [docs/brotli_benchmarks.md](docs/brotli_benchmarks.md) for recorded Brotli
+See [docs/brotli-pkg.md](https://github.com/hustcer/fbr/blob/main/docs/brotli-pkg.md) for the package split rationale
+and [docs/brotli_benchmarks.md](https://github.com/hustcer/fbr/blob/main/docs/brotli_benchmarks.md) for recorded Brotli
 benchmark data.

@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.3.0
+
+### Added
+
+- Added `just bench`, backed by `tools/brotli/bench/report.nu`, to regenerate
+  the Brotli release benchmark report and current benchmark JSONL files.
+- Added checked-in Brotli benchmark data under `docs/current-bench/`, including
+  Google Brotli 1 MiB comparison streams.
+
+### Performance
+
+- Improved Brotli decode hot paths by sizing dynamic output buffers from the
+  compressed input length, refilling the bit reader four bytes at a time, and
+  skipping zero-width command extra-bit reads.
+- Packed decoded Brotli Huffman table entries into `FixedArray[Int]` and
+  updated encoder/decoder users to avoid boxed table-entry loads.
+- Optimized compressed meta-block literal decoding with a single-literal-tree
+  fast path, a streamlined multi-tree path, and one reused command record per
+  meta-block.
+
+### Tests and docs
+
+- Added white-box coverage for the decode optimizations, packed Huffman table
+  behavior, output capacity sizing, and command record reuse.
+- Regenerated `docs/brotli_release_report.md` from the current release-build
+  benchmarks for `wasm-gc` and native targets against Google Brotli CLI 1.2.0.
+
 ## v0.2.0
 
 ### Breaking
