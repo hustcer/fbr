@@ -1475,7 +1475,7 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   assert_true(brotli_use_literal_only_lz77_candidate(4, 4096))
   assert_false(brotli_use_literal_only_lz77_candidate(4, 8192))
   assert_false(brotli_use_literal_only_lz77_candidate(8, 65536))
-  assert_true(brotli_use_literal_only_lz77_candidate(9, 65536))
+  assert_false(brotli_use_literal_only_lz77_candidate(9, 65536))
   assert_false(brotli_use_literal_only_lz77_candidate(10, 65536))
   assert_false(brotli_use_literal_only_lz77_candidate(11, 65536))
   inspect(

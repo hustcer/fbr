@@ -5859,7 +5859,7 @@ fn brotli_use_literal_only_lz77_candidate(
   quality : Int,
   data_length : Int,
 ) -> Bool {
-  data_length < 8192 || quality < 3 || quality == 9
+  data_length < 8192 || quality < 3
 }
 
 ///|
