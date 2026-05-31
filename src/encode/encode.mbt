@@ -5954,6 +5954,11 @@ fn brotli_try_split_literal_only_chunk(
 }
 
 ///|
+fn brotli_use_intermediate_lz77_candidate(quality : Int) -> Bool {
+  quality < 4 || quality > 8
+}
+
+///|
 fn brotli_use_intermediate_four_byte_candidate(
   quality : Int,
   data_length : Int,
@@ -6259,7 +6264,7 @@ fn brotli_try_compressed_chunk(
         initial_previous_byte_1,
         initial_previous_byte_2,
       )
-      if quality >= 4 {
+      if quality >= 4 && brotli_use_intermediate_lz77_candidate(quality) {
         let intermediate_config = brotli_intermediate_hash_config_for_quality(
           quality,
         )
@@ -6597,7 +6602,8 @@ fn brotli_encode_standard(
           best,
           opts.quality,
         )
-        if opts.quality >= 4 {
+        if opts.quality >= 4 &&
+          brotli_use_intermediate_lz77_candidate(opts.quality) {
           let intermediate_config = brotli_intermediate_hash_config_for_quality(
             opts.quality,
           )
