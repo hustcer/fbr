@@ -25,7 +25,7 @@ priv struct BrotliHashMatchCandidate {
 }
 
 ///|
-fn brotli_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
+fn brotli_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
   {
     table_size: 32768,
     table_mask: 32767,
@@ -34,7 +34,7 @@ fn brotli_hash_config_for_quality(_quality : Int) -> BrotliHashConfig {
     max_match_length: 4096,
     min_match_length: 4,
     max_distance_cache_codes: @common.brotli_num_distance_short_codes,
-    lazy_lookahead: 3,
+    lazy_lookahead: brotli_greedy_lazy_lookahead_for_quality(quality, 3),
     scan_step: 1,
     max_commands: 1200,
     max_input_length: 1048576,
@@ -64,7 +64,7 @@ fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
     lazy_lookahead: if quality <= 2 {
       1
     } else {
-      3
+      brotli_greedy_lazy_lookahead_for_quality(quality, 3)
     },
     scan_step: 1,
     max_commands: 52000,
@@ -160,7 +160,7 @@ fn brotli_intermediate_hash_config_for_quality(
       5
     },
     max_distance_cache_codes: @common.brotli_num_distance_short_codes,
-    lazy_lookahead: 3,
+    lazy_lookahead: brotli_greedy_lazy_lookahead_for_quality(quality, 3),
     scan_step: 1,
     max_commands,
     max_input_length: 2097152,
@@ -191,6 +191,18 @@ fn brotli_four_byte_hash_config(config : BrotliHashConfig) -> BrotliHashConfig {
     density_sample_step: config.density_sample_step,
     density_required_numerator: config.density_required_numerator,
     density_required_denominator: config.density_required_denominator,
+  }
+}
+
+///|
+fn brotli_greedy_lazy_lookahead_for_quality(
+  quality : Int,
+  default_lookahead : Int,
+) -> Int {
+  if quality >= 4 && quality <= 8 {
+    1
+  } else {
+    default_lookahead
   }
 }
 
