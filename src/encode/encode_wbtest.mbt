@@ -1203,6 +1203,26 @@ test "brotli_sync encoder uses distance-cache short codes" {
 }
 
 ///|
+test "brotli encoder maps distance prefixes by range boundary" {
+  for
+    code in @common.brotli_num_distance_short_codes..<@common.brotli_distance_alphabet_size(
+      0, 0, 24,
+    ) {
+    let extra_bits = @common.brotli_distance_extra_bits(code, 0, 0)
+    let offset = @common.brotli_distance_offset(code, 0, 0)
+    let first = brotli_distance_prefix_for_distance(offset)
+    assert_eq(first.symbol, code)
+    assert_eq(first.insert_extra_bits, extra_bits)
+    assert_eq(first.insert_extra, 0)
+    let last_extra = (1 << extra_bits) - 1
+    let last = brotli_distance_prefix_for_distance(offset + last_extra)
+    assert_eq(last.symbol, code)
+    assert_eq(last.insert_extra_bits, extra_bits)
+    assert_eq(last.insert_extra, last_extra)
+  }
+}
+
+///|
 test "brotli_sync matcher probes distance-cache candidates" {
   let input : FixedArray[Byte] = [
     b'a', b'b', b'c', b'd', b'0', b'1', b'a', b'b', b'c', b'd', b'2', b'3',

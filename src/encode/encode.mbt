@@ -1764,27 +1764,33 @@ fn brotli_find_single_copy_match(
 fn brotli_distance_prefix_for_distance(
   distance : Int,
 ) -> BrotliCommandPrefix raise @common.FbrError {
-  for
-    code in @common.brotli_num_distance_short_codes..<@common.brotli_distance_alphabet_size(
-      0, 0, 24,
-    ) {
-    let extra_bits = @common.brotli_distance_extra_bits(code, 0, 0)
-    let offset = @common.brotli_distance_offset(code, 0, 0)
-    let extra = distance - offset
-    if extra >= 0 && extra < 1 << extra_bits {
-      return {
-        symbol: code,
-        insert_extra: extra,
-        copy_extra: 0,
-        insert_extra_bits: extra_bits,
-        copy_extra_bits: 0,
-      }
-    }
+  if distance <= 0 {
+    raise @common.fbr_err(
+      @common.BrotliInvalidDistance,
+      msg="invalid Brotli distance",
+    )
   }
-  raise @common.fbr_err(
-    @common.BrotliInvalidDistance,
-    msg="no Brotli distance prefix",
-  )
+  let extra_bits = @common.brotli_log2_floor_plus_one(distance + 3) - 2
+  let split = 3 << extra_bits
+  let half = if distance + 4 <= split { 0 } else { 1 }
+  let offset = if half == 0 { (2 << extra_bits) - 3 } else { split - 3 }
+  let symbol = @common.brotli_num_distance_short_codes +
+    (extra_bits - 1) * 2 +
+    half
+  if symbol < @common.brotli_num_distance_short_codes ||
+    symbol >= @common.brotli_distance_alphabet_size(0, 0, 24) {
+    raise @common.fbr_err(
+      @common.BrotliInvalidDistance,
+      msg="no Brotli distance prefix",
+    )
+  }
+  {
+    symbol,
+    insert_extra: distance - offset,
+    copy_extra: 0,
+    insert_extra_bits: extra_bits,
+    copy_extra_bits: 0,
+  }
 }
 
 ///|
