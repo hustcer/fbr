@@ -5833,7 +5833,7 @@ fn brotli_use_command_distance_split_lz77_candidates(quality : Int) -> Bool {
 
 ///|
 fn brotli_use_literal_split_lz77_candidate(quality : Int) -> Bool {
-  quality < 4 || quality > 8
+  quality < 3 || quality > 8
 }
 
 ///|
