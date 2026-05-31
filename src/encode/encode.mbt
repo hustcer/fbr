@@ -5984,6 +5984,11 @@ fn brotli_use_mixed_dictionary_lz77_candidate(quality : Int) -> Bool {
 }
 
 ///|
+fn brotli_use_high_quality_four_byte_lz77_candidate(quality : Int) -> Bool {
+  quality >= 10
+}
+
+///|
 fn brotli_encode_uncompressed(
   data : FixedArray[Byte],
   opts : BrotliOptions,
@@ -6159,54 +6164,58 @@ fn brotli_try_compressed_chunk(
         initial_previous_byte_1,
         initial_previous_byte_2,
       )
-      let hq_config_4 = brotli_four_byte_hash_config(hq_config)
-      if brotli_use_mixed_dictionary_lz77_candidate(quality) &&
-        brotli_mixed_dictionary_may_pay(data) {
-        let mixed = brotli_try_compressed_command_candidate(
-          data,
-          brotli_build_mixed_dictionary_lz77_command_candidate(
-            data, hq_config_4, base_offset, window_bits, distance_cache,
-          ),
-          is_last,
-          best,
-          quality,
-          allow_contexts,
-          initial_previous_byte_1,
-          initial_previous_byte_2,
-        )
-        match (best, mixed) {
-          (Some(before), Some(after)) =>
-            if after.writer.bit_pos < before.writer.bit_pos {
-              mixed
-            } else {
-              brotli_try_compressed_command_candidate(
-                data,
-                brotli_build_simple_lz77_command_candidate(
-                  data, hq_config_4, distance_cache,
-                ),
-                is_last,
-                mixed,
-                quality,
-                allow_contexts,
-                initial_previous_byte_1,
-                initial_previous_byte_2,
-              )
-            }
-          (_, _) => mixed
+      if brotli_use_high_quality_four_byte_lz77_candidate(quality) {
+        let hq_config_4 = brotli_four_byte_hash_config(hq_config)
+        if brotli_use_mixed_dictionary_lz77_candidate(quality) &&
+          brotli_mixed_dictionary_may_pay(data) {
+          let mixed = brotli_try_compressed_command_candidate(
+            data,
+            brotli_build_mixed_dictionary_lz77_command_candidate(
+              data, hq_config_4, base_offset, window_bits, distance_cache,
+            ),
+            is_last,
+            best,
+            quality,
+            allow_contexts,
+            initial_previous_byte_1,
+            initial_previous_byte_2,
+          )
+          match (best, mixed) {
+            (Some(before), Some(after)) =>
+              if after.writer.bit_pos < before.writer.bit_pos {
+                mixed
+              } else {
+                brotli_try_compressed_command_candidate(
+                  data,
+                  brotli_build_simple_lz77_command_candidate(
+                    data, hq_config_4, distance_cache,
+                  ),
+                  is_last,
+                  mixed,
+                  quality,
+                  allow_contexts,
+                  initial_previous_byte_1,
+                  initial_previous_byte_2,
+                )
+              }
+            (_, _) => mixed
+          }
+        } else {
+          brotli_try_compressed_command_candidate(
+            data,
+            brotli_build_simple_lz77_command_candidate(
+              data, hq_config_4, distance_cache,
+            ),
+            is_last,
+            best,
+            quality,
+            allow_contexts,
+            initial_previous_byte_1,
+            initial_previous_byte_2,
+          )
         }
       } else {
-        brotli_try_compressed_command_candidate(
-          data,
-          brotli_build_simple_lz77_command_candidate(
-            data, hq_config_4, distance_cache,
-          ),
-          is_last,
-          best,
-          quality,
-          allow_contexts,
-          initial_previous_byte_1,
-          initial_previous_byte_2,
-        )
+        best
       }
     } else {
       let natural_config = brotli_natural_hash_config_for_quality(quality)
