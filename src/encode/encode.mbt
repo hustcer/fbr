@@ -5623,6 +5623,16 @@ fn brotli_write_best_lz77_metablock(
       }
     }
   }
+  if allow_contexts &&
+    brotli_use_context8_first_lz77_candidate(quality, data.length()) {
+    match
+      brotli_write_context8_lz77_metablock(
+        data, commands, is_last, initial_previous_byte_1, initial_previous_byte_2,
+      ) {
+      Some(candidate) => return candidate
+      None => ()
+    }
+  }
   let weighted = BrotliBitWriter::new(
     128 + data.length() * 4 + commands.length() * 8,
   )
@@ -5824,6 +5834,14 @@ fn brotli_use_command_distance_split_lz77_candidates(quality : Int) -> Bool {
 ///|
 fn brotli_use_literal_split_lz77_candidate(quality : Int) -> Bool {
   quality < 4 || quality > 8
+}
+
+///|
+fn brotli_use_context8_first_lz77_candidate(
+  quality : Int,
+  data_length : Int,
+) -> Bool {
+  quality >= 4 && quality <= 8 && data_length >= 8192
 }
 
 ///|
