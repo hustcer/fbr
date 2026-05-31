@@ -1,5 +1,32 @@
 # Progress Log: Brotli Support
 
+## 2026-06-01 — decode tree lookup validation check removed
+
+- Accepted one decode performance strategy after comparing it against a
+  same-time baseline and the existing negative-cache list.
+- Changed private `BrotliHuffmanTreeGroup::tree` to rely on validated indexes
+  and the underlying array access instead of doing an additional explicit
+  `FbrError` bounds check on every hot lookup.
+- Added white-box coverage for invalid mapped context-map tree indexes so the
+  validation invariant remains tested.
+- Screening evidence, current candidate versus same-time baseline, q0/q5/q9/q11
+  Google 1 MiB streams with `wasm-gc,native`, repeats=5, samples=3:
+  - aggregate eight-row min time: 382.314 -> 372.795 ms/op, +2.49%.
+  - q0 wasm/native: 42.907 -> 41.954 ms/op and 70.498 -> 68.741 ms/op.
+  - q5 wasm/native: 34.574 -> 34.040 ms/op and 58.943 -> 57.120 ms/op.
+  - q9 wasm/native: 33.567 -> 32.884 ms/op and 56.045 -> 55.010 ms/op.
+  - q11 wasm/native: 31.122 -> 30.270 ms/op and 54.658 -> 52.778 ms/op.
+- Full benchmark evidence:
+  - `just bench` passed and regenerated `docs/current-bench/decode.jsonl`,
+    `docs/current-bench/encode.jsonl`, and `docs/brotli_release_report.md`.
+  - Encode output sizes in `docs/current-bench/encode.jsonl` are unchanged
+    versus HEAD, so encoder behavior did not obviously regress.
+- MoonBit review/validation evidence:
+  - `moon check --target native` passed.
+  - `moon test src/decode --target native` passed, 53/53.
+  - `moon fmt && moon info && moon check --target all && moon test --target all
+    && git diff --check` passed; all four targets report 122/122 tests.
+
 ## 2026-05-30 — P3 5% ratio release gate enforced
 
 - Committed as `911db1e test(brotli): enforce p3 ratio release gate`.

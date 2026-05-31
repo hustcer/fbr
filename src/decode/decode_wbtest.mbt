@@ -466,6 +466,18 @@ test "brotli_read_context_map decodes direct map values" {
 }
 
 ///|
+test "brotli_context_map_tree_index rejects invalid mapped tree" {
+  let context_map = BrotliContextMap::{ num_trees: 1, map: [1, 0, 0, 0] }
+  let result : Result[Int, FbrError] = try? brotli_context_map_tree_index(
+    context_map, 0, brotli_distance_context_bits, 0,
+  )
+  guard result is Err(FbrError(code~, ..)) else {
+    fail("expected invalid context-map tree")
+  }
+  assert_eq(code, BrotliInvalidContextMap)
+}
+
+///|
 test "brotli_inverse_move_to_front transforms map in place" {
   let context_map : FixedArray[Byte] = [1, 0, 1]
   brotli_inverse_move_to_front(context_map)

@@ -183,6 +183,11 @@ implementations are available at `/Users/hustcer/iWork/refs/brotli` and
   optimization workaround, not as default `clang -O2` release results. Every
   optimization commit must include wasm-gc/native encode/decode and
   encoded-size evidence in the commit body.
+- Current accepted decode performance increment: private Huffman tree-group
+  lookup no longer repeats an explicit bounds check after compressed-header,
+  block-tracker, and context-map validation. Same-time q0/q5/q9/q11 decode
+  screening improved aggregate wasm-gc/native min time by 2.49%, and
+  `just bench` confirmed encode output sizes stayed unchanged.
 
 ## Current Increment
 

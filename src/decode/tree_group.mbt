@@ -7,13 +7,7 @@ priv struct BrotliHuffmanTreeGroup {
 fn BrotliHuffmanTreeGroup::tree(
   self : BrotliHuffmanTreeGroup,
   index : Int,
-) -> FixedArray[Int] raise @common.FbrError {
-  if index < 0 || index >= self.trees.length() {
-    raise @common.fbr_err(
-      @common.BrotliInvalidHuffman,
-      msg="Brotli tree group index out of range",
-    )
-  }
+) -> FixedArray[Int] {
   self.trees[index]
 }
 

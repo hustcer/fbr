@@ -777,3 +777,25 @@ Policy for future decode optimization: a candidate should beat the current
 code on both `wasm-gc` and native `cc-o0` across at least q0, q5, q9, and q11
 before spending time on full `just bench`. If it only helps q0 or only helps
 wasm-gc, treat it as a failed narrow optimization and revert.
+
+## 2026-06-01 — Accepted decode performance trial
+
+- **Remove duplicate explicit Huffman tree-group bounds check from hot lookup:**
+  `BrotliHuffmanTreeGroup::tree` now relies on the underlying array access
+  after header parsing, block tracking, and context-map validation have already
+  constrained tree indexes. This keeps the fast-path API package-private and
+  avoids rechecking the same invariant for every command, multi-context
+  literal, and explicit-distance tree lookup.
+- Same-time q0/q5/q9/q11 screening with
+  `just target-perf-decode ... wasm-gc,native 5 3` improved every target:
+  aggregate min time across eight rows improved from 382.314 ms/op to
+  372.795 ms/op, a 2.49% decode speedup. Individual min-time gains were
+  approximately q0 wasm/native +2.22%/+2.49%, q5 +1.54%/+3.09%,
+  q9 +2.04%/+1.85%, and q11 +2.74%/+3.44%.
+- `just bench` completed after the change and regenerated
+  `docs/current-bench/*.jsonl` and `docs/brotli_release_report.md`. Encode
+  output sizes were byte-for-byte unchanged versus the previous
+  `docs/current-bench/encode.jsonl`, so the optimization does not change
+  encoder behavior.
+- Added `brotli_context_map_tree_index rejects invalid mapped tree` white-box
+  coverage to document the validation invariant used by the hot tree lookup.
