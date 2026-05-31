@@ -497,7 +497,7 @@ test "brotli_sync splits LZ77 command blocks by command histograms" {
   }
   assert_true(split.bit_pos < weighted.bit_pos)
   let best = brotli_write_best_lz77_metablock(
-    input, commands, true, 5, false, 0, 0,
+    input, commands, true, 9, false, 0, 0,
   )
   assert_eq(best.bit_pos, split.bit_pos)
   let encoded = BrotliBitWriter::new(16 + split.buf.length())
@@ -562,7 +562,7 @@ test "brotli_sync splits LZ77 literal and command blocks together" {
   assert_true(joint_split.bit_pos < literal_split.bit_pos)
   assert_true(joint_split.bit_pos < command_split.bit_pos)
   let best = brotli_write_best_lz77_metablock(
-    input, commands, true, 5, false, 0, 0,
+    input, commands, true, 9, false, 0, 0,
   )
   assert_eq(best.bit_pos, joint_split.bit_pos)
   let encoded = BrotliBitWriter::new(16 + joint_split.buf.length())
@@ -605,7 +605,7 @@ test "brotli_sync splits LZ77 distance blocks by distance histograms" {
   }
   assert_true(split.bit_pos < weighted.bit_pos)
   let best = brotli_write_best_lz77_metablock(
-    input, commands, true, 5, false, 0, 0,
+    input, commands, true, 9, false, 0, 0,
   )
   assert_eq(best.bit_pos, split.bit_pos)
   let encoded = BrotliBitWriter::new(16 + split.buf.length())
@@ -669,7 +669,7 @@ test "brotli_sync splits LZ77 literal and distance blocks together" {
   assert_true(joint_split.bit_pos < literal_split.bit_pos)
   assert_true(joint_split.bit_pos < distance_split.bit_pos)
   let best = brotli_write_best_lz77_metablock(
-    input, commands, true, 5, false, 0, 0,
+    input, commands, true, 9, false, 0, 0,
   )
   assert_eq(best.bit_pos, joint_split.bit_pos)
   let encoded = BrotliBitWriter::new(16 + joint_split.buf.length())
@@ -727,7 +727,7 @@ test "brotli_sync splits LZ77 command and distance blocks together" {
   assert_true(joint_split.bit_pos < command_split.bit_pos)
   assert_true(joint_split.bit_pos < distance_split.bit_pos)
   let best = brotli_write_best_lz77_metablock(
-    input, commands, true, 5, false, 0, 0,
+    input, commands, true, 9, false, 0, 0,
   )
   assert_eq(best.bit_pos, joint_split.bit_pos)
   let encoded = BrotliBitWriter::new(16 + joint_split.buf.length())
@@ -1469,6 +1469,10 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
   assert_false(brotli_use_context16_lz77_candidate(4))
   assert_false(brotli_use_context16_lz77_candidate(8))
   assert_true(brotli_use_context16_lz77_candidate(9))
+  assert_false(brotli_use_command_distance_split_lz77_candidates(3))
+  assert_false(brotli_use_command_distance_split_lz77_candidates(4))
+  assert_false(brotli_use_command_distance_split_lz77_candidates(8))
+  assert_true(brotli_use_command_distance_split_lz77_candidates(9))
   let best3 = match brotli_build_simple_lz77_commands(input, natural) {
     Some(commands) =>
       brotli_write_best_lz77_metablock(input, commands, true, 2, true, 0, 0)

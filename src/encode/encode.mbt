@@ -5687,7 +5687,7 @@ fn brotli_write_best_lz77_metablock(
       None => ()
     }
   }
-  if quality >= 4 {
+  if brotli_use_command_distance_split_lz77_candidates(quality) {
     let command_split = brotli_best_command_block_split_point(commands)
     if split > 0 && command_split > 0 {
       match
@@ -5810,6 +5810,11 @@ fn brotli_use_context4_lz77_candidate(quality : Int) -> Bool {
 ///|
 fn brotli_use_context16_lz77_candidate(quality : Int) -> Bool {
   quality < 4 || quality > 8
+}
+
+///|
+fn brotli_use_command_distance_split_lz77_candidates(quality : Int) -> Bool {
+  quality > 8
 }
 
 ///|
