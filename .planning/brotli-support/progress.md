@@ -5145,3 +5145,40 @@ info`, `git diff --check`, and `git diff --cached --check` passed.
   41.7348/62.0278 ms on wasm-gc/native and the trial measured
   42.0638/64.3754 ms. Reverted and recorded it as a rejected decode
   optimization.
+
+## 2026-06-01 — Decode optimization session (same-time harness + unsafe-access pivot)
+
+- Re-read the rejected/accepted decode trials. Confirmed the native benchmark
+  compiler is `cc-o0`, so generated-op count maps to runtime and every added
+  branch/local hurts; accepted trials all removed operations.
+- Built `tools/brotli/bench/decode-compare.nu` (+ `just decode-compare`): a
+  reusable same-time comparison that interleaves trial (working tree) vs a
+  baseline git ref built in a throwaway worktree, then reports per-row deltas
+  and a strict guardrail verdict. Human table by default, `--json` for agents.
+  Fixed a macOS `/tmp` -> `/private/tmp` worktree-registration mismatch by
+  canonicalizing the path with `path expand` and pruning first.
+- C1 (unsafe_get in `brotli_read_symbol`) passed check/tests but the rounds=2
+  same-time screen regressed 7/8 rows (+0.61% aggregate). Reverted and recorded
+  as rejected. Insight: array bounds checks are not a material decode cost on
+  current backends; the cost is refill/Huffman-traversal arithmetic. Deleted
+  the rest of the unchecked-access candidate queue (C2/C3/C4/C5/C6) as same
+  mechanism, less hot.
+- Pivoting to structural changes that cut real hot-path ops: L3 = intrinsic
+  uint32 word-load in the bit-reader refill (zero-copy `Bytes` view +
+  `unsafe_read_uint32_le`); L1 = 64-bit accumulator to halve refill frequency.
+  L3 implemented, passes `moon check` (both targets) and `moon test src/decode`
+  (56/56); same-time screen in progress.
+- Built the combined L1+L3 bit reader (`bit_buf : UInt64`, UInt64 mask LUT,
+  `Bytes` view, `unsafe_read_uint64_le`/`unsafe_read_uint32_le` refill, 3 new
+  64-bit white-box tests). Passed check + tests (59/59) on both targets.
+  `decode-compare` rounds=4 FAILED the guardrail: native uniformly faster
+  (q0 -2.71%, q5 -0.68%, q9 -1.71%, q11 -3.21%) but wasm-gc uniformly slower
+  (q0 +1.40%, q5 +0.18%, q9 +1.40%, q11 +0.23%). rounds=2 had been misleading
+  (showed q9/q11 wasm faster); rounds>=4 is needed for borderline calls.
+  Reverted the decoder/test/huffman changes; recorded the failure. The 64-bit
+  accumulator's wasm-gc arithmetic cost is the culprit — do not retry it.
+- Per maintainer guidance, committed the session infrastructure even though L1
+  failed: the `decode-compare.nu` harness, its `just decode-compare` recipe,
+  and the brainstorm + C1 + L1 findings. Next: try L3-alone (keep 32-bit
+  accumulator, only swap the empty-accumulator 4-byte chain for
+  `unsafe_read_uint32_le`).

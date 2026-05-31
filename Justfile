@@ -85,6 +85,10 @@ target-perf-decode input expected targets='wasm-gc,native' repeats='10' samples=
 target-perf-encode input quality='11' targets='wasm-gc,native' repeats='10' samples='5':
     nu tools/brotli/bench/target-perf.nu {{ input }} --mode encode --quality {{ quality }} --targets {{ targets }} --repeats {{ repeats }} --samples {{ samples }} --json
 
+# Same-time decode comparison of the working tree vs a baseline git ref
+decode-compare base='HEAD' qualities='0,5,9,11' targets='wasm-gc,native' rounds='2':
+    nu tools/brotli/bench/decode-compare.nu --base {{ base }} --qualities {{ qualities }} --targets {{ targets }} --rounds {{ rounds }}
+
 # Verify decode-only and encode-only release artifacts do not pull the opposite side
 size targets='js':
     nu tools/brotli/size/verify.nu --targets {{ targets }}

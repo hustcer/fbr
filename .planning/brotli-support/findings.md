@@ -1300,3 +1300,125 @@ wasm-gc, treat it as a failed narrow optimization and revert.
   both targets: baseline measured 41.7348/62.0278 ms on wasm-gc/native, while
   the trial measured 42.0638/64.3754 ms. Reverted; local aliasing of hot
   decoder state worsens current generated code.
+
+## 2026-06-01 — Decode optimization brainstorm (unchecked-access strategy family)
+
+Context: continuing decode optimization after the four accepted trials
+(tree-group bounds check, validated short-distance helper, fused
+explicit-distance formula, direct command-info lookup). Re-read the rejected
+list: almost every rejected trial regressed native `cc-o0`. Root cause insight:
+the native benchmark compiler is `cc-o0` (no optimization), so generated-code
+operation count maps directly to runtime. Every added branch/local/helper costs
+instructions; the compiler will not fold redundancy. The accepted trials all
+*removed* operations. Therefore the highest-leverage untried mechanism is
+removing operations that the existing code still pays but does not need.
+
+New mechanism not present in any prior trial: MoonBit exposes
+`FixedArray::unsafe_get` / `unsafe_set` (intrinsics `%fixedarray.unsafe_get` /
+`%fixedarray.unsafe_set`) and `FixedArray::unsafe_blit`. The checked `[]`
+(`FixedArray::at` / `%fixedarray.get`) emits a real bounds compare+branch at
+`-O0`; the unsafe variants skip it. This is distinct from every prior rejected
+"remove an `if`" trial — those removed *semantic* validation; this removes the
+*implicit array bounds check* on accesses whose index is already provably
+in-bounds. Expected to help both backends because both pay the check.
+
+Candidate queue (each screened independently against the q0/q5/q9/q11 ×
+wasm-gc+native guardrail; revert if it does not beat baseline on both targets):
+
+- C1 `brotli_read_symbol` table reads (`table[0]`, root `table[index]`,
+  sub-table `table[(entry>>16)+sub_index]`). Hottest decode function (every
+  literal, command, distance, block-length, code-length symbol). Safety: root
+  index masked `< 2^root_bits <= table.length()`; sub-table offset+index sized
+  by the builder `< total_size == table.length()`; sentinel checks still
+  validate contents.
+- C2 literal-write `buf[pos] = literal.to_byte()` in the single-literal-tree
+  and single-literal-block paths. Safety: `output.ensure(insert_length)` runs
+  before the loop, so the whole run is reserved.
+- C3 bit-reader refill byte loads in `refill_to` (4-byte and 3-byte fast
+  paths). Safety: guarded by `byte_pos + 3 < byte_end` / `+ 2 < byte_end`.
+- C4 `copy_from_distance` blits → `unsafe_blit`, and the `distance == 1` fill
+  loop → `unsafe_get`/`unsafe_set`. Safety: `ensure(length)` reserves the run;
+  back-distance bounds already validated. Distinct from the rejected
+  manual-loop and blit-reorder trials (different mechanism: drop blit's check).
+- C5 distance-ring slot access (`distances[slot]`). Safety: ring is size 4 and
+  every index passes through `brotli_distance_ring_slot` (`& 3`).
+- C6 `brotli_command_info_table[symbol]`, block-length base/extra tables, and
+  validated context maps. Safety: indices are Huffman-alphabet-constrained or
+  already validated.
+
+Lateral / structural ideas held in reserve (larger, higher-risk; try only if
+the C-family stalls):
+
+- L1 64-bit bit accumulator (`bit_buf : UInt64`): refill 4–8 bytes per fill so
+  refills happen roughly half as often. Brotli never needs > 24 bits per field,
+  so a 64-bit buffer comfortably covers any single read with far fewer refills.
+  Risk: 64-bit ops on `cc-o0` may offset the win.
+- L3 `Bytes`-backed reader using the intrinsic `Bytes::unsafe_read_uint32_le` /
+  `unsafe_read_uint64_le` (single-instruction LE word load) for refill instead
+  of the byte-load+shift+OR chain. Requires a one-time `FixedArray[Byte]` ->
+  `Bytes` copy of the compressed input. Pairs naturally with L1.
+
+## 2026-06-01 — Rejected decode performance trial (unchecked-access family)
+
+Built a reusable same-time comparison harness (`tools/brotli/bench/decode-compare.nu`,
+`just decode-compare`) that interleaves trial (working tree) and baseline
+(a throwaway git worktree pinned to a ref) and reports per-(quality,target)
+deltas with a strict guardrail verdict. This removes the between-run machine
+drift that made earlier single-shot screens unreliable (the control Google
+binary alone drifted ~5% between two separated runs).
+
+- **C1 `unsafe_get` in `brotli_read_symbol` table reads:** replaced the three
+  provably in-bounds `table[..]` reads (`table[0]`, root `table[index]`,
+  sub-table `table[(entry>>16)+sub_index]`) with `FixedArray::unsafe_get`.
+  Passed `moon check` (both targets) and `moon test src/decode` (56/56). But
+  the rounds=2 same-time screen REGRESSED 7 of 8 rows (only q9 native improved,
+  -1.23%); aggregate per-op min went 345.69 -> 347.81 ms, +0.61% slower. The
+  deltas were mixed/small (the signature of a non-improvement inside noise),
+  not the consistent across-the-board gain the accepted trials showed.
+  Reverted.
+- **Insight:** array bounds checks are NOT a material cost in the decode hot
+  path on the current MoonBit backends — the dominant cost is the bit-reader
+  refill / Huffman traversal arithmetic, not `FixedArray::at`'s bounds compare.
+  This deprioritizes the rest of the unchecked-access family (C2 literal-write
+  `unsafe_set`, C3 refill-byte `unsafe_get`, C5 ring-slot, C6 table lookups):
+  same mechanism, less hot, so unlikely to beat the guardrail. Do not spend
+  time grinding C2/C3/C5/C6 unless a profiler shows bounds checks dominating.
+  Pivot to structural changes that cut real hot-path operations: reduce refill
+  *frequency* (64-bit accumulator) and refill *cost* (intrinsic word load).
+
+## 2026-06-01 — Rejected decode performance trial (L1+L3 combined bit reader)
+
+- **L1+L3 combined: 64-bit accumulator + zero-copy `Bytes` intrinsic word
+  load.** Rewrote `BrotliBitReader` to use `bit_buf : UInt64` (was `UInt`),
+  widened `brotli_low_mask_lut` to `FixedArray[UInt64]`, added a zero-copy
+  `bytes : Bytes` view of the input (`unsafe_reinterpret_as_bytes`, `%identity`),
+  and refilled with `Bytes::unsafe_read_uint64_le` (empty accumulator, 8 input
+  bytes) / `unsafe_read_uint32_le` (partial, 4 input bytes) instead of the
+  per-byte shift/OR chain. Updated the two `brotli_read_symbol` Huffman lookups
+  from `.reinterpret_as_int()` to `.to_int()` for the wider mask, and added 3
+  white-box tests for 64-bit refill / wide padding behavior. Passed
+  `moon check` (both targets) and `moon test src/decode` (59/59).
+- **Same-time `decode-compare` (rounds=4) verdict: FAIL — native uniformly
+  FASTER, wasm-gc uniformly SLOWER.** Per (quality, target) delta vs HEAD:
+  - native: q0 -2.71%, q5 -0.68%, q9 -1.71%, q11 -3.21% (all faster).
+  - wasm-gc: q0 +1.40%, q5 +0.18%, q9 +1.40%, q11 +0.23% (all slower).
+  - aggregate -0.98%, but the strict guardrail rejects any regressed row, and
+    all four wasm-gc rows regressed.
+- **Methodology note: rounds=2 was misleading on this borderline change.** The
+  first rounds=2 screen showed q9/q11 wasm-gc as faster and only flagged
+  q0/q5 wasm; rounds=4 revealed the true uniform wasm-gc regression. For
+  small/borderline decode deltas, use rounds>=4 before drawing a verdict.
+- **Root cause:** on wasm-gc the `UInt64` accumulator arithmetic (shift/mask/or
+  per `peek_bits`/`drop_bits`/`refill`) costs more than the `UInt32` path, and
+  the literal-heavy low-quality streams (q0/q5) do not refill often enough for
+  the halved refill frequency to pay it back. native benefits because its
+  64-bit ops are cheap and the intrinsic word load removes real instructions.
+  This is a classic helps-one-target / hurts-the-other change, exactly what the
+  guardrail rejects. Do not re-add a 64-bit accumulator to the bit reader on the
+  current backends.
+- **Decomposition follow-up:** the native win comes from fewer/cheaper refill
+  operations, and L3 (intrinsic word load) is the operation-reducing half that
+  does NOT require widening the accumulator. The next candidate is **L3-alone**:
+  keep `bit_buf : UInt` (32-bit) and only replace the empty-accumulator 4-byte
+  byte/shift/OR chain with `Bytes::unsafe_read_uint32_le`. Hypothesis: keeps
+  part of the native win without the wasm-gc 64-bit penalty.
