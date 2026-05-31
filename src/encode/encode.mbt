@@ -5975,7 +5975,7 @@ fn brotli_use_natural_four_byte_candidate(
   quality : Int,
   _data_length : Int,
 ) -> Bool {
-  quality < 4 || quality > 8
+  quality < 3 || quality > 8
 }
 
 ///|
