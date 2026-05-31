@@ -5818,12 +5818,12 @@ fn brotli_write_best_lz77_metablock(
 
 ///|
 fn brotli_use_context4_lz77_candidate(quality : Int) -> Bool {
-  quality < 4 || quality > 8
+  quality < 3 || quality > 8
 }
 
 ///|
 fn brotli_use_context16_lz77_candidate(quality : Int) -> Bool {
-  quality < 4 || quality > 8
+  quality < 3 || quality > 8
 }
 
 ///|
