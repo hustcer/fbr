@@ -152,5 +152,5 @@ bytes/data plus a small number of chunk copies, not as tens of thousands of
 `array.set` initialization instructions.
 
 See [docs/brotli-pkg.md](https://github.com/hustcer/fbr/blob/main/docs/brotli-pkg.md) for the package split rationale
-and [docs/brotli_benchmarks.md](https://github.com/hustcer/fbr/blob/main/docs/brotli_benchmarks.md) for recorded Brotli
+and [docs/brotli_release_report.md](https://github.com/hustcer/fbr/blob/main/docs/brotli_release_report.md) for recorded Brotli
 benchmark data.
