@@ -1470,6 +1470,52 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
       brotli_write_best_lz77_metablock(input, commands, true, 2, true, 0, 0)
     None => fail("expected three-byte hash candidate")
   }
+  let previous = brotli_previous_match_positions(input, natural)
+  let cache_a : FixedArray[Int] = [4, 11, 15, 16]
+  let cache_b : FixedArray[Int] = [4, 11, 15, 16]
+  let commands_a = match
+    brotli_build_simple_lz77_commands_with_distance_cache(
+      input, natural, cache_a,
+    ) {
+    Some(commands) => commands
+    None => fail("expected normal LZ77 commands")
+  }
+  let commands_b = match
+    brotli_build_simple_lz77_commands_with_distance_cache_and_previous(
+      input, natural, cache_b, previous,
+    ) {
+    Some(commands) => commands
+    None => fail("expected previous-table LZ77 commands")
+  }
+  assert_eq(commands_a.length(), commands_b.length())
+  assert_eq(cache_a[0], cache_b[0])
+  assert_eq(cache_a[1], cache_b[1])
+  assert_eq(cache_a[2], cache_b[2])
+  assert_eq(cache_a[3], cache_b[3])
+  for i in 0..<commands_a.length() {
+    assert_eq(commands_a[i].insert_start, commands_b[i].insert_start)
+    assert_eq(commands_a[i].insert_length, commands_b[i].insert_length)
+    assert_eq(commands_a[i].copy_length, commands_b[i].copy_length)
+    assert_eq(commands_a[i].output_length, commands_b[i].output_length)
+    assert_eq(commands_a[i].has_copy, commands_b[i].has_copy)
+    assert_eq(commands_a[i].command.symbol, commands_b[i].command.symbol)
+    assert_eq(
+      commands_a[i].command.insert_extra,
+      commands_b[i].command.insert_extra,
+    )
+    assert_eq(
+      commands_a[i].command.copy_extra,
+      commands_b[i].command.copy_extra,
+    )
+    assert_eq(
+      commands_a[i].distance_prefix.symbol,
+      commands_b[i].distance_prefix.symbol,
+    )
+    assert_eq(
+      commands_a[i].distance_prefix.insert_extra,
+      commands_b[i].distance_prefix.insert_extra,
+    )
+  }
   let best4 = match brotli_build_simple_lz77_commands(input, four_byte) {
     Some(commands) =>
       brotli_write_best_lz77_metablock(input, commands, true, 2, true, 0, 0)

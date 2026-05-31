@@ -2621,6 +2621,26 @@ fn brotli_build_simple_lz77_commands(
 }
 
 ///|
+fn brotli_build_simple_lz77_commands_with_previous(
+  data : FixedArray[Byte],
+  hash_config : BrotliHashConfig,
+  previous : FixedArray[Int],
+) -> Array[BrotliEncodeCommand]? {
+  if data.length() < 8 ||
+    data.length() > brotli_hash_max_input_length(hash_config) ||
+    previous.length() != data.length() {
+    return None
+  }
+  if !brotli_has_compressible_match_density(data, hash_config) {
+    return None
+  }
+  let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
+  brotli_build_simple_lz77_commands_with_distance_cache_and_previous(
+    data, hash_config, distance_cache, previous,
+  )
+}
+
+///|
 fn brotli_build_simple_lz77_command_candidate(
   data : FixedArray[Byte],
   hash_config : BrotliHashConfig,
@@ -2633,6 +2653,31 @@ fn brotli_build_simple_lz77_command_candidate(
   match
     brotli_build_simple_lz77_commands_with_distance_cache(
       data, hash_config, chunk_cache,
+    ) {
+    Some(commands) => Some({ commands, distance_cache: chunk_cache })
+    None => None
+  }
+}
+
+///|
+fn brotli_build_simple_lz77_command_candidate_with_previous(
+  data : FixedArray[Byte],
+  hash_config : BrotliHashConfig,
+  distance_cache : FixedArray[Int],
+  previous : FixedArray[Int],
+) -> BrotliCommandCandidate? {
+  if data.length() < 8 ||
+    data.length() > brotli_hash_max_input_length(hash_config) ||
+    previous.length() != data.length() {
+    return None
+  }
+  if !brotli_has_compressible_match_density(data, hash_config) {
+    return None
+  }
+  let chunk_cache = brotli_copy_distance_cache(distance_cache)
+  match
+    brotli_build_simple_lz77_commands_with_distance_cache_and_previous(
+      data, hash_config, chunk_cache, previous,
     ) {
     Some(commands) => Some({ commands, distance_cache: chunk_cache })
     None => None
@@ -2667,9 +2712,26 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
   if !brotli_has_compressible_match_density(data, hash_config) {
     return None
   }
+  let previous = brotli_previous_match_positions(data, hash_config)
+  brotli_build_simple_lz77_commands_with_distance_cache_and_previous(
+    data, hash_config, distance_cache, previous,
+  )
+}
+
+///|
+fn brotli_build_simple_lz77_commands_with_distance_cache_and_previous(
+  data : FixedArray[Byte],
+  hash_config : BrotliHashConfig,
+  distance_cache : FixedArray[Int],
+  previous : FixedArray[Int],
+) -> Array[BrotliEncodeCommand]? {
+  if data.length() < 8 ||
+    data.length() > brotli_hash_max_input_length(hash_config) ||
+    previous.length() != data.length() {
+    return None
+  }
   let commands : Array[BrotliEncodeCommand] = []
   let max_commands = brotli_effective_max_commands(hash_config, data.length())
-  let previous = brotli_previous_match_positions(data, hash_config)
   let mut literal_start = 0
   let mut position = 0
   // Lazy-match carry-forward: when the lookahead defers to `position + skip`,
@@ -5924,11 +5986,25 @@ fn brotli_try_compressed_chunk(
       initial_previous_byte_2,
     )
   }
+  let shared_previous3 : FixedArray[Int]? = if quality >= 4 &&
+    quality <= 8 &&
+    data.length() >= 8192 {
+    Some(brotli_previous_match_positions(data, hash_config))
+  } else {
+    None
+  }
   let best = brotli_try_compressed_command_candidate(
     data,
-    brotli_build_simple_lz77_command_candidate(
-      data, hash_config, distance_cache,
-    ),
+    match shared_previous3 {
+      Some(previous) =>
+        brotli_build_simple_lz77_command_candidate_with_previous(
+          data, hash_config, distance_cache, previous,
+        )
+      None =>
+        brotli_build_simple_lz77_command_candidate(
+          data, hash_config, distance_cache,
+        )
+    },
     is_last,
     None,
     quality,
@@ -6070,11 +6146,35 @@ fn brotli_try_compressed_chunk(
       }
     } else {
       let natural_config = brotli_natural_hash_config_for_quality(quality)
+      let use_natural4 = brotli_use_natural_four_byte_candidate(
+        quality,
+        data.length(),
+      )
+      let use_intermediate4 = quality >= 4 &&
+        brotli_use_intermediate_four_byte_candidate(quality, data.length())
+      let shared_previous4 : FixedArray[Int]? = if use_natural4 ||
+        use_intermediate4 {
+        Some(
+          brotli_previous_match_positions(
+            data,
+            brotli_four_byte_hash_config(natural_config),
+          ),
+        )
+      } else {
+        None
+      }
       let best = brotli_try_compressed_command_candidate(
         data,
-        brotli_build_simple_lz77_command_candidate(
-          data, natural_config, distance_cache,
-        ),
+        match shared_previous3 {
+          Some(previous) =>
+            brotli_build_simple_lz77_command_candidate_with_previous(
+              data, natural_config, distance_cache, previous,
+            )
+          None =>
+            brotli_build_simple_lz77_command_candidate(
+              data, natural_config, distance_cache,
+            )
+        },
         is_last,
         best,
         quality,
@@ -6084,12 +6184,18 @@ fn brotli_try_compressed_chunk(
       )
       let best = brotli_try_compressed_command_candidate(
         data,
-        if brotli_use_natural_four_byte_candidate(quality, data.length()) {
-          brotli_build_simple_lz77_command_candidate(
-            data,
-            brotli_four_byte_hash_config(natural_config),
-            distance_cache,
-          )
+        if use_natural4 {
+          let natural4_config = brotli_four_byte_hash_config(natural_config)
+          match shared_previous4 {
+            Some(previous) =>
+              brotli_build_simple_lz77_command_candidate_with_previous(
+                data, natural4_config, distance_cache, previous,
+              )
+            None =>
+              brotli_build_simple_lz77_command_candidate(
+                data, natural4_config, distance_cache,
+              )
+          }
         } else {
           None
         },
@@ -6106,9 +6212,16 @@ fn brotli_try_compressed_chunk(
         )
         let best = brotli_try_compressed_command_candidate(
           data,
-          brotli_build_simple_lz77_command_candidate(
-            data, intermediate_config, distance_cache,
-          ),
+          match shared_previous3 {
+            Some(previous) =>
+              brotli_build_simple_lz77_command_candidate_with_previous(
+                data, intermediate_config, distance_cache, previous,
+              )
+            None =>
+              brotli_build_simple_lz77_command_candidate(
+                data, intermediate_config, distance_cache,
+              )
+          },
           is_last,
           best,
           quality,
@@ -6119,11 +6232,21 @@ fn brotli_try_compressed_chunk(
         if brotli_use_intermediate_four_byte_candidate(quality, data.length()) {
           brotli_try_compressed_command_candidate(
             data,
-            brotli_build_simple_lz77_command_candidate(
-              data,
-              brotli_four_byte_hash_config(intermediate_config),
-              distance_cache,
-            ),
+            match shared_previous4 {
+              Some(previous) =>
+                brotli_build_simple_lz77_command_candidate_with_previous(
+                  data,
+                  brotli_four_byte_hash_config(intermediate_config),
+                  distance_cache,
+                  previous,
+                )
+              None =>
+                brotli_build_simple_lz77_command_candidate(
+                  data,
+                  brotli_four_byte_hash_config(intermediate_config),
+                  distance_cache,
+                )
+            },
             is_last,
             best,
             quality,
@@ -6250,9 +6373,22 @@ fn brotli_encode_standard(
       None => ()
     }
     let mut best : BrotliBitWriter? = None
+    let shared_previous3 : FixedArray[Int]? = if opts.quality >= 4 &&
+      opts.quality <= 8 &&
+      data.length() >= 8192 {
+      Some(brotli_previous_match_positions(data, hash_config))
+    } else {
+      None
+    }
     best = brotli_try_compressed_commands(
       data,
-      brotli_build_simple_lz77_commands(data, hash_config),
+      match shared_previous3 {
+        Some(previous) =>
+          brotli_build_simple_lz77_commands_with_previous(
+            data, hash_config, previous,
+          )
+        None => brotli_build_simple_lz77_commands(data, hash_config)
+      },
       true,
       best,
       opts.quality,
@@ -6359,20 +6495,50 @@ fn brotli_encode_standard(
         let natural_config = brotli_natural_hash_config_for_quality(
           opts.quality,
         )
+        let use_natural4 = brotli_use_natural_four_byte_candidate(
+          opts.quality,
+          data.length(),
+        )
+        let use_intermediate4 = opts.quality >= 4 &&
+          brotli_use_intermediate_four_byte_candidate(
+            opts.quality,
+            data.length(),
+          )
+        let shared_previous4 : FixedArray[Int]? = if use_natural4 ||
+          use_intermediate4 {
+          Some(
+            brotli_previous_match_positions(
+              data,
+              brotli_four_byte_hash_config(natural_config),
+            ),
+          )
+        } else {
+          None
+        }
         best = brotli_try_compressed_commands(
           data,
-          brotli_build_simple_lz77_commands(data, natural_config),
+          match shared_previous3 {
+            Some(previous) =>
+              brotli_build_simple_lz77_commands_with_previous(
+                data, natural_config, previous,
+              )
+            None => brotli_build_simple_lz77_commands(data, natural_config)
+          },
           true,
           best,
           opts.quality,
         )
         best = brotli_try_compressed_commands(
           data,
-          if brotli_use_natural_four_byte_candidate(opts.quality, data.length()) {
-            brotli_build_simple_lz77_commands(
-              data,
-              brotli_four_byte_hash_config(natural_config),
-            )
+          if use_natural4 {
+            let natural4_config = brotli_four_byte_hash_config(natural_config)
+            match shared_previous4 {
+              Some(previous) =>
+                brotli_build_simple_lz77_commands_with_previous(
+                  data, natural4_config, previous,
+                )
+              None => brotli_build_simple_lz77_commands(data, natural4_config)
+            }
           } else {
             None
           },
@@ -6386,21 +6552,34 @@ fn brotli_encode_standard(
           )
           best = brotli_try_compressed_commands(
             data,
-            brotli_build_simple_lz77_commands(data, intermediate_config),
+            match shared_previous3 {
+              Some(previous) =>
+                brotli_build_simple_lz77_commands_with_previous(
+                  data, intermediate_config, previous,
+                )
+              None =>
+                brotli_build_simple_lz77_commands(data, intermediate_config)
+            },
             true,
             best,
             opts.quality,
           )
-          if brotli_use_intermediate_four_byte_candidate(
-              opts.quality,
-              data.length(),
-            ) {
+          if use_intermediate4 {
             best = brotli_try_compressed_commands(
               data,
-              brotli_build_simple_lz77_commands(
-                data,
-                brotli_four_byte_hash_config(intermediate_config),
-              ),
+              match shared_previous4 {
+                Some(previous) =>
+                  brotli_build_simple_lz77_commands_with_previous(
+                    data,
+                    brotli_four_byte_hash_config(intermediate_config),
+                    previous,
+                  )
+                None =>
+                  brotli_build_simple_lz77_commands(
+                    data,
+                    brotli_four_byte_hash_config(intermediate_config),
+                  )
+              },
               true,
               best,
               opts.quality,
