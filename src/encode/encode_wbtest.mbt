@@ -1425,11 +1425,11 @@ test "brotli_sync q2 keeps alternate hash candidates exact-costed" {
     brotli_intermediate_hash_config_for_quality(8).max_commands,
     content="240000",
   )
-  inspect(brotli_hash_config_for_quality(4).lazy_lookahead, content="1")
-  inspect(brotli_natural_hash_config_for_quality(8).lazy_lookahead, content="1")
+  inspect(brotli_hash_config_for_quality(4).lazy_lookahead, content="0")
+  inspect(brotli_natural_hash_config_for_quality(8).lazy_lookahead, content="0")
   inspect(
     brotli_intermediate_hash_config_for_quality(8).lazy_lookahead,
-    content="1",
+    content="0",
   )
   inspect(
     brotli_high_quality_hash_config_for_quality(9).lazy_lookahead,

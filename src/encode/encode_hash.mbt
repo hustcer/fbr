@@ -200,7 +200,7 @@ fn brotli_greedy_lazy_lookahead_for_quality(
   default_lookahead : Int,
 ) -> Int {
   if quality >= 4 && quality <= 8 {
-    1
+    0
   } else {
     default_lookahead
   }
