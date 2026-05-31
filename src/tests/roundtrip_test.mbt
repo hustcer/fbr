@@ -69,3 +69,32 @@ test "brotli roundtrip (literal-heavy, single literal tree path)" {
     }
   }
 }
+
+///|
+/// Match-heavy roundtrip that exercises the encoder's lazy-match lookahead and
+/// its carry-forward deferral (a longer match one byte ahead defers the current
+/// position). Overlapping near-repeats with small shifts make deferrals common,
+/// so this guards the carry-forward path's correctness across qualities.
+test "brotli roundtrip (lazy-match deferral path)" {
+  for size in [4096, 20000] {
+    let data : FixedArray[Byte] = FixedArray::make(size, b'\x00')
+    for i in 0..<size {
+      // Interleave two periodic patterns of nearby periods so the longest
+      // available match length shifts by one between adjacent positions.
+      let a = (i % 61).to_byte()
+      let b = (i % 64).to_byte()
+      data[i] = if i % 3 == 0 { a } else { b }
+    }
+    for q in [2, 3, 5, 7, 9, 11] {
+      let compressed = @fbr.brotli_sync(data, opts={
+        ..@fbr.BrotliOptions::default(),
+        quality: q,
+      })
+      let decompressed = @fbr.unbrotli_sync(compressed)
+      assert_eq(decompressed.length(), data.length())
+      for i in 0..<data.length() {
+        assert_eq(decompressed[i], data[i])
+      }
+    }
+  }
+}

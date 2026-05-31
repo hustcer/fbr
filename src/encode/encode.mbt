@@ -2555,17 +2555,32 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
   let previous = brotli_previous_match_positions(data, hash_config)
   let mut literal_start = 0
   let mut position = 0
+  // Lazy-match carry-forward: when the lookahead defers to `position + skip`,
+  // no command is emitted before we resume there, so `distance_cache` is
+  // unchanged and the match `brotli_longest_previous_hash_match_with_cache`
+  // already computed for that position is exactly what a fresh search would
+  // return. Carry it forward instead of re-searching the deferred position.
+  let mut have_carried = false
+  let mut carried_length = 0
+  let mut carried_distance = 0
   while position < data.length() {
-    let (match_length, distance) = brotli_longest_previous_hash_match_with_cache(
-      data, previous, position, hash_config, distance_cache,
-    )
+    let (match_length, distance) = if have_carried {
+      have_carried = false
+      (carried_length, carried_distance)
+    } else {
+      brotli_longest_previous_hash_match_with_cache(
+        data, previous, position, hash_config, distance_cache,
+      )
+    }
     if match_length >= hash_config.min_match_length {
       let lookahead = hash_config.lazy_lookahead
       if lookahead > 0 {
         let mut k = 1
         let mut skip = 0
+        let mut skip_length = 0
+        let mut skip_distance = 0
         while k <= lookahead && position + k < data.length() {
-          let (next_length, _) = brotli_longest_previous_hash_match_with_cache(
+          let (next_length, next_distance) = brotli_longest_previous_hash_match_with_cache(
             data,
             previous,
             position + k,
@@ -2574,12 +2589,17 @@ fn brotli_build_simple_lz77_commands_with_distance_cache(
           )
           if next_length > match_length {
             skip = k
+            skip_length = next_length
+            skip_distance = next_distance
             break
           }
           k += 1
         }
         if skip > 0 {
           position += skip
+          carried_length = skip_length
+          carried_distance = skip_distance
+          have_carried = true
           continue
         }
       }
