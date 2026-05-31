@@ -6380,10 +6380,6 @@ fn brotli_encode_standard(
   }
   let hash_config = brotli_hash_config_for_quality(opts.quality)
   if data.length() <= @common.brotli_max_metablock_bytes {
-    match brotli_find_single_copy_match(data) {
-      Some(match_) => return brotli_encode_single_copy_match(data, opts, match_)
-      None => ()
-    }
     let mut best : BrotliBitWriter? = None
     let shared_previous3 : FixedArray[Int]? = if opts.quality >= 4 &&
       opts.quality <= 8 &&
