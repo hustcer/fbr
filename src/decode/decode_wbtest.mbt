@@ -668,7 +668,10 @@ test "BrotliCommand::read_into overwrites every field when a record is reused" {
   // Symbol 64 selects an implicit (last-distance) command with context 3.
   let tree_a = make_one_symbol_tree(64, brotli_num_command_symbols)
   let info_a = brotli_command_info(64)
-  command.read_into(BrotliBitReader::new([0, 0, 0, 0, 0, 0, 0, 0], 0, 8), tree_a)
+  command.read_into(
+    BrotliBitReader::new([0, 0, 0, 0, 0, 0, 0, 0], 0, 8),
+    tree_a,
+  )
   assert_eq(command.insert_length, info_a.insert_len_offset)
   assert_eq(command.copy_length, info_a.copy_len_offset)
   assert_eq(command.distance_code, info_a.distance_code)
@@ -677,7 +680,10 @@ test "BrotliCommand::read_into overwrites every field when a record is reused" {
   // the same record must overwrite the previous distance_code and context.
   let tree_b = make_one_symbol_tree(128, brotli_num_command_symbols)
   let info_b = brotli_command_info(128)
-  command.read_into(BrotliBitReader::new([0, 0, 0, 0, 0, 0, 0, 0], 0, 8), tree_b)
+  command.read_into(
+    BrotliBitReader::new([0, 0, 0, 0, 0, 0, 0, 0], 0, 8),
+    tree_b,
+  )
   assert_eq(command.distance_code, -1)
   assert_eq(command.distance_code, info_b.distance_code)
   assert_eq(command.distance_context, info_b.distance_context)
