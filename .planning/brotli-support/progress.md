@@ -86,6 +86,28 @@
     out of the worktree so they will not be committed.
   - Encode output sizes from the generated `docs/current-bench/encode.jsonl`
     matched HEAD exactly.
+- Rejected follow-up trial: removed the explicit block-length symbol range
+  check from `brotli_read_block_length`. It passed native check and decode
+  tests but failed screening: q0 native, q5 wasm-gc, and both q9 rows were
+  slower or tied in the wrong direction. Source was reverted and the failure was
+  added to findings.
+- Rejected follow-up trial: removed the root/sub-table sentinel checks in
+  `brotli_read_symbol`. It passed native check and decode tests but failed
+  screening: q0 regressed on both targets, q5 wasm-gc regressed, and q9/q11
+  native regressed. Source was reverted and the failure was added to findings.
+- Rejected follow-up trial: added an identity-transform fast path to
+  `copy_transformed_dictionary_word`. It passed native check and decode tests
+  but failed screening, with q5 wasm-gc regressing sharply and q9/q11 wasm-gc
+  not showing stable wins. Source was reverted and the failure was added to
+  findings.
+- Rejected follow-up trial: used a decode-private non-raising literal context
+  helper in the multi-literal-tree path. It passed native check and decode tests
+  and helped q5/q9/q11, but q0 native regressed from 63.370 to 63.494 ms/op.
+  Source was reverted and the failure was added to findings.
+- Rejected follow-up trial: used a decode-private recent-distance record helper
+  after normal back-reference copies. It passed native check and decode tests
+  and improved native rows, but q5 wasm-gc regressed from 31.903 to
+  32.085 ms/op. Source was reverted and the failure was added to findings.
 
 ## 2026-05-30 — P3 5% ratio release gate enforced
 
@@ -4805,3 +4827,321 @@ info`, `git diff --check`, and `git diff --cached --check` passed.
   cleanup). Same-time screening showed q0 improved slightly, but q5 regressed
   on wasm-gc/native and q9/q11 native regressed, so it was reverted and
   recorded as rejected.
+- Tried pre-resolving the multi-literal-tree context map into a
+  context-to-Huffman-tree table before the compressed meta-block body loop. It
+  passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 same-time screening failed immediately: HEAD measured
+  39.862/61.388 ms on wasm-gc/native and the trial measured 40.208/63.243 ms.
+  Reverted the source change and recorded it as a rejected decode
+  optimization.
+- Tried removing the unreachable `length == 0` branch from
+  `BrotliOutputBuilder::copy_from_distance`, relying on Brotli command copy
+  lengths being at least 2. It passed `moon check --target native` and
+  `moon test src/decode --target native`, but q0 screening was mixed: wasm-gc
+  was effectively tied/slightly faster at 39.715 ms versus 39.741 ms, while
+  native regressed to 64.856 ms versus 61.449 ms. Reverted and recorded it as
+  a rejected decode optimization.
+- Tried changing `BrotliBlockTracker::ensure_ready` from `remaining > 0` to
+  `remaining != 0`, relying on valid decode paths keeping remaining
+  non-negative. It passed `moon check --target native` and `moon test
+  src/decode --target native`, but q0 screening was mixed: wasm-gc improved
+  slightly at 39.766 ms versus 39.852 ms, while native regressed to 63.282 ms
+  versus 61.478 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried narrowing the root Huffman `entry_bits > reader.bits_avail` EOF check
+  to the residual tail-decode path with a `tail_decode` flag. It passed
+  `moon check --target native` and `moon test src/decode --target native`, but
+  q0 screening failed: HEAD measured 39.834/61.472 ms on wasm-gc/native and
+  the trial measured 39.904/63.624 ms. Reverted and recorded it as a rejected
+  decode optimization.
+- Tried replacing hot-path `BrotliHuffmanTreeGroup::tree(index)` calls with
+  direct `trees[index]` access and temporarily updated white-box tests after
+  the private method became unused. It passed `moon check --target native` and
+  `moon test src/decode --target native`, and repeated q0 screening showed
+  native improved materially, but wasm-gc regressed slightly in both runs.
+  Reverted and recorded it as a rejected decode optimization.
+- Tried splitting the single literal-tree + single literal-block compressed
+  body into a separate helper loop to avoid literal block tracker allocation
+  and hot per-command literal-shape branches. It passed `moon check --target
+  native` and `moon test src/decode --target native`, but q0 screening failed:
+  HEAD measured 39.921/61.522 ms on wasm-gc/native and the split loop measured
+  40.059/63.253 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried reordering `BrotliOutputBuilder::copy_from_distance` so the
+  non-overlapping `distance >= length` branch ran before the `distance == 1`
+  repeated-byte path. It passed `moon check --target native` and `moon test
+  src/decode --target native`, but q0 screening failed: HEAD measured
+  39.885/61.469 ms on wasm-gc/native and the reordered branch measured
+  40.227/63.410 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried hoisting single-symbol literal trees in the single-literal-tree path
+  and filling insert runs directly with the fixed byte. It passed `moon check
+  --target native` and `moon test src/decode --target native`, but q0 screening
+  was mixed: wasm-gc improved slightly at 39.778 ms versus 39.803 ms, while
+  native regressed to 63.108 ms versus 61.525 ms. Reverted and recorded it as
+  a rejected decode optimization.
+- Added and then reverted a temporary decoder-state probe to inspect q0/q5/q9/q11
+  shape. q0 has two single literal-tree/block compressed meta-blocks and about
+  143k commands; q5/q9/q11 each have one multi-literal-tree block and
+  75k-86k commands. Explicit distance decode dominates all samples
+  (about 74k-107k calls), and normal non-overlap copies dominate normal copy
+  shape. This points future candidates toward explicit distance decode and
+  non-overlap copy mechanics, but does not invalidate the prior rejected
+  branch/order and copy-helper trials.
+- Tried precomputing distance `direct_limit` and `postfix_mask` once per
+  meta-block and passing them to a new private distance helper. It passed
+  `moon check --target native` and `moon test src/decode --target native`, but
+  q0 screening failed: HEAD measured 39.576/61.460 ms on wasm-gc/native and
+  the trial measured 40.170/63.361 ms. Reverted and recorded it as a rejected
+  decode optimization.
+- Tried a postfix-0 explicit distance helper that avoids postfix mask/shift
+  work when `header.distance_postfix_bits == 0`. It passed `moon check
+  --target native` and `moon test src/decode --target native`, but q0
+  screening failed: HEAD measured 39.860/61.640 ms on wasm-gc/native and the
+  trial measured 40.023/62.795 ms. Reverted and recorded it as a rejected
+  decode optimization.
+- Tried reordering the command loop distance branch so the measured dominant
+  explicit-distance path (`command.distance_code < 0`) was first and the short
+  distance path was in the `else`. It passed `moon check --target native` and
+  `moon test src/decode --target native`, but q0 screening failed: HEAD
+  measured 39.940/61.612 ms on wasm-gc/native and the trial measured
+  40.109/63.183 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried a per-meta-block window coverage flag so the command loop could use
+  `output.len` directly for `max_distance` when the whole meta-block fits in
+  the Brotli window. It passed `moon check --target native` and `moon test
+  src/decode --target native`, but q0 screening failed: HEAD measured
+  39.891/61.385 ms on wasm-gc/native and the trial measured 40.145/62.783 ms.
+  Reverted and recorded it as a rejected decode optimization.
+- Tried lazily constructing the literal block tracker only when it can be used,
+  avoiding the unused tracker allocation for single literal-tree/block q0
+  streams while keeping the integrated loop. It passed `moon check --target
+  native` and `moon test src/decode --target native`, but q0 screening failed:
+  HEAD measured 39.803/61.580 ms on wasm-gc/native and the trial measured
+  40.221/63.116 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried removing the duplicate transform-index range check from
+  `copy_transformed_dictionary_word`, relying on
+  `copy_from_dictionary_after_max_distance` validation. It passed `moon check
+  --target native` and `moon test src/decode --target native`, but q0
+  screening failed: HEAD measured 39.846/61.702 ms on wasm-gc/native and the
+  trial measured 40.001/63.191 ms. Reverted and recorded it as a rejected
+  decode optimization.
+- Tried removing the final `unbrotli_sync` `out.length() >
+  opts.max_output_size` check after `brotli_decode_scaffold`, relying on the
+  output builder cap enforcement during decode. It passed `moon check --target
+  native` and `moon test src/decode --target native`, but q0 screening failed:
+  HEAD measured 39.519/61.550 ms on wasm-gc/native and the trial measured
+  40.026/63.419 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried `BrotliOutputBuilder::ensure_validated` without the negative-length
+  check for the command insert-length reserve in the compressed-body loop. It
+  passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 screening failed: HEAD measured 40.124/61.315 ms on
+  wasm-gc/native and the trial measured 40.010/63.321 ms. Reverted and
+  recorded it as a rejected decode optimization.
+- Tried caching `self.buf` in a local `buf` inside
+  `BrotliOutputBuilder::copy_from_distance` for all normal-copy variants. It
+  passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 screening was mixed: wasm-gc improved slightly
+  39.966 -> 39.820 ms, while native regressed 61.354 -> 63.373 ms. Reverted
+  and recorded it as a rejected decode optimization.
+- Tried moving `literal_tree0 = header.literal_trees.tree(0)` into the
+  `single_literal_tree` branch so multi-tree streams avoid an unused setup
+  lookup. It passed `moon check --target native` and `moon test src/decode
+  --target native`, but q0 screening failed: HEAD measured 39.702/61.525 ms
+  on wasm-gc/native and the trial measured 39.915/66.209 ms because q0 repeats
+  the lookup per command. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried caching the current command Huffman tree and only refreshing it when
+  `command_blocks.current_type` changes. It passed `moon check --target native`
+  and `moon test src/decode --target native`; repeated q0 screening showed
+  native improved, but wasm-gc regressed slightly in both runs. Reverted and
+  recorded it as a rejected decode optimization.
+- Added and reverted a temporary command-symbol distribution probe. q0/q5/q9/q11
+  are dominated by explicit-distance command symbols, especially 131..135 and
+  nearby no-extra or low-extra copy-length commands.
+- Tried a direct fast path for command symbols 128..135 in
+  `BrotliCommand::read_into`. It passed `moon check --target native` and
+  `moon test src/decode --target native`, but q0 screening failed: HEAD
+  measured 39.632/61.269 ms on wasm-gc/native and the trial measured
+  40.107/62.850 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried caching the resolved distance Huffman tree by current distance block
+  type and `command.distance_context` inside the compressed-body loop. It
+  passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 screening was mixed: wasm-gc improved slightly
+  40.036 -> 39.954 ms, while native regressed 61.579 -> 61.731 ms. Reverted
+  and recorded it as a rejected decode optimization.
+- Tried removing the private `copy_from_distance` negative-length and
+  distance-range checks, relying on compressed-body caller validation. It
+  passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 screening failed on both targets: HEAD measured
+  41.961/63.099 ms on wasm-gc/native and the trial measured 42.393/65.051 ms.
+  Reverted and recorded it as a rejected decode optimization.
+- Tried adding a code-0 fast path inside
+  `brotli_take_short_code_validated`, keeping the helper call but avoiding the
+  shared `code <= 3` offset/context math for that short-distance code. It
+  passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 screening failed: HEAD measured 41.841/61.987 ms on
+  wasm-gc/native and the trial measured 41.907/63.901 ms. Reverted and
+  recorded it as a rejected decode optimization.
+- Tried adding a single-symbol fast path for q0-hot command symbol 1 inside
+  `BrotliCommand::read_into`, setting the known insert/copy/distance fields
+  without the command-info table lookup. It passed `moon check --target native`
+  and `moon test src/decode --target native`, but q0 screening failed: HEAD
+  measured 41.723/61.866 ms on wasm-gc/native and the trial measured
+  41.941/63.835 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried caching command-info record fields in local variables inside
+  `BrotliCommand::read_into` before reading command extra bits. It passed
+  `moon check --target native` and `moon test src/decode --target native`, but
+  q0 screening failed on both targets: HEAD measured 41.603/61.591 ms on
+  wasm-gc/native and the trial measured 42.129/63.820 ms. Reverted and
+  recorded it as a rejected decode optimization.
+- Tried a `brotli_context_map_tree_index_validated` helper for explicit
+  distance tree selection, keeping the helper call but removing the checked
+  context-map validation from the hot path. It passed `moon check --target
+  native` and `moon test src/decode --target native`, but q0 screening was
+  mixed: HEAD measured 42.440/61.707 ms on wasm-gc/native and the trial
+  measured 41.761/62.949 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried rewriting the `distance == 1` repeated-byte copy branch from a range
+  `for` loop to an explicit `while pos < end` loop. It passed `moon check
+  --target native` and `moon test src/decode --target native`, but q0
+  screening was mixed: HEAD measured 41.959/62.016 ms on wasm-gc/native and
+  the trial measured 41.878/64.014 ms. Reverted and recorded it as a rejected
+  decode optimization.
+- Tried changing `BrotliBitReader::take_bits` to shift/drop bits directly
+  after `peek_bits(n)` instead of calling the checked `drop_bits(n)` helper.
+  It passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 screening was mixed: HEAD measured 41.858/61.916 ms on
+  wasm-gc/native and the trial measured 41.012/64.882 ms. Reverted and
+  recorded it as a rejected decode optimization.
+- Tried moving the meta-block `remaining -= command.insert_length` update to
+  immediately after the insert-length bounds check, before decoding inserted
+  literals. It passed `moon check --target native` and `moon test src/decode
+  --target native`, but q0 screening failed on both targets: HEAD measured
+  41.749/62.831 ms on wasm-gc/native and the trial measured 42.179/67.102 ms.
+  Reverted and recorded it as a rejected decode optimization.
+- Tried reversing the Boolean order for the `single_literal_block` setup flag,
+  checking `header.literal_block.num_types == 1` before `single_literal_tree`.
+  It passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 screening was mixed: HEAD measured 42.194/62.385 ms on
+  wasm-gc/native and the trial measured 42.067/64.606 ms. Reverted and
+  recorded it as a rejected decode optimization.
+- Tried reusing the already-computed `direct_limit` in `brotli_read_distance`
+  by changing `xcode` from `code - ndirect - 16` to `code - direct_limit`. It
+  passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 screening failed on both targets: HEAD measured
+  41.670/61.877 ms on wasm-gc/native and the trial measured 41.888/64.271 ms.
+  Reverted and recorded it as a rejected decode optimization.
+- Tried caching decoded command fields in local variables immediately after
+  `BrotliCommand::read_into`, then using the locals through literal, distance,
+  and copy handling. It passed `moon check --target native` and `moon test
+  src/decode --target native`, but q0 screening failed on both targets: HEAD
+  measured 41.709/61.770 ms on wasm-gc/native and the trial measured
+  42.031/63.569 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried merging the three successful `copy_from_distance` branches so they
+  share a single final `self.len = start + length` assignment instead of
+  assigning and returning inside the `distance == 1` and non-overlap branches.
+  It passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 screening failed on both targets: HEAD measured
+  41.459/62.060 ms on wasm-gc/native and the trial measured 41.899/64.228 ms.
+  Reverted and recorded it as a rejected decode optimization.
+- Tried removing the local `distance_tree` binding in the explicit-distance
+  branch and passing `header.distance_trees.tree(distance_tree_index)` directly
+  to `brotli_read_distance`. It passed `moon check --target native` and
+  `moon test src/decode --target native`, but q0 screening failed on both
+  targets: HEAD measured 41.796/61.613 ms on wasm-gc/native and the trial
+  measured 42.230/64.555 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried replacing the decode-private short-distance helper's
+  `@common.brotli_distance_ring_slot(...)` calls with direct `& 3` ring slot
+  indexing. It passed `moon check --target native` and `moon test src/decode
+  --target native`, but q0 screening failed: HEAD measured 42.455/61.732 ms on
+  wasm-gc/native and the trial measured 42.538/64.644 ms. Reverted and
+  recorded it as a rejected decode optimization.
+- Tried constant-folding the direct-distance branch in `brotli_read_distance`
+  from `code - brotli_num_distance_short_codes + 1` to `code - 15`. It passed
+  `moon check --target native` and `moon test src/decode --target native`, but
+  q0 screening failed on both targets: HEAD measured 41.853/61.854 ms on
+  wasm-gc/native and the trial measured 42.088/64.186 ms. Reverted and
+  recorded it as a rejected decode optimization.
+- Tried removing the explicit `return` after the 24-bit fast refill in
+  `BrotliBitReader::refill_to`, relying on the following `while` condition to
+  do nothing when enough bits are available. It passed `moon check --target
+  native` and `moon test src/decode --target native`, but q0 screening failed
+  on both targets: HEAD measured 41.954/62.302 ms on wasm-gc/native and the
+  trial measured 42.398/64.191 ms. Reverted and recorded it as a rejected
+  decode optimization.
+- Tried changing `BrotliBitReader::peek_bits` to read
+  `brotli_low_mask_lut[n]` directly instead of calling `brotli_low_mask(n)`.
+  It passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 screening failed on both targets: HEAD measured
+  41.780/61.786 ms on wasm-gc/native and the trial measured 41.916/64.126 ms.
+  Reverted and recorded it as a rejected decode optimization.
+- Tried moving `self.len = start + length` before the repeated-byte fill loop
+  in the `distance == 1` branch of `BrotliOutputBuilder::copy_from_distance`.
+  It passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 screening was mixed: HEAD measured 41.835/61.793 ms on
+  wasm-gc/native and the trial measured 41.812/64.109 ms. Reverted and
+  recorded it as a rejected decode optimization.
+- Tried caching `entry >> 16` as `entry_value` inside `brotli_read_symbol` and
+  reusing it for the root return and sub-table offset. It passed `moon check
+  --target native` and `moon test src/decode --target native`, but q0
+  screening failed on both targets: HEAD measured 41.774/61.720 ms on
+  wasm-gc/native and the trial measured 41.871/63.701 ms. Reverted and
+  recorded it as a rejected decode optimization.
+- Tried removing the zero-length branch from `brotli_skip_metadata`, letting
+  `reader.take_bytes(..., length=0)` perform the same byte alignment. It passed
+  `moon check --target native` and `moon test src/decode --target native`, but
+  q0 screening was mixed: HEAD measured 42.225/62.271 ms on wasm-gc/native and
+  the trial measured 41.942/64.998 ms. Reverted and recorded it as a rejected
+  decode optimization.
+- Tried caching `header.context_modes` and `header.literal_trees` as locals in
+  the multi literal-tree branch of `brotli_decode_compressed_metablock_body`.
+  It passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 same-time screening failed: HEAD measured
+  42.0888/61.6848 ms on wasm-gc/native and the trial measured
+  42.2274/64.5204 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried inlining the `bits_avail == 0` four-byte refill case directly in
+  `brotli_read_symbol`. It passed `moon check --target native` and
+  `moon test src/decode --target native`. q0 same-time screening improved
+  slightly on both targets (HEAD 41.3968/63.7920 ms, trial
+  41.2974/63.5768 ms for wasm-gc/native), but q5 failed because native
+  regressed from 51.2378 to 53.5978 ms while wasm-gc improved from 34.0830 to
+  33.6478 ms. Reverted and recorded it as a rejected decode optimization.
+- Tried a `BrotliCommand::read_into` fast return when both command extra-bit
+  widths are zero. It passed `moon check --target native` and
+  `moon test src/decode --target native`, but q0 same-time screening failed:
+  HEAD measured 41.4432/61.8700 ms on wasm-gc/native and the trial measured
+  41.8366/64.2958 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried splitting the single literal tree plus single literal block meta-block
+  shape into a dedicated compressed-body loop. It passed
+  `moon check --target native` and `moon test src/decode --target native`, but
+  q0 same-time screening failed: HEAD measured 41.7002/61.7896 ms on
+  wasm-gc/native and the trial measured 41.8904/63.4546 ms. Reverted and
+  recorded it as a rejected decode optimization.
+- Tried moving `BrotliCommand::read_into` distance field assignments before
+  reading insert/copy extra bits. It passed `moon check --target native` and
+  `moon test src/decode --target native`, but q0 same-time screening failed
+  because native regressed from 63.1218 to 64.9398 ms while wasm-gc improved in
+  a noisy sample. Reverted and recorded it as a rejected decode optimization.
+- Tried reusing `output_before_copy` as the argument to
+  `state.max_distance(...)` instead of reading `output.len` again. It passed
+  `moon check --target native` and `moon test src/decode --target native`, but
+  q0 same-time screening failed on both targets: HEAD measured
+  41.7680/62.0576 ms on wasm-gc/native and the trial measured
+  42.3574/64.4980 ms. Reverted and recorded it as a rejected decode
+  optimization.
+- Tried caching `state.distance_ring` in a local inside the compressed-body
+  loop setup and using that alias for distance decode and ring updates. It
+  passed `moon check --target native` and `moon test src/decode --target
+  native`, but q0 same-time screening failed on both targets: HEAD measured
+  41.7348/62.0278 ms on wasm-gc/native and the trial measured
+  42.0638/64.3754 ms. Reverted and recorded it as a rejected decode
+  optimization.
