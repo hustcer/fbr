@@ -715,6 +715,18 @@ test "BrotliDistanceRing resolves initial implicit distance" {
 }
 
 ///|
+test "validated short-distance helper matches checked ring lookup" {
+  let checked = BrotliDistanceRing::new()
+  let validated = BrotliDistanceRing::new()
+  inspect(checked.take_short_code(0), content="4")
+  inspect(brotli_take_short_code_validated(validated, 0), content="4")
+  checked.record(7)
+  validated.record(7)
+  inspect(checked.take_short_code(4), content="6")
+  inspect(brotli_take_short_code_validated(validated, 4), content="6")
+}
+
+///|
 test "brotli distance formula decodes direct and postfix distances" {
   inspect(brotli_distance_extra_bits(16, 0, 0), content="1")
   inspect(brotli_distance_offset(16, 0, 0), content="1")

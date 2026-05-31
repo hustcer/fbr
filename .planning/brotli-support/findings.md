@@ -814,3 +814,13 @@ wasm-gc, treat it as a failed narrow optimization and revert.
   encoder behavior.
 - Added `brotli_context_map_tree_index rejects invalid mapped tree` white-box
   coverage to document the validation invariant used by the hot tree lookup.
+- **Validated short-distance helper:** added a decode-private helper for short
+  distance codes whose range is already guaranteed by command symbols or the
+  distance Huffman alphabet, avoiding the public `take_short_code` range check
+  in the compressed-body hot path. Same-session q0/q5/q9/q11 screening with
+  `wasm-gc,native`, repeats=5, samples=3 improved aggregate min time from
+  371.619 to 362.544 ms/op, a 2.44% decode speedup. Each of the eight screened
+  rows improved. `just bench` completed, and its results were saved under
+  `target/brotli-perf-notes/2026-06-01-short-distance/` rather than committed.
+  Encode output sizes were unchanged versus the checked-in
+  `docs/current-bench/encode.jsonl`.

@@ -188,6 +188,12 @@ implementations are available at `/Users/hustcer/iWork/refs/brotli` and
   block-tracker, and context-map validation. Same-time q0/q5/q9/q11 decode
   screening improved aggregate wasm-gc/native min time by 2.49%, and
   `just bench` confirmed encode output sizes stayed unchanged.
+- Follow-up accepted decode increment: decode-private validated short-distance
+  lookup avoids the public short-code range check when the command/distance
+  alphabet already guarantees the code range. q0/q5/q9/q11 screening improved
+  aggregate wasm-gc/native min time by 2.44%; `just bench` passed and was saved
+  under `target/brotli-perf-notes/2026-06-01-short-distance/` instead of being
+  committed.
 
 ## Current Increment
 

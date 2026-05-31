@@ -37,6 +37,21 @@
   table check. It passed native check and decode tests but failed screening
   because q0 wasm-gc regressed from 42.017 to 44.907 ms/op. Source was
   reverted and the failure was added to findings.
+- Accepted follow-up trial: added a decode-private validated short-distance
+  helper and used it for implicit command distances plus short codes read from
+  explicit distance trees.
+  - Screening q0/q5/q9/q11 Google 1 MiB streams with `wasm-gc,native`,
+    repeats=5, samples=3 improved aggregate eight-row min time from 371.619 to
+    362.544 ms/op, +2.44%.
+  - Individual min-time rows: q0 wasm/native 42.017 -> 40.814 and
+    68.275 -> 67.637; q5 33.412 -> 32.685 and 56.582 -> 55.453; q9
+    32.861 -> 31.451 and 54.998 -> 53.577; q11 30.497 -> 29.498 and
+    52.977 -> 51.428.
+  - `just bench` passed; benchmark artifacts were saved under
+    `target/brotli-perf-notes/2026-06-01-short-distance/` and then restored
+    out of the worktree so they will not be committed.
+  - Encode output sizes from the generated `docs/current-bench/encode.jsonl`
+    matched HEAD exactly.
 
 ## 2026-05-30 — P3 5% ratio release gate enforced
 

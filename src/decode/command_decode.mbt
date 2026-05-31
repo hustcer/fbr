@@ -185,7 +185,10 @@ fn brotli_decode_compressed_metablock_body(
       return
     }
     let distance = if command.distance_code >= 0 {
-      state.distance_ring.take_short_code(command.distance_code)
+      brotli_take_short_code_validated(
+        state.distance_ring,
+        command.distance_code,
+      )
     } else {
       distance_blocks.ensure_ready(reader, header.distance_block)
       let distance_tree_index = brotli_context_map_tree_index(
