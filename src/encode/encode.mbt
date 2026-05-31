@@ -1895,34 +1895,94 @@ fn brotli_add_unique_symbol(
 }
 
 ///|
-fn brotli_find_command_prefix(
+let brotli_command_prefix_code_count = 24
+
+///|
+fn brotli_command_prefix_table_index(
+  mode : Int,
+  insert_code : Int,
+  copy_code : Int,
+) -> Int {
+  (mode * brotli_command_prefix_code_count + insert_code) *
+  brotli_command_prefix_code_count +
+  copy_code
+}
+
+///|
+let brotli_command_prefix_table : FixedArray[Int] = {
+  let code_count = brotli_command_prefix_code_count
+  let table = FixedArray::make(3 * code_count * code_count, -1)
+  for symbol in 0..<@common.brotli_num_command_symbols {
+    let cell_index = symbol >> 6
+    let cell_pos = @common.brotli_command_cell_pos[cell_index]
+    let copy_code = ((cell_pos << 3) & 0x18) + (symbol & 0x7)
+    let insert_code = (cell_pos & 0x18) + ((symbol >> 3) & 0x7)
+    let mode = if cell_index >= 2 { 1 } else { 0 }
+    let index = brotli_command_prefix_table_index(mode, insert_code, copy_code)
+    if table[index] < 0 {
+      table[index] = symbol
+    }
+    let insert_only_index = brotli_command_prefix_table_index(
+      2, insert_code, copy_code,
+    )
+    if table[insert_only_index] < 0 {
+      table[insert_only_index] = symbol
+    }
+  }
+  table
+}
+
+///|
+fn brotli_prefix_code_for_length(
+  extra_bits : FixedArray[Int],
+  initial : Int,
+  length : Int,
+) -> (Int, Int, Int)? {
+  let mut offset = initial
+  for code in 0..<extra_bits.length() {
+    let bits = extra_bits[code]
+    let limit = offset + (1 << bits)
+    if length >= offset && length < limit {
+      return Some((code, bits, length - offset))
+    }
+    offset = limit
+  }
+  None
+}
+
+///|
+fn brotli_command_prefix_for_mode(
   insert_length : Int,
   copy_length : Int,
-  explicit_distance : Bool,
+  mode : Int,
 ) -> BrotliCommandPrefix raise @common.FbrError {
-  for symbol in 0..<@common.brotli_num_command_symbols {
-    let info = @common.brotli_command_info(symbol)
-    let distance_ok = if explicit_distance {
-      info.distance_code < 0
-    } else {
-      info.distance_code >= 0
-    }
-    if distance_ok &&
-      insert_length >= info.insert_len_offset &&
-      copy_length >= info.copy_len_offset {
-      let insert_extra = insert_length - info.insert_len_offset
-      let copy_extra = copy_length - info.copy_len_offset
-      if insert_extra < 1 << info.insert_len_extra_bits &&
-        copy_extra < 1 << info.copy_len_extra_bits {
+  match
+    (
+      brotli_prefix_code_for_length(
+        @common.brotli_insert_length_extra_bits, 0, insert_length,
+      ),
+      brotli_prefix_code_for_length(
+        @common.brotli_copy_length_extra_bits, 2, copy_length,
+      ),
+    ) {
+    (
+      Some((insert_code, insert_bits, insert_extra)),
+      Some((copy_code, copy_bits, copy_extra)),
+    ) => {
+      let symbol = brotli_command_prefix_table[brotli_command_prefix_table_index(
+          mode, insert_code, copy_code,
+        )]
+      if symbol >= 0 {
         return {
           symbol,
           insert_extra,
           copy_extra,
-          insert_extra_bits: info.insert_len_extra_bits,
-          copy_extra_bits: info.copy_len_extra_bits,
+          insert_extra_bits: insert_bits,
+          copy_extra_bits: copy_bits,
         }
       }
     }
+    _ => ()
   }
   raise @common.fbr_err(
     @common.BrotliInvalidMetablock,
@@ -1931,30 +1991,27 @@ fn brotli_find_command_prefix(
 }
 
 ///|
+fn brotli_find_command_prefix(
+  insert_length : Int,
+  copy_length : Int,
+  explicit_distance : Bool,
+) -> BrotliCommandPrefix raise @common.FbrError {
+  brotli_command_prefix_for_mode(
+    insert_length,
+    copy_length,
+    if explicit_distance {
+      1
+    } else {
+      0
+    },
+  )
+}
+
+///|
 fn brotli_find_insert_only_command_prefix(
   insert_length : Int,
 ) -> BrotliCommandPrefix raise @common.FbrError {
-  for symbol in 0..<@common.brotli_num_command_symbols {
-    let info = @common.brotli_command_info(symbol)
-    if insert_length >= info.insert_len_offset {
-      let insert_extra = insert_length - info.insert_len_offset
-      if insert_extra < 1 << info.insert_len_extra_bits &&
-        2 >= info.copy_len_offset &&
-        2 - info.copy_len_offset < 1 << info.copy_len_extra_bits {
-        return {
-          symbol,
-          insert_extra,
-          copy_extra: 2 - info.copy_len_offset,
-          insert_extra_bits: info.insert_len_extra_bits,
-          copy_extra_bits: info.copy_len_extra_bits,
-        }
-      }
-    }
-  }
-  raise @common.fbr_err(
-    @common.BrotliInvalidMetablock,
-    msg="no Brotli insert-only command prefix",
-  )
+  brotli_command_prefix_for_mode(insert_length, 2, 2)
 }
 
 ///|

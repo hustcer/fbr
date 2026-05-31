@@ -1203,6 +1203,97 @@ test "brotli_sync encoder uses distance-cache short codes" {
 }
 
 ///|
+fn brotli_reference_command_prefix_for_mode(
+  insert_length : Int,
+  copy_length : Int,
+  mode : Int,
+) -> BrotliCommandPrefix raise FbrError {
+  for symbol in 0..<@common.brotli_num_command_symbols {
+    let info = @common.brotli_command_info(symbol)
+    let distance_ok = if mode == 2 {
+      true
+    } else if mode == 1 {
+      info.distance_code < 0
+    } else {
+      info.distance_code >= 0
+    }
+    if distance_ok &&
+      insert_length >= info.insert_len_offset &&
+      copy_length >= info.copy_len_offset {
+      let insert_extra = insert_length - info.insert_len_offset
+      let copy_extra = copy_length - info.copy_len_offset
+      if insert_extra < 1 << info.insert_len_extra_bits &&
+        copy_extra < 1 << info.copy_len_extra_bits {
+        return {
+          symbol,
+          insert_extra,
+          copy_extra,
+          insert_extra_bits: info.insert_len_extra_bits,
+          copy_extra_bits: info.copy_len_extra_bits,
+        }
+      }
+    }
+  }
+  raise @common.fbr_err(
+    BrotliInvalidMetablock,
+    msg="no reference command prefix",
+  )
+}
+
+///|
+fn assert_command_prefix_matches_reference(
+  insert_length : Int,
+  copy_length : Int,
+  mode : Int,
+) -> Unit raise {
+  let direct_result : Result[BrotliCommandPrefix, FbrError] = try? brotli_command_prefix_for_mode(
+    insert_length, copy_length, mode,
+  )
+  let reference_result : Result[BrotliCommandPrefix, FbrError] = try? brotli_reference_command_prefix_for_mode(
+    insert_length, copy_length, mode,
+  )
+  match (direct_result, reference_result) {
+    (Ok(direct), Ok(reference)) => {
+      assert_eq(direct.symbol, reference.symbol)
+      assert_eq(direct.insert_extra, reference.insert_extra)
+      assert_eq(direct.copy_extra, reference.copy_extra)
+      assert_eq(direct.insert_extra_bits, reference.insert_extra_bits)
+      assert_eq(direct.copy_extra_bits, reference.copy_extra_bits)
+    }
+    (Err(_), Err(_)) => ()
+    _ => fail("command prefix lookup diverged from reference scan")
+  }
+}
+
+///|
+test "brotli encoder command prefix table matches reference scan" {
+  for insert_code in 0..<@common.brotli_insert_length_extra_bits.length() {
+    let insert_offset = @common.brotli_prefix_offset(
+      @common.brotli_insert_length_extra_bits, insert_code, 0,
+    )
+    let insert_last = insert_offset +
+      (1 << @common.brotli_insert_length_extra_bits[insert_code]) -
+      1
+    for copy_code in 0..<@common.brotli_copy_length_extra_bits.length() {
+      let copy_offset = @common.brotli_prefix_offset(
+        @common.brotli_copy_length_extra_bits, copy_code, 2,
+      )
+      let copy_last = copy_offset +
+        (1 << @common.brotli_copy_length_extra_bits[copy_code]) -
+        1
+      for mode in 0..<=2 {
+        assert_command_prefix_matches_reference(
+          insert_offset, copy_offset, mode,
+        )
+        assert_command_prefix_matches_reference(insert_offset, copy_last, mode)
+        assert_command_prefix_matches_reference(insert_last, copy_offset, mode)
+        assert_command_prefix_matches_reference(insert_last, copy_last, mode)
+      }
+    }
+  }
+}
+
+///|
 test "brotli encoder maps distance prefixes by range boundary" {
   for
     code in @common.brotli_num_distance_short_codes..<@common.brotli_distance_alphabet_size(
