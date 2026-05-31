@@ -5958,7 +5958,11 @@ fn brotli_use_intermediate_four_byte_candidate(
   quality : Int,
   data_length : Int,
 ) -> Bool {
-  (quality != 6 && quality != 7) || data_length > 65536
+  if quality >= 4 && quality <= 8 {
+    false
+  } else {
+    (quality != 6 && quality != 7) || data_length > 65536
+  }
 }
 
 ///|
