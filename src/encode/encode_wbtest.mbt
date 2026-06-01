@@ -1836,3 +1836,373 @@ test "brotli_sync enforces max_input_size" {
   })
   assert_brotli_error(result, InvalidZipData)
 }
+
+///|
+fn assert_roundtrip_bytes(
+  input : FixedArray[Byte],
+  compressed : FixedArray[Byte],
+) -> Unit raise {
+  let decoded = @decode.unbrotli_sync(compressed)
+  assert_eq(decoded.length(), input.length())
+  for i in 0..<input.length() {
+    assert_eq(decoded[i], input[i])
+  }
+}
+
+///|
+fn make_periodic_chunk(length : Int) -> FixedArray[Byte] {
+  let input = FixedArray::make(length, b'\x00')
+  let pattern : FixedArray[Byte] = [
+    b'm', b'o', b'o', b'n', b'b', b'i', b't', b'-', b'b', b'r', b'o', b't', b'l',
+    b'i', b'-', b'c', b'h', b'u', b'n', b'k',
+  ]
+  for i in 0..<length {
+    input[i] = pattern[i % pattern.length()]
+  }
+  input
+}
+
+///|
+test "brotli_encode_chunked_standard round-trips compressed and stored chunks" {
+  let compressible = make_periodic_chunk(70_000)
+  let compressed = brotli_encode_chunked_standard(compressible, {
+    quality: 4,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  assert_roundtrip_bytes(compressible, compressed)
+
+  let noisy = FixedArray::make(70_000, b'\x00')
+  let mut state = 0x1234_5678
+  for i in 0..<noisy.length() {
+    state = state * 1103515245 + 12345
+    noisy[i] = ((state >> 16) & 0xff).to_byte()
+  }
+  let stored = brotli_encode_chunked_standard(noisy, {
+    quality: 4,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  assert_roundtrip_bytes(noisy, stored)
+}
+
+///|
+test "mixed dictionary LZ77 candidate preserves dictionary and normal copies" {
+  let words = str_to_u8(
+    " the time was full of work because they could find new other place over",
+  )
+  let input = FixedArray::make(12_000, b'\x00')
+  for i in 0..<input.length() {
+    input[i] = words[i % words.length()]
+  }
+  let config = brotli_four_byte_hash_config(
+    brotli_high_quality_hash_config_for_quality(10),
+  )
+  let commands = match
+    brotli_build_mixed_dictionary_lz77_commands(input, config, 0, 22) {
+    Some(commands) => commands
+    None => fail("expected mixed dictionary/LZ77 commands")
+  }
+  let mut copy_bytes = 0
+  for i in 0..<commands.length() {
+    if commands[i].has_copy {
+      copy_bytes += commands[i].output_length
+    }
+  }
+  assert_true(copy_bytes > input.length() / 2)
+
+  let body = brotli_write_best_lz77_metablock(
+    input, commands, true, 10, true, 0, 0,
+  )
+  let encoded = BrotliBitWriter::new(16 + body.buf.length())
+  brotli_encode_window_bits(encoded, 22)
+  encoded.write_from_bits(body.buf, body.bit_pos)
+  assert_roundtrip_bytes(input, encoded.finish())
+}
+
+///|
+test "small standard chunk tries literal-only candidate and round-trips" {
+  let input = FixedArray::make(4096, b'\x00')
+  let mut state = 12345
+  for i in 0..<input.length() {
+    state = (state * 73 + 41) % 9973
+    input[i] = (32 + state % 95).to_byte()
+  }
+  let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
+  let candidate = brotli_try_compressed_chunk(
+    input,
+    brotli_hash_config_for_quality(4),
+    true,
+    0,
+    22,
+    4,
+    distance_cache,
+    0,
+    0,
+  )
+  guard candidate is Some(chunk) else {
+    fail("expected literal-heavy chunk candidate")
+  }
+  let encoded = BrotliBitWriter::new(16 + chunk.writer.buf.length())
+  brotli_encode_window_bits(encoded, 22)
+  encoded.write_from_bits(chunk.writer.buf, chunk.writer.bit_pos)
+  assert_roundtrip_bytes(input, encoded.finish())
+}
+
+///|
+test "brotli_sync uses chunked standard path for large non-single-copy input" {
+  let input = FixedArray::make(70_000, b'\x00')
+  let mut state = 0x1234_5678
+  for i in 0..<input.length() {
+    state = state * 1103515245 + 12345
+    input[i] = ((state >> 16) & 0xff).to_byte()
+  }
+  let compressed = brotli_sync(input, opts={
+    quality: 4,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  assert_roundtrip_bytes(input, compressed)
+}
+
+///|
+test "brotli_sync q10 standard path handles dictionary-heavy text" {
+  let words = str_to_u8(
+    " the time was full of work because they could find new other place over",
+  )
+  let input = FixedArray::make(12_000, b'\x00')
+  for i in 0..<input.length() {
+    input[i] = words[i % words.length()]
+  }
+  let compressed = brotli_sync(input, opts={
+    quality: 10,
+    window_bits: 22,
+    max_input_size: default_max_input_size,
+  })
+  assert_roundtrip_bytes(input, compressed)
+}
+
+///|
+test "brotli_try_compressed_chunk exercises standard quality candidate matrix" {
+  let input = make_periodic_chunk(12_000)
+  let q2_cache : FixedArray[Int] = [4, 11, 15, 16]
+  let q2_candidate = brotli_try_compressed_chunk(
+    input,
+    brotli_hash_config_for_quality(2),
+    true,
+    0,
+    22,
+    2,
+    q2_cache,
+    0,
+    0,
+  )
+  guard q2_candidate is Some(q2_chunk) else {
+    fail("expected q2 compressed chunk candidate")
+  }
+  let q2_writer = BrotliBitWriter::new(16 + q2_chunk.writer.buf.length())
+  brotli_encode_window_bits(q2_writer, 22)
+  q2_writer.write_from_bits(q2_chunk.writer.buf, q2_chunk.writer.bit_pos)
+  assert_roundtrip_bytes(input, q2_writer.finish())
+
+  for quality in [4, 6, 8, 9, 10] {
+    let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
+    let candidate = brotli_try_compressed_chunk(
+      input,
+      brotli_hash_config_for_quality(quality),
+      true,
+      0,
+      22,
+      quality,
+      distance_cache,
+      b'k'.to_int(),
+      b'n'.to_int(),
+    )
+    guard candidate is Some(chunk) else {
+      fail("expected compressed chunk candidate")
+    }
+    let writer = BrotliBitWriter::new(16 + chunk.writer.buf.length())
+    brotli_encode_window_bits(writer, 22)
+    writer.write_from_bits(chunk.writer.buf, chunk.writer.bit_pos)
+    assert_roundtrip_bytes(input, writer.finish())
+  }
+}
+
+///|
+test "brotli_try_compressed_chunk returns none for incompressible chunks" {
+  let input = FixedArray::make(12_000, b'\x00')
+  let mut state = 17
+  for i in 0..<input.length() {
+    state = state * 1664525 + 1013904223
+    input[i] = ((state >> 16) & 0xff).to_byte()
+  }
+  let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
+  let candidate = brotli_try_compressed_chunk(
+    input,
+    brotli_hash_config_for_quality(4),
+    true,
+    0,
+    22,
+    4,
+    distance_cache,
+    0,
+    0,
+  )
+  guard candidate is None else {
+    fail("expected no compressed chunk candidate")
+  }
+}
+
+///|
+test "brotli validation rejects negative max input size" {
+  let input : FixedArray[Byte] = []
+  let result : Result[FixedArray[Byte], FbrError] = try? brotli_sync(input, opts={
+    quality: 1,
+    window_bits: 22,
+    max_input_size: -1,
+  })
+  assert_brotli_error(result, InvalidZipData)
+}
+
+///|
+test "encoder Huffman tree handles empty and length-limited histograms" {
+  let empty = FixedArray::make(8, 0)
+  let (empty_lengths, empty_max_bits) = h_tree(empty, 5)
+  assert_eq(empty_lengths.length(), 0)
+  assert_eq(empty_max_bits, 0)
+
+  let skewed = FixedArray::make(20, 1)
+  skewed[0] = 10_000
+  let (lengths, max_bits) = h_tree(skewed, 5)
+  assert_true(lengths.length() >= skewed.length())
+  assert_true(max_bits <= 5)
+  for i in 0..<lengths.length() {
+    assert_true(lengths[i].to_int() <= 5)
+  }
+}
+
+///|
+test "hash configs preserve large chunk command budgets and density gates" {
+  let natural = brotli_natural_hash_config_for_quality(4)
+  assert_true(
+    brotli_effective_max_commands(natural, 2_100_000) >
+    brotli_effective_max_commands(natural, 1_000_000),
+  )
+
+  let dense = make_periodic_chunk(4096)
+  assert_true(
+    brotli_has_compressible_match_density(
+      dense,
+      brotli_hash_config_for_quality(4),
+    ),
+  )
+
+  let sparse = FixedArray::make(4096, b'\x00')
+  let mut state = 0x3456_789a
+  for i in 0..<sparse.length() {
+    state = state * 1664525 + 1013904223
+    sparse[i] = ((state >> 16) & 0xff).to_byte()
+  }
+  assert_false(
+    brotli_has_compressible_match_density(
+      sparse,
+      brotli_hash_config_for_quality(4),
+    ),
+  )
+}
+
+///|
+test "hash match helpers cover four-byte and malformed previous-table paths" {
+  let data : FixedArray[Byte] = [
+    b'a', b'b', b'c', b'd', b'e', b'x', b'a', b'b', b'c', b'd', b'e', b'y',
+  ]
+  let config4 = brotli_four_byte_hash_config(
+    brotli_high_quality_hash_config_for_quality(10),
+  )
+  assert_eq(brotli_match_hash(data, data.length() - 3, config4), 0)
+  assert_true(brotli_match_hash(data, 0, config4) >= 0)
+
+  let short_previous = brotli_previous_match_positions([b'a', b'b'], config4)
+  assert_eq(short_previous.length(), 2)
+  assert_eq(short_previous[0], -1)
+  assert_eq(short_previous[1], -1)
+
+  let previous4 = brotli_previous_match_positions(data, config4)
+  assert_eq(previous4[6], 0)
+  let matches = brotli_bounded_previous_hash_matches_with_cache(
+    data,
+    previous4,
+    6,
+    brotli_bounded_shortest_path_config(config4),
+    [4, 11, 15, 16],
+  )
+  assert_true(matches.length() > 0)
+  assert_eq(matches[0].distance, 6)
+
+  let malformed_previous = FixedArray::make(1, -1)
+  let no_matches = brotli_bounded_previous_hash_matches_with_cache(
+    data,
+    malformed_previous,
+    6,
+    brotli_bounded_shortest_path_config(config4),
+    [99, 100, 101, 102],
+  )
+  assert_eq(no_matches.length(), 0)
+}
+
+///|
+test "bounded hash match recorder keeps the longest match per distance" {
+  let matches : Array[BrotliHashMatchCandidate] = []
+  brotli_record_bounded_hash_match(matches, 3, 4, 4)
+  assert_eq(matches.length(), 0)
+  brotli_record_bounded_hash_match(matches, 4, 4, 4)
+  brotli_record_bounded_hash_match(matches, 7, 4, 4)
+  brotli_record_bounded_hash_match(matches, 5, 4, 4)
+  assert_eq(matches.length(), 1)
+  assert_eq(matches[0].length, 7)
+  assert_eq(matches[0].distance, 4)
+}
+
+///|
+test "encoder command and block prefix helpers reject invalid lengths" {
+  guard brotli_insert_prefix_code_for_length(-1) is None else {
+    fail("expected invalid insert prefix")
+  }
+  guard brotli_copy_prefix_code_for_length(1) is None else {
+    fail("expected invalid copy prefix")
+  }
+  let invalid_command = brotli_try_make_encode_command_with_distance_mode(
+    0, -1, 0, 1, false, false,
+  )
+  guard invalid_command is None else {
+    fail("expected invalid insert-only command")
+  }
+
+  let invalid_block : Result[BrotliCommandPrefix, FbrError] = try? brotli_block_length_prefix(
+    0,
+  )
+  guard invalid_block is Err(FbrError(code~, ..)) else {
+    fail("expected invalid block length")
+  }
+  assert_eq(code, BrotliInvalidMetablock)
+}
+
+///|
+test "literal-only command builder rejects inputs that should stay stored" {
+  let empty : FixedArray[Byte] = []
+  assert_false(brotli_literal_only_may_beat_stored(empty))
+  guard brotli_build_literal_only_command(empty) is None else {
+    fail("expected no literal-only command for empty input")
+  }
+
+  let too_large = FixedArray::make(65_537, b'a')
+  guard brotli_build_literal_only_command(too_large) is None else {
+    fail("expected no literal-only command past one meta-block")
+  }
+
+  let noisy = FixedArray::make(4096, b'\x00')
+  for i in 0..<noisy.length() {
+    noisy[i] = (i & 0xff).to_byte()
+  }
+  assert_false(brotli_literal_only_may_beat_stored(noisy))
+}

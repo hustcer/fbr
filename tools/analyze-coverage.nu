@@ -144,12 +144,13 @@ def render-markdown [
   ]
   | append $lowest_rows
   | str join (char newline)
+  | $in + (char newline)
 }
 
 def main [
   --output (-o): string = $default_output # Path for the Markdown report.
 ] {
-  let coverage_run = moon coverage analyze -- -f summary o+e>| complete
+  let coverage_run = ^moon coverage analyze -- -f summary | complete
   if $coverage_run.exit_code != 0 {
     print --stderr $coverage_run.stdout
     print --stderr $coverage_run.stderr

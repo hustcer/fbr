@@ -112,6 +112,82 @@ test "brotli_build_huffman_table rejects malformed length sets" {
 }
 
 ///|
+test "public Brotli error-code mapping stays aligned with default messages" {
+  let codes : Array[FbrErrorCode] = [
+    UnexpectedEOF,
+    InvalidUTF8,
+    InvalidZipData,
+    BrotliInvalidWindowBits,
+    BrotliInvalidMetablock,
+    BrotliInvalidHuffman,
+    BrotliInvalidContextMap,
+    BrotliInvalidDistance,
+    BrotliInvalidTransform,
+    BrotliDictionaryNotSupported,
+    BrotliLargeWindowNotSupported,
+    BrotliReserved,
+    BrotliInvalidPadding,
+  ]
+  let names : Array[String] = [
+    "UnexpectedEOF", "InvalidUTF8", "InvalidZipData", "BrotliInvalidWindowBits",
+    "BrotliInvalidMetablock", "BrotliInvalidHuffman", "BrotliInvalidContextMap",
+    "BrotliInvalidDistance", "BrotliInvalidTransform", "BrotliDictionaryNotSupported",
+    "BrotliLargeWindowNotSupported", "BrotliReserved", "BrotliInvalidPadding",
+  ]
+  for i in 0..<codes.length() {
+    inspect(codes[i], content=names[i])
+    assert_eq(fbr_error_code_to_int(codes[i]), i)
+    guard fbr_err(codes[i]) is FbrError(code~, message~) else {
+      fail("expected FbrError")
+    }
+    assert_eq(code, codes[i])
+    assert_eq(message, error_messages[i])
+  }
+}
+
+///|
+test "brotli Huffman builders validate bounds and four-symbol simple layout" {
+  let invalid_alphabet : Result[FixedArray[Int], FbrError] = try? brotli_build_huffman_table(
+    [1],
+    0,
+    1,
+  )
+  guard invalid_alphabet is Err(FbrError(code=alphabet_code, ..)) else {
+    fail("expected invalid alphabet size")
+  }
+  assert_eq(alphabet_code, BrotliInvalidHuffman)
+
+  let invalid_root : Result[FixedArray[Int], FbrError] = try? brotli_build_huffman_table(
+    [1],
+    1,
+    0,
+  )
+  guard invalid_root is Err(FbrError(code=root_code, ..)) else {
+    fail("expected invalid root width")
+  }
+  assert_eq(root_code, BrotliInvalidHuffman)
+
+  let symbols : FixedArray[Int] = [10, 20, 40, 30]
+  let table = brotli_build_simple_huffman_table(symbols, 4, 3)
+  assert_eq(brotli_huffman_code_value(table[0]), 10)
+  assert_eq(brotli_huffman_code_bits(table[0]), 1)
+  assert_eq(brotli_huffman_code_value(table[1]), 20)
+  assert_eq(brotli_huffman_code_bits(table[1]), 2)
+  assert_eq(brotli_huffman_code_value(table[3]), 30)
+  assert_eq(brotli_huffman_code_bits(table[3]), 3)
+  assert_eq(brotli_huffman_code_value(table[7]), 40)
+  assert_eq(brotli_huffman_code_bits(table[7]), 3)
+
+  let invalid_simple : Result[FixedArray[Int], FbrError] = try? brotli_build_simple_huffman_table(
+    symbols, 5, 3,
+  )
+  guard invalid_simple is Err(FbrError(code=simple_code, ..)) else {
+    fail("expected invalid simple Huffman size")
+  }
+  assert_eq(simple_code, BrotliInvalidHuffman)
+}
+
+///|
 fn brotli_ascii_utf8_context1_ref(byte : Int) -> Int {
   if byte == 9 || byte == 10 || byte == 13 {
     1
@@ -223,4 +299,73 @@ test "brotli literal context LUT matches if-else reference for UTF8 and signed" 
     }
     assert_eq(brotli_signed_lut2[p1], expected_lut2_signed)
   }
+}
+
+///|
+test "brotli transform helpers cover ASCII and multi-byte uppercase paths" {
+  let ascii : FixedArray[Byte] = [b'a', b'z', b'0']
+  brotli_uppercase_all(ascii, 0, ascii.length())
+  assert_eq(ascii[0], b'A')
+  assert_eq(ascii[1], b'Z')
+  assert_eq(ascii[2], b'0')
+
+  let two_byte : FixedArray[Byte] = [0xc3, 0xa9]
+  brotli_uppercase_first(two_byte, 0, two_byte.length())
+  assert_eq(two_byte[1], (0xa9 ^ 32).to_byte())
+
+  let three_byte : FixedArray[Byte] = [0xe2, 0x82, 0xac]
+  brotli_uppercase_first(three_byte, 0, three_byte.length())
+  assert_eq(three_byte[2], (0xac ^ 5).to_byte())
+
+  let mixed : FixedArray[Byte] = [0xc3, 0xa9, 0xe2, 0x82, 0xac]
+  brotli_uppercase_all(mixed, 0, mixed.length())
+  assert_eq(mixed[1], (0xa9 ^ 32).to_byte())
+  assert_eq(mixed[4], (0xac ^ 5).to_byte())
+
+  let empty : FixedArray[Byte] = [b'a']
+  brotli_uppercase_first(empty, 0, 0)
+  assert_eq(empty[0], b'a')
+}
+
+///|
+test "brotli transform string lookup validates bounds" {
+  let first_len = brotli_transform_string_length(0)
+  assert_true(first_len >= 0)
+  let invalid : Result[Int, FbrError] = try? brotli_transform_string_offset(-1)
+  guard invalid is Err(FbrError(code~, ..)) else {
+    fail("expected invalid transform id")
+  }
+  assert_eq(code, BrotliInvalidTransform)
+}
+
+///|
+test "brotli distance helpers reject invalid inputs" {
+  let ring = BrotliDistanceRing::new()
+  let invalid_short : Result[Int, FbrError] = try? ring.take_short_code(16)
+  guard invalid_short is Err(FbrError(code=short_code, ..)) else {
+    fail("expected invalid short code")
+  }
+  assert_eq(short_code, BrotliInvalidDistance)
+
+  let invalid_record : Result[Unit, FbrError] = try? ring.record(0)
+  guard invalid_record is Err(FbrError(code=record_code, ..)) else {
+    fail("expected invalid recorded distance")
+  }
+  assert_eq(record_code, BrotliInvalidDistance)
+
+  let negative_extra : Result[Int, FbrError] = try? brotli_distance_extra_bits(
+    -1, 0, 0,
+  )
+  guard negative_extra is Err(FbrError(code=extra_code, ..)) else {
+    fail("expected negative distance code")
+  }
+  assert_eq(extra_code, BrotliInvalidDistance)
+
+  let short_offset : Result[Int, FbrError] = try? brotli_distance_offset(
+    0, 0, 0,
+  )
+  guard short_offset is Err(FbrError(code=offset_code, ..)) else {
+    fail("expected short-code offset error")
+  }
+  assert_eq(offset_code, BrotliInvalidDistance)
 }
