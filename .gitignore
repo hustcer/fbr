@@ -6,6 +6,7 @@ findings.md
 progress.md
 task_plan.md
 .agents/
+bisect.coverage
 .antigravitycli/
 skills-lock.json
 bench/node_modules/

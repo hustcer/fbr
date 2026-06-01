@@ -1,383 +1,76 @@
-# 测试覆盖率分析报告 - fbr 库
-
-## 📊 总体统计
-
-| 指标       | 数值       |
-| ---------- | ---------- |
-| 总代码行数 | 3,990 行   |
-| 已覆盖行数 | 3,890 行   |
-| 未覆盖行数 | 100 行     |
-| **覆盖率** | **97.49%** |
-| 涉及文件数 | 11 个      |
-| 测试用例数 | 128 个     |
-
-**最近更新**: 2026-03-08 - 新增 6 个安全测试，覆盖率保持 97.49%
-
-## 📁 各文件覆盖率详情
-
-| 文件        | 未覆盖行数 | 优先级 | 说明                             |
-| ----------- | ---------- | ------ | -------------------------------- |
-| zip.mbt     | 29         | 🔴 高  | ZIP 格式处理，最多未覆盖代码     |
-| deflate.mbt | 18         | 🟡 中  | 核心压缩算法，部分边界情况未覆盖 |
-| huffman.mbt | 14         | 🟡 中  | Huffman 编码，部分边界情况       |
-| inflate.mbt | 12         | 🟢 低  | 核心解压算法，已大幅改进 ✅      |
-| zlib.mbt    | 10         | 🟢 低  | Zlib 格式，覆盖较好              |
-| stream.mbt  | 7          | 🟢 低  | 流式 API，已补充测试 ✅          |
-| gzip.mbt    | 4          | 🟢 低  | GZIP 格式，覆盖优秀 ✅           |
-| string.mbt  | 2          | 🟢 低  | 字符串工具                       |
-| bits.mbt    | 2          | 🟢 低  | 位操作工具                       |
-| fzip.mbt    | 1          | 🟢 低  | 便捷 API ✅                      |
-| error.mbt   | 1          | 🟢 低  | 错误处理 ✅                      |
-
-## 🔍 详细分析
-
-### 1. zip.mbt (26 行未覆盖)
-
-**未覆盖的主要功能：**
-
-- ZIP64 扩展格式支持
-- 多文件 ZIP 归档
-- ZIP 文件列表功能
-- 特殊的 ZIP 头部处理
-
-**影响评估：**
-
-- ZIP 功能是库的重要特性
-- 未覆盖代码主要是高级功能和边界情况
-- 基本的 ZIP 压缩/解压已覆盖
-
-**建议：**
-
-- 添加 ZIP64 格式测试（大文件支持）
-- 添加多文件归档测试
-- 测试 `unzip_list()` 函数
-
-### 2. stream.mbt (26 行未覆盖)
-
-**未覆盖的主要功能：**
-
-- 流式压缩 API (`DeflateStream`, `GzipStream`, `ZlibStream`)
-- 流式解压 API (`InflateStream`, `GunzipStream`, `UnzlibStream`)
-- 自动检测解压流 (`DecompressStream`)
-
-**影响评估：**
-
-- 流式 API 是高级功能
-- 当前测试主要覆盖同步 API
-- 流式 API 对大文件处理很重要
-
-**建议：**
-
-- 添加流式压缩测试
-- 添加流式解压测试
-- 测试分块处理场景
-
-### 3. deflate.mbt (22 行未覆盖)
-
-**未覆盖的主要代码路径：**
-
-- `compute_mem_level()` 函数中的边界情况（`log_val < 8` 分支）
-- 数组池化的某些边界检查
-- 流式压缩状态管理的部分路径
-- 特殊数据模式的优化路径
-
-**影响评估：**
-
-- 核心压缩功能已充分测试
-- 未覆盖代码主要是性能优化和边界情况
-- 不影响基本功能的正确性
-
-**建议：**
-
-- 添加极小数据（< 256 字节）的测试
-- 测试内存级别计算的边界情况
-- 添加流式压缩状态转换测试
-
-### 4. inflate.mbt (19 行未覆盖)
-
-**未覆盖的主要代码路径：**
-
-- 错误处理路径（损坏数据检测）
-- 特殊的 DEFLATE 块类型处理
-- 字典支持的边界情况
-- 缓冲区扩展的某些路径
-
-**影响评估：**
-
-- 核心解压功能已充分测试
-- 未覆盖代码主要是错误恢复路径
-- 正常数据解压已完全覆盖
-
-**建议：**
-
-- 添加损坏数据测试（触发错误路径）
-- 测试带字典的解压场景
-- 添加大数据解压测试（触发缓冲区扩展）
-
-### 5. huffman.mbt (14 行未覆盖)
-
-**未覆盖的主要代码路径：**
-
-- 极端频率分布的 Huffman 树构建
-- 代码长度限制的边界情况
-- 数组池化的某些分支
-
-**影响评估：**
-
-- 常见场景的 Huffman 编码已充分测试
-- 未覆盖代码是极端情况的处理
-- 数组池化优化已在 commit 5e6f86b 中验证
-
-**建议：**
-
-- 添加极端频率分布测试
-- 测试最大代码长度限制（15 位）
-
-## 💡 关键发现
-
-### 优势
-
-1. **整体覆盖率优秀**: 96.57% 的覆盖率表明测试质量很高
-2. **核心功能全覆盖**: DEFLATE/GZIP/Zlib 的核心压缩解压功能已充分测试
-3. **测试用例丰富**: 89 个测试用例覆盖了主要使用场景
-4. **边界测试充分**: 包含了零数据、随机数据、序列数据等多种模式
-
-### 待改进领域
-
-1. **流式 API 测试不足** (stream.mbt - 26 行未覆盖)
-   - 流式压缩/解压 API 几乎未测试
-   - 这是高级功能，但对大文件处理很重要
-
-2. **ZIP 功能测试不足** (zip.mbt - 26 行未覆盖)
-   - ZIP64 格式未测试
-   - 多文件归档未测试
-   - 文件列表功能未测试
-
-3. **错误路径覆盖不足**
-   - 损坏数据的错误处理路径未充分测试
-   - 边界情况的错误恢复未覆盖
-
-## 🎯 改进建议
-
-### 优先级 1：补充流式 API 测试 (stream.mbt)
-
-```moonbit
-// 建议添加的测试用例
-test "stream deflate - basic usage" {
-  let stream = DeflateStream::new()
-  stream.push([1, 2, 3], final=false)
-  stream.push([4, 5, 6], final=true)
-  // 验证输出
-}
-
-test "stream inflate - chunked decompression" {
-  let stream = InflateStream::new()
-  // 分块解压测试
-}
-```
-
-### 优先级 2：补充 ZIP 功能测试 (zip.mbt)
-
-```moonbit
-test "zip - multiple files archive" {
-  // 测试多文件 ZIP 归档
-}
-
-test "zip - list files" {
-  // 测试 unzip_list() 函数
-}
-
-test "zip64 - large file support" {
-  // 测试 ZIP64 格式（如果需要）
-}
-```
-
-### 优先级 3：补充错误处理测试
-
-```moonbit
-test "inflate - corrupted data error" {
-  let corrupted = [0xff, 0xff, 0xff, 0xff]
-  let result = try? inflate_sync(corrupted)
-  assert_true(result is Err(_))
-}
-
-test "deflate - invalid compression level" {
-  // 测试无效参数处理
-}
-```
-
-### 优先级 4：补充边界情况测试
-
-```moonbit
-test "deflate - very small data" {
-  // 测试 < 256 字节的数据
-  let tiny = FixedArray::make(100, b'x')
-  let compressed = deflate_sync(tiny)
-  let decompressed = inflate_sync(compressed)
-  assert_eq(decompressed.length(), 100)
-}
-
-test "huffman - extreme frequency distribution" {
-  // 测试极端频率分布
-}
-```
-
-## 📈 覆盖率对比
-
-| 项目类型 | 推荐覆盖率 | fzip 实际覆盖率 | 评价            |
-| -------- | ---------- | --------------- | --------------- |
-| 开源库   | 80-90%     | **96.57%**      | ⭐⭐⭐⭐⭐ 优秀 |
-| 核心功能 | 95%+       | ~98%+           | ⭐⭐⭐⭐⭐ 优秀 |
-| 高级功能 | 70-80%     | ~85%            | ⭐⭐⭐⭐ 良好   |
-| 错误路径 | 60-70%     | ~70%            | ⭐⭐⭐ 合格     |
-
-## 📊 覆盖率趋势建议
-
-### 短期目标（1-2 周）
-
-- 补充流式 API 测试，提升 stream.mbt 覆盖率到 90%+
-- 添加 ZIP 多文件测试，提升 zip.mbt 覆盖率到 90%+
-- **目标总覆盖率**: 97.5%+
-
-### 中期目标（1 个月）
-
-- 补充所有错误处理路径测试
-- 添加性能回归测试
-- **目标总覆盖率**: 98%+
-
-### 长期目标
-
-- 保持覆盖率 > 97%
-- 新功能必须带测试（覆盖率 > 90%）
-- 定期审查和更新测试用例
-
-## 🎓 总结
-
-### 整体评价：⭐⭐⭐⭐⭐ 优秀
-
-fzip 库的测试覆盖率达到 **96.57%**，在开源压缩库中属于优秀水平。
-
-### 核心优势
-
-1. **核心功能覆盖完整**
-   - DEFLATE/GZIP/Zlib 压缩解压功能已充分测试
-   - 多种数据模式测试（零数据、随机数据、序列数据）
-   - 性能优化代码（数组池化）已验证
-
-2. **测试质量高**
-   - 89 个测试用例，结构清晰
-   - 包含白盒测试和黑盒测试
-   - 使用 snapshot 测试，易于维护
-
-3. **持续改进**
-   - 最近的 commit 5e6f86b 添加了池化测试
-   - 测试覆盖率持续提升
-
-### 改进空间
-
-1. **流式 API** (26 行未覆盖)
-   - 优先级：🔴 高
-   - 影响：中等（高级功能）
-   - 工作量：中等（需要 3-5 个测试用例）
-
-2. **ZIP 功能** (26 行未覆盖)
-   - 优先级：🔴 高
-   - 影响：中等（完整性）
-   - 工作量：中等（需要 3-5 个测试用例）
-
-3. **错误路径** (分散在多个文件)
-   - 优先级：🟡 中
-   - 影响：低（健壮性）
-   - 工作量：较大（需要 10+ 个测试用例）
-
-## 📋 下一步行动
-
-### 立即行动（本周）
-
-- [ ] 添加 `DeflateStream` 基本使用测试
-- [ ] 添加 `InflateStream` 基本使用测试
-- [ ] 添加 ZIP 多文件归档测试
-
-### 近期行动（本月）
-
-- [ ] 补充所有流式 API 测试
-- [ ] 补充 ZIP64 格式测试
-- [ ] 添加损坏数据错误处理测试
-- [ ] 添加极小数据边界测试
-
-### 持续改进
-
-- [ ] 设置 CI 覆盖率检查（最低 95%）
-- [ ] 新功能开发时同步编写测试
-- [ ] 每月审查覆盖率报告
-
----
-
-**报告生成时间**: 2026-03-08
-**分析工具**: `moon coverage analyze`
-**测试框架**: MoonBit 内置测试框架
-
-## 📈 改进历史
-
-### 2026-03-08 第三次更新（安全测试）
-
-**新增测试用例** (6 个):
-
-- ✅ `gzip_wbtest.mbt` - 添加 1 个 CRC-32 校验和验证测试
-- ✅ `zlib_wbtest.mbt` - 添加 1 个 Adler-32 校验和验证测试
-- ✅ `zip_wbtest.mbt` - 添加 1 个压缩率检查测试
-- ✅ `inflate_wbtest.mbt` - 添加 3 个可配置大小限制测试
-
-**覆盖率保持**:
-
-- 测试数量: 122 → 128 (+6)
-- 覆盖率: 97.49% (保持稳定)
-
-**主要改进**:
-
-- 新增安全特性测试（校验和验证、大小限制、压缩率检查）
-- 验证了中级安全漏洞修复的有效性
-- 提升了错误处理路径的测试覆盖
-
-### 2026-03-08 第二次更新（流式API + ZIP + 字典 + GZIP）
-
-**新增测试用例** (25 个):
-
-- ✅ `stream_wbtest.mbt` - 添加 3 个流式 API 测试（ZlibStream, UnzlibStream, DecompressStream）
-- ✅ `zip_wbtest.mbt` - 添加 4 个 ZIP 测试（多文件归档、文件列表、选项、空文件）
-- ✅ `deflate_wbtest.mbt` - 添加 1 个字典压缩测试
-- ✅ `gzip_wbtest.mbt` - 添加 3 个 GZIP 头部选项测试（level 9, mtime, filename）
-
-**覆盖率提升**:
-
-- 测试数量: 97 → 122 (+25)
-- 未覆盖行数: 121 → 100 (-21)
-- 覆盖率: 96.97% → 97.49% (+0.52%)
-
-**主要改进**:
-
-- gzip.mbt: 11 → 4 行 (-63% 🏆)
-- stream.mbt: 13 → 7 行 (-46%)
-- deflate.mbt: 22 → 18 行 (-18%)
-- inflate.mbt: 17 → 12 行 (-29%)
-- zip.mbt: 26 → 29 行 (+3 行，新增测试覆盖了其他路径)
-
-### 2026-03-08 第一次更新（初始改进）
-
-**新增测试用例** (8 个):
-
-- ✅ `stream_wbtest.mbt` - 新建文件，添加 4 个流式 API 测试
-- ✅ `deflate_wbtest.mbt` - 添加 2 个极小数据测试
-- ✅ `inflate_wbtest.mbt` - 添加 2 个错误处理测试
-
-**覆盖率提升**:
-
-- 测试数量: 89 → 97 (+8)
-- 未覆盖行数: 137 → 121 (-16)
-- 覆盖率: 96.57% → 96.97% (+0.4%)
-
-**主要改进**:
-
-- stream.mbt: 26 → 13 行 (-50%)
-- inflate.mbt: 19 → 17 行 (-10.5%)
-- error.mbt: 3 → 2 行 (-33%)
+# fbr Coverage Analysis
+
+Generated: `Mon Jun  1 18:02:42 2026`
+
+Coverage source: `moon coverage analyze -- -f summary`
+
+Generated temporary main packages such as `src/brotli_*_main/` are excluded from the totals.
+
+## Summary
+
+| Metric                     |  Value |
+| -------------------------- | -----: |
+| Coverage                   | 81.68% |
+| Covered lines              |   3178 |
+| Total instrumented lines   |   3891 |
+| Uncovered lines            |    713 |
+| Files in report            |     25 |
+| Files with uncovered lines |     25 |
+| Packages in report         |      4 |
+
+## Packages
+
+| Package  | Covered | Total | Uncovered | Coverage |
+| -------- | ------: | ----: | --------: | -------: |
+| `root`   |       2 |     4 |         2 |    50.0% |
+| `common` |     172 |   276 |       104 |   62.32% |
+| `decode` |     383 |   524 |       141 |   73.09% |
+| `encode` |    2621 |  3087 |       466 |    84.9% |
+
+## Files
+
+| File                          | Package  | Covered | Total | Uncovered | Coverage |
+| ----------------------------- | -------- | ------: | ----: | --------: | -------: |
+| `encode/encode.mbt`           | `encode` |    2143 |  2519 |       376 |   85.07% |
+| `encode/encode_dict.mbt`      | `encode` |     237 |   284 |        47 |   83.45% |
+| `decode/decode.mbt`           | `decode` |     105 |   151 |        46 |   69.54% |
+| `common/error.mbt`            | `common` |      16 |    47 |        31 |   34.04% |
+| `common/transform.mbt`        | `common` |      17 |    44 |        27 |   38.64% |
+| `common/huffman.mbt`          | `common` |      89 |   111 |        22 |   80.18% |
+| `encode/huffman_tree.mbt`     | `encode` |      63 |    83 |        20 |    75.9% |
+| `decode/huffman_decode.mbt`   | `decode` |      72 |    92 |        20 |   78.26% |
+| `encode/encode_hash.mbt`      | `encode` |     130 |   149 |        19 |   87.25% |
+| `decode/block.mbt`            | `decode` |      31 |    48 |        17 |   64.58% |
+| `decode/command_decode.mbt`   | `decode` |      54 |    69 |        15 |   78.26% |
+| `common/distance.mbt`         | `common` |      14 |    27 |        13 |   51.85% |
+| `decode/bit_reader.mbt`       | `decode` |      41 |    53 |        12 |   77.36% |
+| `decode/transform_copy.mbt`   | `decode` |      15 |    25 |        10 |    60.0% |
+| `decode/context_decode.mbt`   | `decode` |      37 |    47 |        10 |   78.72% |
+| `decode/dictionary_copy.mbt`  | `decode` |       6 |    14 |         8 |   42.86% |
+| `common/bits.mbt`             | `common` |      14 |    19 |         5 |   73.68% |
+| `encode/suffix_tree.mbt`      | `encode` |      39 |    42 |         3 |   92.86% |
+| `fbr.mbt`                     | `root`   |       2 |     4 |         2 |    50.0% |
+| `decode/distance_decode.mbt`  | `decode` |      13 |    15 |         2 |   86.67% |
+| `common/format_constants.mbt` | `common` |       2 |     4 |         2 |    50.0% |
+| `common/context.mbt`          | `common` |       6 |     8 |         2 |    75.0% |
+| `common/command.mbt`          | `common` |      14 |    16 |         2 |    87.5% |
+| `encode/stream.mbt`           | `encode` |       9 |    10 |         1 |    90.0% |
+| `decode/stream.mbt`           | `decode` |       9 |    10 |         1 |    90.0% |
+
+## Key Findings
+
+Files with the most uncovered lines:
+
+- `encode/encode.mbt`: 376 uncovered lines, 85.07% covered
+- `encode/encode_dict.mbt`: 47 uncovered lines, 83.45% covered
+- `decode/decode.mbt`: 46 uncovered lines, 69.54% covered
+- `common/error.mbt`: 31 uncovered lines, 34.04% covered
+- `common/transform.mbt`: 27 uncovered lines, 38.64% covered
+
+Lowest file coverage:
+
+- `common/error.mbt`: 34.04% covered 16/47
+- `common/transform.mbt`: 38.64% covered 17/44
+- `decode/dictionary_copy.mbt`: 42.86% covered 6/14
+- `fbr.mbt`: 50.0% covered 2/4
+- `common/format_constants.mbt`: 50.0% covered 2/4

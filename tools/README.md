@@ -92,7 +92,9 @@ nu tools/analyze-coverage.nu
 ```
 
 Runs `moon coverage analyze` and prints a compact coverage summary. This helper
-is intended for local inspection rather than release gating.
+saves the detailed Markdown report to `COVERAGE_ANALYSIS.md` by default and is
+intended for local inspection rather than release gating. Use `--output <path>`
+to write the report elsewhere.
 
 ## Generated Files And Scratch Data
 
