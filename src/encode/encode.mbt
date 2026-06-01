@@ -5964,8 +5964,8 @@ fn brotli_try_split_literal_only_chunk(
 }
 
 ///|
-fn brotli_use_intermediate_lz77_candidate(quality : Int) -> Bool {
-  quality < 4 || quality > 8
+fn brotli_use_intermediate_lz77_candidate(_quality : Int) -> Bool {
+  true
 }
 
 ///|
@@ -5973,7 +5973,13 @@ fn brotli_use_intermediate_four_byte_candidate(
   quality : Int,
   data_length : Int,
 ) -> Bool {
-  if quality >= 4 && quality <= 8 {
+  if quality == 4 ||
+    quality == 5 ||
+    (quality == 6 && data_length > 65536) ||
+    (quality == 7 && data_length > 65536) ||
+    quality == 8 {
+    true
+  } else if quality >= 4 && quality <= 8 {
     false
   } else {
     (quality != 6 && quality != 7) || data_length > 65536
