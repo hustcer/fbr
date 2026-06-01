@@ -39,7 +39,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Added `just bench`, backed by `tools/brotli/bench/report.nu`, to regenerate
+- Added `just bench`, backed by `tools/bench/report.nu`, to regenerate
   the Brotli release benchmark report and current benchmark JSONL files.
 - Added checked-in Brotli benchmark data under `docs/current-bench/`, including
   Google Brotli 1 MiB comparison streams.
@@ -104,15 +104,15 @@ All notable changes to this project will be documented in this file.
   or combined APIs.
 - Static RFC dictionary embedded as chunked bytes and copied into the
   `FixedArray[Byte]` used by the codec.
-- Tools under `tools/brotli/`:
-  - `tools/brotli/bench/ratio.nu`, `tools/brotli/bench/chunk-match.nu`, and
-    `tools/brotli/bench/target-perf.nu` for ratio, density, and wasm-gc/native
+- Tools under `tools/`:
+  - `tools/bench/ratio.nu`, `tools/bench/chunk-match.nu`, and
+    `tools/bench/target-perf.nu` for ratio, density, and wasm-gc/native
     encode/decode benchmarks.
-  - `tools/brotli/conformance/run.nu` for the upstream Google Brotli test
+  - `tools/conformance/run.nu` for the upstream Google Brotli test
     corpus.
-  - `tools/brotli/fuzz/gen-corpus.nu` and `tools/brotli/fuzz/run.nu` for
+  - `tools/fuzz/gen-corpus.nu` and `tools/fuzz/run.nu` for
     short fuzz runs against the decoder.
-  - `tools/brotli/encode/verify.nu` and `tools/brotli/silesia/verify.nu` for
+  - `tools/encode/verify.nu` and `tools/silesia/verify.nu` for
     Google CLI cross-validation.
 
 ### Performance
@@ -237,18 +237,18 @@ All notable changes to this project will be documented in this file.
 - Brotli fuzz runner accepts `--target`, so the same generated corpus can now
   be checked on `native`, `wasm-gc`, `js`, or `all` targets during release
   validation.
-- Added `tools/brotli/fuzz/roundtrip.nu`, a deterministic encoder fuzz harness
+- Added `tools/fuzz/roundtrip.nu`, a deterministic encoder fuzz harness
   that checks random byte inputs through `brotli_sync` -> `unbrotli_sync` for
   selected quality levels and MoonBit backends.
 - Brotli fuzz harness locks now record an owner PID and automatically recover
   stale locks left by interrupted local validation runs.
-- Added `tools/brotli/release/validate.nu` to run the practical Brotli release
+- Added `tools/release/validate.nu` to run the practical Brotli release
   validation gate from one Nushell command.
 - Added `docs/brotli_release_report.md` with the current Brotli release
   readiness summary, validation evidence, and accepted P4 ratio exception.
 - Added Justfile entries for the full, smoke, and package-only Brotli release
   validation gates, and added package verification to the release runner.
-- Added `tools/brotli/fuzz/soak.nu` plus Justfile entries for the scripted
+- Added `tools/fuzz/soak.nu` plus Justfile entries for the scripted
   Brotli long fuzz soak gate.
 - Made Brotli fuzz corpus generation deterministic with `--seed` and
   `--corpus-dir` options for reproducible release-validation corpora.
@@ -279,7 +279,7 @@ All notable changes to this project will be documented in this file.
 - Brotli conformance and target-perf harnesses now use the same owner-PID
   stale-lock recovery as the fuzz runners; target-perf also uses a stable
   ignored placeholder white-box test path.
-- `tools/brotli/size/verify.nu` now builds decode-only, encode-only, and full
+- `tools/size/verify.nu` now builds decode-only, encode-only, and full
   temporary applications. It scans JS artifacts for opposite-side package
   markers and can also report wasm-gc artifact sizes.
 - Updated `README.md` to document the leaf package imports, root facade, and

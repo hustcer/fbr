@@ -590,8 +590,8 @@ Validation:
 ```bash
 moon check --target all
 moon test src/decode
-nu tools/brotli/conformance/run.nu
-nu tools/brotli/silesia/verify.nu
+nu tools/conformance/run.nu
+nu tools/silesia/verify.nu
 ```
 
 ### Phase 4: Move Encoder
@@ -608,9 +608,9 @@ Validation:
 ```bash
 moon check --target all
 moon test src/encode
-nu tools/brotli/encode/verify.nu target/brotli-bench/silesia-2m.bin --quality 2
-nu tools/brotli/encode/verify.nu target/brotli-bench/silesia-2m.bin --quality 9
-nu tools/brotli/encode/verify.nu target/brotli-bench/silesia-2m.bin --quality 11
+nu tools/encode/verify.nu target/brotli-bench/silesia-2m.bin --quality 2
+nu tools/encode/verify.nu target/brotli-bench/silesia-2m.bin --quality 9
+nu tools/encode/verify.nu target/brotli-bench/silesia-2m.bin --quality 11
 ```
 
 ### Phase 5: Add Facade, Tests, And Update fzip
@@ -663,7 +663,7 @@ Both must be caught by CI, not by remembering to run a command.
   reliable guard against silent table-ordering changes. Do the same for
   `unbrotli_sync` output on the decode corpus.
 - **Benchmark gate (performance invariant).** Run the existing
-  `tools/brotli/bench` target-perf harness before the split (baseline) and after
+  `tools/bench` target-perf harness before the split (baseline) and after
   (candidate) on the same corpus; fail the gate when decode or encode regresses
   beyond the threshold below. This is also the backstop for the unverified
   cross-package inlining assumption.
@@ -685,16 +685,16 @@ Suggested validation commands:
 ```bash
 moon check --target all
 moon test --target all
-nu tools/brotli/conformance/run.nu
-nu tools/brotli/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9,10,11 --json
-nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-1m.bin.google.q11.br \
+nu tools/conformance/run.nu
+nu tools/bench/ratio.nu target/brotli-bench/silesia-1m.bin --qualities 2,9,10,11 --json
+nu tools/bench/target-perf.nu target/brotli-bench/silesia-1m.bin.google.q11.br \
   --mode decode \
   --expected target/brotli-bench/silesia-1m.bin \
   --targets wasm-gc,native \
   --repeats 1 \
   --samples 3 \
   --json
-nu tools/brotli/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
+nu tools/bench/target-perf.nu target/brotli-bench/silesia-64k.bin \
   --mode encode \
   --quality 9 \
   --targets wasm-gc,native \
@@ -724,7 +724,7 @@ Run:
 ```bash
 just size
 # or:
-nu tools/brotli/size/verify.nu --targets js --json
+nu tools/size/verify.nu --targets js --json
 ```
 
 The script builds the fixtures in release mode and records linked artifact

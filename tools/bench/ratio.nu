@@ -50,7 +50,7 @@ def moonbit-encode [
   quality: int
 ]: nothing -> record {
   let started = (date now)
-  let run = (nu tools/brotli/encode/verify.nu $input --quality $quality | complete)
+  let run = (nu tools/encode/verify.nu $input --quality $quality | complete)
   let elapsed = (date now) - $started
   if $run.exit_code != 0 {
     print --stderr $run.stdout
@@ -102,7 +102,7 @@ def main [
       moonbit_time_backend: "legacy-js-verify",
       google_time_ms: $google.encode_time_ms,
       google_time_backend: "cli",
-      performance_benchmark: "tools/brotli/bench/target-perf.nu",
+      performance_benchmark: "tools/bench/target-perf.nu",
       moonbit_sha256: $moon.encoded_sha256,
       google_encoded: $google.encoded,
     })

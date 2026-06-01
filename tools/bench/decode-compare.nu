@@ -8,7 +8,7 @@
 # rigorous way to screen a decode change against the project guardrail without
 # being fooled by between-run machine noise.
 #
-# It reuses `tools/brotli/bench/target-perf.nu` for the actual measurement, so
+# It reuses `tools/bench/target-perf.nu` for the actual measurement, so
 # the timing shape (release build, per-op min over repeats x samples) matches
 # the documented benchmark methodology. The baseline is built in a throwaway
 # git worktree pinned to the resolved ref; the trial is measured in the repo
@@ -19,16 +19,17 @@
 #   * --json   -> a single machine-readable JSON object
 #
 # Examples:
-#   nu tools/brotli/bench/decode-compare.nu
-#   nu tools/brotli/bench/decode-compare.nu --base HEAD --qualities 0,5,9,11
-#   nu tools/brotli/bench/decode-compare.nu --rounds 3 --json
+#   nu tools/bench/decode-compare.nu
+#   nu tools/bench/decode-compare.nu --base HEAD --qualities 0,5,9,11
+#   nu tools/bench/decode-compare.nu --rounds 3 --json
 #
 # Guardrail (matches the .planning decode policy): an optimization is accepted
 # only if the trial is at least as fast as the baseline on EVERY (quality,
 # target) row. `pass_strict` reports exactly that, allowing a per-row
 # `--tolerance` (percent) to absorb residual noise.
 
-const perf_script = "tools/brotli/bench/target-perf.nu"
+const perf_script = "tools/bench/target-perf.nu"
+const legacy_perf_script = "tools/brotli/bench/target-perf.nu"
 const default_input_dir = "target/brotli-current-bench/google-1m"
 const default_expected = "target/brotli-bench/silesia-1m.bin"
 
@@ -53,9 +54,14 @@ def measure-one [
   repeats: int
   samples: int
 ]: nothing -> list<any> {
+  let script = if ($dir | path join $perf_script | path exists) {
+    $perf_script
+  } else {
+    $legacy_perf_script
+  }
   let out = do {
     cd $dir
-    ^nu $perf_script $input --mode decode --expected $expected --targets $targets --repeats $repeats --samples $samples --json
+    ^nu $script $input --mode decode --expected $expected --targets $targets --repeats $repeats --samples $samples --json
     | complete
   }
   if $out.exit_code != 0 {

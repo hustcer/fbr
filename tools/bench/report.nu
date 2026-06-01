@@ -118,7 +118,7 @@ def run-encode-benchmark [
   samples: int
 ]: nothing -> list<record> {
   let result = run-or-exit $"encode (input-label $input) q($quality)" {
-    nu tools/brotli/bench/target-perf.nu $input --mode encode --quality $quality --targets $targets --repeats $repeats --samples $samples --json
+    nu tools/bench/target-perf.nu $input --mode encode --quality $quality --targets $targets --repeats $repeats --samples $samples --json
     | complete
   }
   parse-first-json-line $result.stdout
@@ -153,7 +153,7 @@ def run-decode-benchmark [
 ]: nothing -> list<record> {
   let compressed = google-encode-for-decode $expected $quality $google_dir
   let result = run-or-exit $"decode Google q($quality)" {
-    nu tools/brotli/bench/target-perf.nu $compressed --mode decode --expected $expected --targets $targets --repeats $repeats --samples $samples --json
+    nu tools/bench/target-perf.nu $compressed --mode decode --expected $expected --targets $targets --repeats $repeats --samples $samples --json
     | complete
   }
   parse-first-json-line $result.stdout
@@ -177,7 +177,7 @@ def env-table [
     [Date $date]
     [MoonBit $"`($moon_version)`"]
     ["Google Brotli CLI" $"`($brotli_version)`"]
-    ["MoonBit profile" "release, via `tools/brotli/bench/target-perf.nu`"]
+    ["MoonBit profile" "release, via `tools/bench/target-perf.nu`"]
     ["MoonBit targets" $"`($targets)`"]
     ["Timing shape" $"`--repeats ($repeats) --samples ($samples)`; tables report per-operation min and avg"]
   ]

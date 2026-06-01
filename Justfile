@@ -39,7 +39,7 @@ b: __setup
 
 # Bench: Run Brotli performance benchmarks and regenerate the release report
 bench:
-    nu tools/brotli/bench/report.nu
+    nu tools/bench/report.nu
 
 # Run tests
 test:
@@ -47,55 +47,59 @@ test:
 
 # Run the full Brotli practical release validation gate
 release:
-    nu tools/brotli/release/validate.nu
+    nu tools/release/validate.nu
 
 # Run a quick Brotli release validation smoke gate
 release-smoke:
-    nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-package --decoder-fuzz-limit 2 --roundtrip-count 1 --roundtrip-max-len 16 --roundtrip-qualities 2
+    nu tools/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-package --decoder-fuzz-limit 2 --roundtrip-count 1 --roundtrip-max-len 16 --roundtrip-qualities 2
 
 # Run Brotli release validation with a generated deterministic decoder fuzz corpus
 release-generated-fuzz count='1000' seed='1':
-    nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-size --skip-package --generated-fuzz-count {{ count }} --generated-fuzz-seed {{ seed }}
+    nu tools/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-size --skip-package --generated-fuzz-count {{ count }} --generated-fuzz-seed {{ seed }}
 
 # Run the upstream Brotli conformance corpus
 conformance:
-    nu tools/brotli/conformance/run.nu
+    nu tools/conformance/run.nu
 
 # Run one upstream Brotli conformance fixture by expected-file name
 conformance-fixture fixture:
-    nu tools/brotli/conformance/run.nu --fixture {{ fixture }}
+    nu tools/conformance/run.nu --fixture {{ fixture }}
 
 # Run the checked-in Brotli decoder fuzz corpus
 fuzz target='native' limit='0' batch_size='25':
-    nu tools/brotli/fuzz/run.nu --target {{ target }} --limit {{ limit }} --batch-size {{ batch_size }}
+    nu tools/fuzz/run.nu --target {{ target }} --limit {{ limit }} --batch-size {{ batch_size }}
 
 # Run deterministic Brotli encoder roundtrip fuzz
 roundtrip target='native' count='12' max_len='2048' qualities='0,1,2,9,11' batch_size='25':
-    nu tools/brotli/fuzz/roundtrip.nu --target {{ target }} --count {{ count }} --max-len {{ max_len }} --qualities {{ qualities }} --batch-size {{ batch_size }}
+    nu tools/fuzz/roundtrip.nu --target {{ target }} --count {{ count }} --max-len {{ max_len }} --qualities {{ qualities }} --batch-size {{ batch_size }}
 
 # Run the Brotli ratio and external-decode harness
 ratio input='target/bench/silesia-2m.bin' qualities='2,3,4,5,6,7,8,9':
-    nu tools/brotli/bench/ratio.nu {{ input }} --qualities {{ qualities }} --json
+    nu tools/bench/ratio.nu {{ input }} --qualities {{ qualities }} --json
 
 # Run wasm-gc/native Brotli decode target-perf
 target-perf-decode input expected targets='wasm-gc,native' repeats='10' samples='5':
-    nu tools/brotli/bench/target-perf.nu {{ input }} --mode decode --expected {{ expected }} --targets {{ targets }} --repeats {{ repeats }} --samples {{ samples }} --json
+    nu tools/bench/target-perf.nu {{ input }} --mode decode --expected {{ expected }} --targets {{ targets }} --repeats {{ repeats }} --samples {{ samples }} --json
 
 # Run wasm-gc/native Brotli encode target-perf
 target-perf-encode input quality='11' targets='wasm-gc,native' repeats='10' samples='5':
-    nu tools/brotli/bench/target-perf.nu {{ input }} --mode encode --quality {{ quality }} --targets {{ targets }} --repeats {{ repeats }} --samples {{ samples }} --json
+    nu tools/bench/target-perf.nu {{ input }} --mode encode --quality {{ quality }} --targets {{ targets }} --repeats {{ repeats }} --samples {{ samples }} --json
 
 # Same-time decode comparison of the working tree vs a baseline git ref
 decode-compare base='HEAD' qualities='0,5,9,11' targets='wasm-gc,native' rounds='2':
-    nu tools/brotli/bench/decode-compare.nu --base {{ base }} --qualities {{ qualities }} --targets {{ targets }} --rounds {{ rounds }}
+    nu tools/bench/decode-compare.nu --base {{ base }} --qualities {{ qualities }} --targets {{ targets }} --rounds {{ rounds }}
+
+# Same-time encode speed and size comparison of the working tree vs a baseline git ref
+encode-compare base='HEAD' inputs='target/brotli-bench/silesia-64k.bin,target/brotli-bench/silesia-128k.bin' qualities='0,1,2,3,4,5,6,7,8,9,10,11' targets='wasm-gc,native' repeats='3' samples='3' rounds='2':
+    nu tools/bench/encode-compare.nu --base {{ base }} --inputs {{ inputs }} --qualities {{ qualities }} --targets {{ targets }} --repeats {{ repeats }} --samples {{ samples }} --rounds {{ rounds }}
 
 # Verify decode-only and encode-only release artifacts do not pull the opposite side
 size targets='js':
-    nu tools/brotli/size/verify.nu --targets {{ targets }}
+    nu tools/size/verify.nu --targets {{ targets }}
 
 # Run Brotli packaging and publish dry-run validation only
 release-package:
-    nu tools/brotli/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-fuzz --skip-size
+    nu tools/release/validate.nu --skip-moon --skip-conformance --skip-ratio --skip-fuzz --skip-size
 
 # Run the accepted Brotli release-candidate gate set
 release-candidate generated_count='1000' seed='1' soak_iterations='3':
@@ -111,15 +115,15 @@ release-candidate-smoke:
 
 # Run the Brotli long fuzz soak gate
 fuzz-soak duration_minutes='1440':
-    nu tools/brotli/fuzz/soak.nu --duration-min {{ duration_minutes }}
+    nu tools/fuzz/soak.nu --duration-min {{ duration_minutes }}
 
 # Run bounded full-corpus Brotli fuzz soak iterations
 fuzz-soak-bounded iterations='3':
-    nu tools/brotli/fuzz/soak.nu --duration-min 1440 --max-iterations {{ iterations }}
+    nu tools/fuzz/soak.nu --duration-min 1440 --max-iterations {{ iterations }}
 
 # Run one short Brotli fuzz soak iteration
 fuzz-soak-smoke:
-    nu tools/brotli/fuzz/soak.nu --duration-min 0 --max-iterations 1 --decoder-limit 2 --roundtrip-count 1 --roundtrip-max-len 16 --roundtrip-qualities 2
+    nu tools/fuzz/soak.nu --duration-min 0 --max-iterations 1 --decoder-limit 2 --roundtrip-count 1 --roundtrip-max-len 16 --roundtrip-qualities 2
 
 # Clean build directories
 clean:

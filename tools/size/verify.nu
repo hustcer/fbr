@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
 
-const lock_dir = "tools/brotli/.size-lock"
+const lock_dir = "tools/.size-lock"
 const temp_dirs = [
   "src/fbr_size_decode_main"
   "src/fbr_size_encode_main"

@@ -20,7 +20,7 @@ The benchmark entry point is the reproducible way to regenerate these results.
 | Date              | 2026-06-01                                                         |
 | MoonBit           | `moon 0.1.20260522 (4a0c52f 2026-05-22)`                           |
 | Google Brotli CLI | `brotli 1.2.0`                                                     |
-| MoonBit profile   | release, via `tools/brotli/bench/target-perf.nu`                   |
+| MoonBit profile   | release, via `tools/bench/target-perf.nu`                   |
 | MoonBit targets   | `wasm-gc,native`                                                   |
 | Timing shape      | `--repeats 3 --samples 3`; tables report per-operation min and avg |
 

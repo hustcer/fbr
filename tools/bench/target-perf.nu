@@ -1,12 +1,12 @@
 #!/usr/bin/env nu
 
 const bench_dir = "target/brotli-bench"
-const harness_lock_dir = "tools/brotli/.harness-lock"
+const harness_lock_dir = "tools/.harness-lock"
 const temp_test = "src/brotli_target_perf_wbtest.mbt"
 const temp_main_dir = "src/brotli_target_perf_main"
 const temp_main_pkg = "src/brotli_target_perf_main/moon.pkg"
 const temp_main = "src/brotli_target_perf_main/main.mbt"
-const native_cc_o0 = "tools/brotli/bench/native-cc-o0.nu"
+const native_cc_o0 = "tools/bench/native-cc-o0.nu"
 
 def process-alive [pid: int]: nothing -> bool {
   let probe = (^ps -p ($pid | into string) | complete)
@@ -72,7 +72,7 @@ def parse-csv-strings [text: string]: nothing -> list<string> {
 
 def write-placeholder-temp-test [path: string]: nothing -> nothing {
   [
-    "// Placeholder for tools/brotli/bench/target-perf.nu."
+    "// Placeholder for tools/bench/target-perf.nu."
     "// The harness rewrites this ignored file during a target-perf run."
     ""
   ] | str join (char newline) | save --force $path

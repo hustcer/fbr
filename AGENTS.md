@@ -11,7 +11,7 @@ Source lives under `src/`; each directory is a MoonBit package with its own
 - `src/encode/`: encoder implementation, hash/tree helpers, and encode stream API.
 - `src/tests/`: black-box integration tests and Brotli fixture files.
 - `docs/`: benchmark reports, package rationale, and release notes.
-- `tools/brotli/`: Nushell validation, fuzzing, size, and benchmark scripts.
+- `tools/`: Nushell validation, fuzzing, size, and benchmark scripts.
 
 Generated API summaries are checked in as `pkg.generated.mbti`; refresh them with
 `moon info` when public APIs change.
@@ -57,5 +57,5 @@ ratio, speed, or package split behavior changes.
 
 Do not commit generated corpora, local benchmark scratch files, or build outputs
 from `_build/` and `target/`. Keep release fixtures deterministic, and prefer the
-existing Nushell scripts under `tools/brotli/` for validation rather than ad hoc
+existing Nushell scripts under `tools/` for validation rather than ad hoc
 local commands.

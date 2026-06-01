@@ -129,20 +129,20 @@ def main [
     $iteration += 1
     let decoder_args = if $decoder_limit > 0 {
       [
-        "tools/brotli/fuzz/run.nu"
+        "tools/fuzz/run.nu"
         "--limit"
         ($decoder_limit | into string)
         "--target"
         $decoder_target
       ]
     } else {
-      ["tools/brotli/fuzz/run.nu" "--target" $decoder_target]
+      ["tools/fuzz/run.nu" "--target" $decoder_target]
     }
     let decoder = run-phase "decoder fuzz" $iteration $decoder_args $log_path
     $results = ($results | append $decoder)
 
     let roundtrip_args = [
-      "tools/brotli/fuzz/roundtrip.nu"
+      "tools/fuzz/roundtrip.nu"
       "--count"
       ($roundtrip_count | into string)
       "--max-len"

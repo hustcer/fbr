@@ -13,9 +13,9 @@ Run commands from the repository root.
 | Date                    | 2026-05-30                                                         |
 | MoonBit                 | `moon 0.1.20260522 (4a0c52f 2026-05-22)`                           |
 | Google Brotli CLI       | `brotli 1.2.0`                                                     |
-| MoonBit profile         | release, via `tools/brotli/bench/target-perf.nu`                   |
+| MoonBit profile         | release, via `tools/bench/target-perf.nu`                   |
 | MoonBit targets         | `wasm-gc`, `native`                                                |
-| Native release compiler | `tools/brotli/bench/native-cc-o0.nu` (`native_cc = cc-o0`)         |
+| Native release compiler | `tools/bench/native-cc-o0.nu` (`native_cc = cc-o0`)         |
 | Timing shape            | `--repeats 3 --samples 3`; tables report per-operation min and avg |
 
 `target-perf.nu` compares MoonBit release runs against the Google `brotli` CLI.
@@ -45,7 +45,7 @@ Encoding matrix:
 ```bash
 for input in target/brotli-bench/silesia-64k.bin target/brotli-bench/silesia-128k.bin; do
   for q in 0 1 2 3 4 5 6 7 8 9 10 11; do
-    nu tools/brotli/bench/target-perf.nu "$input" \
+    nu tools/bench/target-perf.nu "$input" \
       --mode encode \
       --quality "$q" \
       --targets wasm-gc,native \
@@ -63,7 +63,7 @@ for q in 0 1 2 3 4 5 6 7 8 9 10 11; do
   brotli -q "$q" -f -c target/brotli-bench/silesia-1m.bin \
     > "target/brotli-current-bench/google-1m/silesia-1m.q${q}.br"
 
-  nu tools/brotli/bench/target-perf.nu \
+  nu tools/bench/target-perf.nu \
     "target/brotli-current-bench/google-1m/silesia-1m.q${q}.br" \
     --mode decode \
     --expected target/brotli-bench/silesia-1m.bin \

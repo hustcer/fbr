@@ -64,7 +64,7 @@ def run-ratio-with-overhead-gate [
   max_overhead: float
 ]: nothing -> record {
   let result = (
-    nu tools/brotli/bench/ratio.nu $input --qualities $qualities --json
+    nu tools/bench/ratio.nu $input --qualities $qualities --json
     | complete
   )
   if $result.exit_code != 0 {
@@ -135,14 +135,14 @@ def main [
 
   if not $skip_conformance {
     $results = append-step $results "Brotli conformance corpus" {
-      nu tools/brotli/conformance/run.nu | complete
+      nu tools/conformance/run.nu | complete
     }
   }
 
   if not $skip_ratio {
     for quality in [0 1] {
       $results = append-step $results $"q($quality) 2MiB external decode" {
-        nu tools/brotli/encode/verify.nu $silesia_2m --quality $quality | complete
+        nu tools/encode/verify.nu $silesia_2m --quality $quality | complete
       }
     }
 
@@ -150,14 +150,14 @@ def main [
       run-ratio-with-overhead-gate $silesia_2m 2,3,4,5,6,7,8,9 $p3_max_overhead
     }
     $results = append-step $results "q10..q11 1MiB ratio-exception decode" {
-      nu tools/brotli/bench/ratio.nu $silesia_1m --qualities 10,11 --json | complete
+      nu tools/bench/ratio.nu $silesia_1m --qualities 10,11 --json | complete
     }
   }
 
   if not $skip_fuzz {
     if $generated_fuzz_count > 0 {
       let generate_args = [
-        "tools/brotli/fuzz/gen-corpus.nu"
+        "tools/fuzz/gen-corpus.nu"
         "--count"
         ($generated_fuzz_count | into string)
         "--seed"
@@ -172,14 +172,14 @@ def main [
 
     let base_decoder_fuzz_args = if $decoder_fuzz_limit > 0 {
       [
-        "tools/brotli/fuzz/run.nu"
+        "tools/fuzz/run.nu"
         "--limit"
         ($decoder_fuzz_limit | into string)
         "--target"
         $decoder_fuzz_target
       ]
     } else {
-      ["tools/brotli/fuzz/run.nu" "--target" $decoder_fuzz_target]
+      ["tools/fuzz/run.nu" "--target" $decoder_fuzz_target]
     }
     let decoder_fuzz_args = if $generated_fuzz_count > 0 {
       $base_decoder_fuzz_args | append ["--corpus-dir" $generated_fuzz_dir]
@@ -191,7 +191,7 @@ def main [
     }
 
     let roundtrip_args = [
-      "tools/brotli/fuzz/roundtrip.nu"
+      "tools/fuzz/roundtrip.nu"
       "--count"
       ($roundtrip_count | into string)
       "--max-len"
@@ -208,7 +208,7 @@ def main [
 
   if not $skip_size {
     $results = append-step $results "decode/encode artifact size split" {
-      nu tools/brotli/size/verify.nu --targets js --json | complete
+      nu tools/size/verify.nu --targets js --json | complete
     }
   }
 

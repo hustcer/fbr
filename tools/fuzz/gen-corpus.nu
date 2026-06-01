@@ -1,7 +1,7 @@
 #!/usr/bin/env nu
 
 const fixture_dir = "src/tests/brotli_fixtures"
-const corpus_dir = "tools/brotli/fuzz/corpus"
+const corpus_dir = "tools/fuzz/corpus"
 
 def next-seed [seed: int]: nothing -> int {
   (($seed * 1_664_525 + 1_013_904_223) mod 4_294_967_296)
