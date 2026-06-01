@@ -222,7 +222,7 @@ def collect-row [target: string, case_name: string, package: string]: nothing ->
     target: $target
     case: $case_name
     package: $package
-    bytes: (file-size $artifact)
+    size: (file-size $artifact | into filesize)
     ok: $scan.symbol_ok
     artifact: $artifact
     symbol_checked: ($target == "js")
