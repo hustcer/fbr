@@ -115,11 +115,22 @@ stream.push(chunk2, final_=true)
 - `brotli_sync` supports quality levels `0..=11`.
 - `unbrotli_sync` decodes RFC 7932 Brotli streams, including static dictionary
   references and transforms.
+- `BrotliOptions` exposes `quality`, `window_bits`, and `max_input_size`.
+- `UnbrotliOptions` exposes optional caller-provided output storage,
+  `max_output_size`, and `max_input_size`.
 - In production builds, `decode` imports only `common`.
 - In production builds, `encode` imports only `common`. Its `moon.pkg` imports
   `decode` only for white-box tests.
 - The root package imports `common`, `decode`, and `encode`, and contains only
   facade wrappers, type aliases, and shared error/default aliases.
+- `BrotliStream` and `UnbrotliStream` are buffering convenience wrappers, not
+  true incremental Brotli codec states.
+- The static dictionary is built from byte chunks instead of one byte-per-entry
+  `FixedArray[Byte]` literal.
+- `tools/` includes fixture, conformance, fuzz, size, and benchmark scripts.
+- q0 and q1 currently emit valid stored streams and are not intended to match
+  Google's low-quality compression ratio. q10 and q11 are valid but may still be
+  larger than Google Brotli output; see the release report for measured data.
 
 ## Size Verification
 
