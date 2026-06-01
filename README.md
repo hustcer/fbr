@@ -112,8 +112,11 @@ Size-sensitive applications should import `hustcer/fbr/decode` or
 
 ## Streams
 
-`BrotliStream` and `UnbrotliStream` buffer input chunks until
-`push(chunk, final_=true)`.
+`UnbrotliStream` incrementally decompresses input chunks and emits output when
+complete Brotli meta-blocks are available.
+
+`BrotliStream` is a buffering convenience wrapper. It stores input chunks until
+`push(chunk, final_=true)`, then calls `brotli_sync` and emits the result.
 
 ```moonbit
 let stream = @encode.BrotliStream::new()
@@ -137,8 +140,8 @@ stream.push(chunk2, final_=true)
   `decode` only for white-box tests.
 - The root package imports `common`, `decode`, and `encode`, and contains only
   facade wrappers, type aliases, and shared error/default aliases.
-- `BrotliStream` and `UnbrotliStream` are buffering convenience wrappers, not
-  true incremental Brotli codec states.
+- `BrotliStream` is a buffering convenience wrapper, not a true incremental
+  Brotli encoder.
 - The static dictionary is built from byte chunks instead of one byte-per-entry
   `FixedArray[Byte]` literal.
 - `tools/` includes fixture, conformance, fuzz, size, and benchmark scripts.
