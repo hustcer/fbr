@@ -2,6 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.6.0
+
+### Performance
+
+- Adjusted Brotli encoder candidate gating for quality levels 3 through 11.
+  The current selection keeps intermediate LZ77 candidates for q4-q8, narrows
+  four-byte high-quality and mixed-dictionary candidates to q10/q11, and avoids
+  several q3/q9 candidate passes that were recorded as rejected trials.
+- In the regenerated `just bench` report, q3 encode min timings improve by
+  1.78x-2.49x versus v0.5.0 on the Silesia 64 KiB and 128 KiB inputs. The q3
+  output size increases by 3.3% on 64 KiB and 4.2% on 128 KiB.
+- The same report shows q9 encode min timings improving by 1.57x-3.48x. The
+  64 KiB q9 output is unchanged; the 128 KiB q9 output grows from 38,926 to
+  40,207 bytes, changing its Google-size delta from -1.46% to +1.78%.
+- q10 and q11 encode min timings improve by 1.33x-1.54x with unchanged output
+  size in the measured rows. q2 also improves by 1.10x-1.23x with unchanged
+  output size.
+- q0 and q1 output sizes are unchanged, with measured min timings 2.7%-13.8%
+  slower. q4 through q8 output sizes are unchanged, with measured min timings
+  ranging from 10.6% faster to 7.6% slower depending on quality, target, and
+  input.
+- Added small decoder hot-path changes for command info lookup, short-distance
+  handling, explicit distance decoding, and validated Huffman tree-group access.
+  The regenerated decode report shows native min timings 5.7%-7.4% faster than
+  v0.5.0; wasm-gc rows range from 3.6% faster to 0.3% slower.
+
+### Tools and docs
+
+- Moved Brotli tooling from `tools/brotli/` to direct `tools/` subdirectories
+  and updated `just` recipes and documentation paths.
+- Added same-time benchmark harnesses for comparing encode and decode behavior
+  against a baseline git ref.
+- Updated the size verification script to report `size` as a filesize value and
+  to select native `.exe` artifacts explicitly.
+- Documented recent `js`, `wasm-gc`, and `native` size-verification results in
+  the README.
+
+### Tests
+
+- Added white-box coverage for context-map validation, command-info table
+  lookup, validated short-distance decoding, explicit distance formulas, and
+  encoder candidate gating.
+
 ## v0.5.0
 
 ### Performance

@@ -13,9 +13,9 @@ Run commands from the repository root.
 | Date                    | 2026-05-30                                                         |
 | MoonBit                 | `moon 0.1.20260522 (4a0c52f 2026-05-22)`                           |
 | Google Brotli CLI       | `brotli 1.2.0`                                                     |
-| MoonBit profile         | release, via `tools/bench/target-perf.nu`                   |
+| MoonBit profile         | release, via `tools/bench/target-perf.nu`                          |
 | MoonBit targets         | `wasm-gc`, `native`                                                |
-| Native release compiler | `tools/bench/native-cc-o0.nu` (`native_cc = cc-o0`)         |
+| Native release compiler | `tools/bench/native-cc-o0.nu` (`native_cc = cc-o0`)                |
 | Timing shape            | `--repeats 3 --samples 3`; tables report per-operation min and avg |
 
 `target-perf.nu` compares MoonBit release runs against the Google `brotli` CLI.
