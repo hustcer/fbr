@@ -133,7 +133,12 @@ def write-temp-packages []: nothing -> nothing {
 
 def artifact-path [target: string, package: string]: nothing -> string {
   let dir = (["_build" $target "release" "build" $package] | path join)
-  let ext = if $target == "js" { "js" } else if $target == "wasm-gc" { "wasm" } else { "" }
+  let ext = match $target {
+    "js" => "js"
+    "wasm-gc" => "wasm"
+    "native" => "exe"
+    _ => ""
+  }
   let exact = if $ext == "" { "" } else { $dir | path join $"($package).($ext)" }
   if $exact != "" and ($exact | path exists) {
     $exact

@@ -25,6 +25,20 @@ so the dictionary is data again instead of a large block of generated startup
 code. This keeps decode-only wasm-gc artifacts close to the real data size
 without changing the public API, the dictionary bytes, or the codec behavior.
 
+Recent `just size js,wasm-gc,native` output:
+
+| target  | case        |     size |
+| ------- | ----------- | -------: |
+| wasm-gc | decode-only | 159.1 kB |
+| wasm-gc | encode-only | 211.8 kB |
+| wasm-gc | full        | 232.2 kB |
+| js      | decode-only | 605.7 kB |
+| js      | encode-only | 973.4 kB |
+| js      | full        |   1.0 MB |
+| native  | decode-only | 507.4 kB |
+| native  | encode-only | 728.2 kB |
+| native  | full        | 790.0 kB |
+
 ## Installation
 
 ```bash
