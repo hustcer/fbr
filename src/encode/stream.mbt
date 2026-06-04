@@ -1,8 +1,9 @@
 ///|
-/// Chunk-oriented Brotli compressor.
+/// Buffering convenience wrapper around `brotli_sync`.
 ///
 /// Input chunks are buffered until the final push, then encoded with
-/// `brotli_sync` and emitted through `ondata`.
+/// `brotli_sync` and emitted through `ondata`. This is not a true incremental
+/// Brotli encoder.
 pub(all) struct BrotliStream {
   /// Called with compressed data when a final chunk is pushed.
   mut ondata : @common.FbrStreamHandler?

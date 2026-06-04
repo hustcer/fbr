@@ -178,6 +178,22 @@ fn BrotliOutputBuilder::finish(self : BrotliOutputBuilder) -> FixedArray[Byte] {
 }
 
 ///|
+fn BrotliOutputBuilder::clone(
+  self : BrotliOutputBuilder,
+) -> BrotliOutputBuilder {
+  let buf = FixedArray::make(self.buf.length(), b'\x00')
+  if self.len > 0 {
+    self.buf.blit_to(buf, len=self.len, src_offset=0, dst_offset=0)
+  }
+  {
+    buf,
+    len: self.len,
+    fixed: self.fixed,
+    max_output_size: self.max_output_size,
+  }
+}
+
+///|
 fn BrotliOutputBuilder::copy_from_distance(
   self : BrotliOutputBuilder,
   distance : Int,
@@ -339,6 +355,41 @@ fn brotli_copy_uncompressed(
 }
 
 ///|
+fn brotli_decode_next_metablock(
+  reader : BrotliBitReader,
+  output : BrotliOutputBuilder,
+  state : BrotliDecoderState,
+) -> Bool raise @common.FbrError {
+  let header = brotli_decode_metablock_header(reader)
+  if header.is_empty {
+    reader.expect_final_padding_zero()
+    return true
+  }
+  if header.is_metadata {
+    brotli_skip_metadata(reader, header.length)
+  } else if header.is_uncompressed {
+    brotli_copy_uncompressed(reader, output, header.length)
+  } else if header.length == 0 {
+    ()
+  } else {
+    let compressed_header = brotli_read_compressed_metablock_header(reader)
+    brotli_decode_compressed_metablock_body(
+      reader,
+      compressed_header,
+      output,
+      header.length,
+      state,
+    )
+  }
+  if header.is_last {
+    reader.expect_final_padding_zero()
+    true
+  } else {
+    false
+  }
+}
+
+///|
 fn brotli_decode_scaffold(
   data : FixedArray[Byte],
   opts : UnbrotliOptions,
@@ -349,32 +400,10 @@ fn brotli_decode_scaffold(
   let output = BrotliOutputBuilder::new(opts, input_len=data.length())
   let state = BrotliDecoderState::new_with_window_bits(window_bits)
   while true {
-    let header = brotli_decode_metablock_header(reader)
-    if header.is_empty {
-      reader.expect_final_padding_zero()
+    if brotli_decode_next_metablock(reader, output, state) {
       if output.len == 0 {
         return brotli_empty_output(opts)
       }
-      return output.finish()
-    }
-    if header.is_metadata {
-      brotli_skip_metadata(reader, header.length)
-    } else if header.is_uncompressed {
-      brotli_copy_uncompressed(reader, output, header.length)
-    } else if header.length == 0 {
-      ()
-    } else {
-      let compressed_header = brotli_read_compressed_metablock_header(reader)
-      brotli_decode_compressed_metablock_body(
-        reader,
-        compressed_header,
-        output,
-        header.length,
-        state,
-      )
-    }
-    if header.is_last {
-      reader.expect_final_padding_zero()
       return output.finish()
     }
   }

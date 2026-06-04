@@ -24,6 +24,31 @@ fn BrotliBitReader::new(
 }
 
 ///|
+fn BrotliBitReader::clone(self : BrotliBitReader) -> BrotliBitReader {
+  {
+    buf: self.buf,
+    byte_pos: self.byte_pos,
+    byte_end: self.byte_end,
+    bit_buf: self.bit_buf,
+    bits_avail: self.bits_avail,
+  }
+}
+
+///|
+fn BrotliBitReader::with_buffer(
+  self : BrotliBitReader,
+  buf : FixedArray[Byte],
+) -> BrotliBitReader {
+  {
+    buf,
+    byte_pos: self.byte_pos,
+    byte_end: buf.length(),
+    bit_buf: self.bit_buf,
+    bits_avail: self.bits_avail,
+  }
+}
+
+///|
 fn BrotliBitReader::refill_to(
   self : BrotliBitReader,
   n : Int,
