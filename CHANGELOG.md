@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.7.0
+
+### Changed
+
+- `UnbrotliStream` now decodes incrementally: it emits output through `ondata`
+  as complete Brotli meta-blocks become available (intermediate calls report
+  `is_final=false`), instead of buffering all input and emitting once on the
+  final `push`. Consumers that assumed a single `ondata` call with the whole
+  result must now concatenate the emitted chunks.
+- `UnbrotliStream` now ignores `UnbrotliOptions.out`; streaming output is
+  delivered only through `ondata`. One-shot `unbrotli_sync` still honors `out`.
+- `UnbrotliStream::push` now rejects non-empty input pushed after the stream has
+  finished.
+
+### Added
+
+- `BrotliDistanceRing::clone` in the `common` package, used by the streaming
+  decoder to speculatively decode a meta-block and roll back on short input.
+
+### Tests
+
+- Added `UnbrotliStream` coverage: output equivalence against one-shot
+  `unbrotli_sync` across every input split point, byte-at-a-time decoding,
+  `max_input_size` enforcement, post-finish rejection, the empty-input final
+  marker, and truncated-input errors.
+- Added white-box coverage for `common`, `decode`, and `encode` helpers.
+
+### Tools and docs
+
+- Documented the `UnbrotliStream` streaming trade-offs in the README: output is
+  retained for the stream lifetime (memory is not window-bounded), each `push`
+  may re-decode the in-progress meta-block, and `out` is ignored.
+- Reworked the coverage-analysis script (`tools/analyze-coverage.nu`) and
+  `COVERAGE_ANALYSIS.md`.
+
 ## v0.6.0
 
 ### Performance
