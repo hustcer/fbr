@@ -72,6 +72,17 @@ fn BrotliDecoderState::new_with_window_bits(
 }
 
 ///|
+/// Deep-copy the decoder state. The distance ring is the only mutable
+/// cross-meta-block state carried here, so cloning it (plus the immutable
+/// `max_backward_distance`) yields a fully independent snapshot.
+fn BrotliDecoderState::clone(self : BrotliDecoderState) -> BrotliDecoderState {
+  {
+    distance_ring: self.distance_ring.clone(),
+    max_backward_distance: self.max_backward_distance,
+  }
+}
+
+///|
 fn BrotliDecoderState::max_distance(
   self : BrotliDecoderState,
   output_len : Int,

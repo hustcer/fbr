@@ -136,7 +136,7 @@ fn UnbrotliStream::process_available(
     guard self.state is Some(state) else { return }
     let trial_reader = reader.clone()
     let trial_output = self.output.clone()
-    let trial_state = brotli_clone_decoder_state(state)
+    let trial_state = state.clone()
     let result : Result[Bool, @common.FbrError] = try? brotli_decode_next_metablock(
       trial_reader, trial_output, trial_state,
     )
@@ -216,27 +216,11 @@ fn UnbrotliStream::compact_input(self : UnbrotliStream) -> Unit {
     )
   }
   self.input = compacted
-  self.reader = Some({
-    buf: self.input,
-    byte_pos: 0,
-    byte_end: self.input.length(),
-    bit_buf: reader.bit_buf,
-    bits_avail: reader.bits_avail,
-  })
-}
-
-///|
-fn brotli_clone_decoder_state(state : BrotliDecoderState) -> BrotliDecoderState {
-  let distances = FixedArray::make(4, 0)
-  for i in 0..<4 {
-    distances[i] = state.distance_ring.distances[i]
-  }
-  {
-    distance_ring: {
-      distances,
-      index: state.distance_ring.index,
-      last_distance_context: state.distance_ring.last_distance_context,
-    },
-    max_backward_distance: state.max_backward_distance,
-  }
+  // Rebase the reader onto the compacted buffer (consumed bytes dropped, so
+  // byte_pos restarts at 0) while preserving the partially-filled bit
+  // accumulator, whose bits came from the bytes we just discarded.
+  let rebased = BrotliBitReader::new(self.input, 0, self.input.length())
+  rebased.bit_buf = reader.bit_buf
+  rebased.bits_avail = reader.bits_avail
+  self.reader = Some(rebased)
 }

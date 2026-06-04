@@ -11,6 +11,24 @@ pub fn BrotliDistanceRing::new() -> BrotliDistanceRing {
 }
 
 ///|
+/// Return an independent copy of the ring, including its backing slots, so the
+/// copy can be mutated without affecting the original. Used by the streaming
+/// decoder to speculatively decode a meta-block and roll back on short input.
+pub fn BrotliDistanceRing::clone(
+  self : BrotliDistanceRing,
+) -> BrotliDistanceRing {
+  let distances = FixedArray::make(self.distances.length(), 0)
+  for i in 0..<self.distances.length() {
+    distances[i] = self.distances[i]
+  }
+  {
+    distances,
+    index: self.index,
+    last_distance_context: self.last_distance_context,
+  }
+}
+
+///|
 pub fn brotli_distance_ring_slot(index : Int) -> Int {
   // The ring has four slots, so a bit mask gives the same wraparound as
   // modulo 4, including negative indices used by short-distance codes.

@@ -196,6 +196,7 @@ pub(all) struct BrotliDistanceRing {
   mut index : Int
   mut last_distance_context : Int
 }
+pub fn BrotliDistanceRing::clone(Self) -> Self
 pub fn BrotliDistanceRing::compensate_dictionary_copy(Self) -> Unit
 pub fn BrotliDistanceRing::new() -> Self
 pub fn BrotliDistanceRing::record(Self, Int) -> Unit raise FbrError
