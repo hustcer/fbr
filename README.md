@@ -112,8 +112,20 @@ Size-sensitive applications should import `hustcer/fbr/decode` or
 
 ## Streams
 
-`UnbrotliStream` incrementally decompresses input chunks and emits output when
-complete Brotli meta-blocks are available.
+`UnbrotliStream` incrementally decompresses input chunks and emits output
+through `ondata` as complete Brotli meta-blocks become available, so decoded
+data is delivered before the final `push`. A few caveats:
+
+- **Memory is not window-bounded.** The stream keeps the entire decompressed
+  output for its lifetime, so memory grows with total output size rather than
+  with the window. For very large payloads, prefer one-shot `unbrotli_sync`.
+- **Re-decode is per-push.** Each meta-block is decoded speculatively and rolled
+  back when the input is incomplete, so a single large meta-block fed in many
+  tiny chunks is re-decoded on every `push` (quadratic in the worst case).
+  Prefer reasonably sized chunks over byte-at-a-time input.
+- **`UnbrotliOptions.out` is ignored.** Streaming output is delivered only
+  through `ondata`; unlike one-shot `unbrotli_sync`, the stream does not write
+  into a caller-provided buffer.
 
 `BrotliStream` is a buffering convenience wrapper. It stores input chunks until
 `push(chunk, final_=true)`, then calls `brotli_sync` and emits the result.
@@ -133,8 +145,9 @@ stream.push(chunk2, final_=true)
 - `unbrotli_sync` decodes RFC 7932 Brotli streams, including static dictionary
   references and transforms.
 - `BrotliOptions` exposes `quality`, `window_bits`, and `max_input_size`.
-- `UnbrotliOptions` exposes optional caller-provided output storage,
-  `max_output_size`, and `max_input_size`.
+- `UnbrotliOptions` exposes an optional caller-provided output buffer (used by
+  `unbrotli_sync`; ignored by `UnbrotliStream`), `max_output_size`, and
+  `max_input_size`.
 - In production builds, `decode` imports only `common`.
 - In production builds, `encode` imports only `common`. Its `moon.pkg` imports
   `decode` only for white-box tests.
