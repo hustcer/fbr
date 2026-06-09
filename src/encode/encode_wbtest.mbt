@@ -1,12 +1,31 @@
 ///|
+fn[T] assert_fbr_error(
+  f : () -> T raise FbrError,
+  expected : FbrErrorCode,
+  message : String,
+) -> Unit raise {
+  try f() catch {
+    FbrError(code~, ..) => assert_eq(code, expected)
+  } noraise {
+    _ => fail(message)
+  }
+}
+
+///|
+fn[T] capture_fbr_result(f : () -> T raise FbrError) -> Result[T, FbrError] {
+  try f() catch {
+    e => Err(e)
+  } noraise {
+    value => Ok(value)
+  }
+}
+
+///|
 fn assert_brotli_error(
-  result : Result[FixedArray[Byte], FbrError],
+  f : () -> FixedArray[Byte] raise FbrError,
   expected : FbrErrorCode,
 ) -> Unit raise {
-  guard result is Err(FbrError(code~, ..)) else {
-    fail("expected Brotli FbrError")
-  }
-  assert_eq(code, expected)
+  assert_fbr_error(f, expected, "expected Brotli FbrError")
 }
 
 ///|
@@ -1246,12 +1265,12 @@ fn assert_command_prefix_matches_reference(
   copy_length : Int,
   mode : Int,
 ) -> Unit raise {
-  let direct_result : Result[BrotliCommandPrefix, FbrError] = try? brotli_command_prefix_for_mode(
-    insert_length, copy_length, mode,
-  )
-  let reference_result : Result[BrotliCommandPrefix, FbrError] = try? brotli_reference_command_prefix_for_mode(
-    insert_length, copy_length, mode,
-  )
+  let direct_result = capture_fbr_result(() => {
+    brotli_command_prefix_for_mode(insert_length, copy_length, mode)
+  })
+  let reference_result = capture_fbr_result(() => {
+    brotli_reference_command_prefix_for_mode(insert_length, copy_length, mode)
+  })
   match (direct_result, reference_result) {
     (Ok(direct), Ok(reference)) => {
       assert_eq(direct.symbol, reference.symbol)
@@ -1818,23 +1837,27 @@ test "brotli_sync default quality round-trips" {
 ///|
 test "brotli_sync rejects invalid quality" {
   let input : FixedArray[Byte] = [1]
-  let result : Result[FixedArray[Byte], FbrError] = try? brotli_sync(input, opts={
-    quality: 12,
-    window_bits: 22,
-    max_input_size: default_max_input_size,
-  })
-  assert_brotli_error(result, InvalidZipData)
+  assert_brotli_error(
+    () => {
+      brotli_sync(input, opts={
+        quality: 12,
+        window_bits: 22,
+        max_input_size: default_max_input_size,
+      })
+    },
+    InvalidZipData,
+  )
 }
 
 ///|
 test "brotli_sync enforces max_input_size" {
   let input : FixedArray[Byte] = [1, 2]
-  let result : Result[FixedArray[Byte], FbrError] = try? brotli_sync(input, opts={
-    quality: 1,
-    window_bits: 22,
-    max_input_size: 1,
-  })
-  assert_brotli_error(result, InvalidZipData)
+  assert_brotli_error(
+    () => {
+      brotli_sync(input, opts={ quality: 1, window_bits: 22, max_input_size: 1 })
+    },
+    InvalidZipData,
+  )
 }
 
 ///|
@@ -2056,12 +2079,16 @@ test "brotli_try_compressed_chunk returns none for incompressible chunks" {
 ///|
 test "brotli validation rejects negative max input size" {
   let input : FixedArray[Byte] = []
-  let result : Result[FixedArray[Byte], FbrError] = try? brotli_sync(input, opts={
-    quality: 1,
-    window_bits: 22,
-    max_input_size: -1,
-  })
-  assert_brotli_error(result, InvalidZipData)
+  assert_brotli_error(
+    () => {
+      brotli_sync(input, opts={
+        quality: 1,
+        window_bits: 22,
+        max_input_size: -1,
+      })
+    },
+    InvalidZipData,
+  )
 }
 
 ///|
@@ -2178,13 +2205,11 @@ test "encoder command and block prefix helpers reject invalid lengths" {
     fail("expected invalid insert-only command")
   }
 
-  let invalid_block : Result[BrotliCommandPrefix, FbrError] = try? brotli_block_length_prefix(
-    0,
+  assert_fbr_error(
+    () => brotli_block_length_prefix(0),
+    BrotliInvalidMetablock,
+    "expected invalid block length",
   )
-  guard invalid_block is Err(FbrError(code~, ..)) else {
-    fail("expected invalid block length")
-  }
-  assert_eq(code, BrotliInvalidMetablock)
 }
 
 ///|

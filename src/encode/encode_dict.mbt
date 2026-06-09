@@ -616,12 +616,14 @@ fn brotli_build_identity_dictionary_commands(
       ) {
       Some((length, output_length, distance)) => {
         let insert_length = position - literal_start
-        let command_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_dictionary_encode_command(
-          literal_start, insert_length, length, output_length, distance,
-        )
-        match command_result {
-          Ok(command) => commands.push(command)
-          Err(_) => return None
+        match
+          brotli_try_optional(() => {
+            brotli_make_dictionary_encode_command(
+              literal_start, insert_length, length, output_length, distance,
+            )
+          }) {
+          Some(command) => commands.push(command)
+          None => return None
         }
         if commands.length() > hash_config.max_commands {
           return None
@@ -636,16 +638,18 @@ fn brotli_build_identity_dictionary_commands(
     return None
   }
   if literal_start < data.length() {
-    let final_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command(
-      literal_start,
-      data.length() - literal_start,
-      0,
-      0,
-      false,
-    )
-    match final_result {
-      Ok(command) => commands.push(command)
-      Err(_) => return None
+    match
+      brotli_try_optional(() => {
+        brotli_make_encode_command(
+          literal_start,
+          data.length() - literal_start,
+          0,
+          0,
+          false,
+        )
+      }) {
+      Some(command) => commands.push(command)
+      None => return None
     }
   }
   Some(commands)
@@ -725,12 +729,14 @@ fn brotli_build_mixed_dictionary_lz77_commands_with_distance_cache(
         Some((word_length, output_length, dictionary_distance)) =>
           if output_length >= 8 && output_length >= match_length + 2 {
             let insert_length = position - literal_start
-            let command_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_dictionary_encode_command(
-              literal_start, insert_length, word_length, output_length, dictionary_distance,
-            )
-            match command_result {
-              Ok(command) => commands.push(command)
-              Err(_) => return None
+            match
+              brotli_try_optional(() => {
+                brotli_make_dictionary_encode_command(
+                  literal_start, insert_length, word_length, output_length, dictionary_distance,
+                )
+              }) {
+              Some(command) => commands.push(command)
+              None => return None
             }
             used_dictionary = true
             if commands.length() > max_commands {
@@ -808,16 +814,18 @@ fn brotli_build_mixed_dictionary_lz77_commands_with_distance_cache(
     return None
   }
   if literal_start < data.length() {
-    let final_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command(
-      literal_start,
-      data.length() - literal_start,
-      0,
-      0,
-      false,
-    )
-    match final_result {
-      Ok(command) => commands.push(command)
-      Err(_) => return None
+    match
+      brotli_try_optional(() => {
+        brotli_make_encode_command(
+          literal_start,
+          data.length() - literal_start,
+          0,
+          0,
+          false,
+        )
+      }) {
+      Some(command) => commands.push(command)
+      None => return None
     }
   }
   let copy_bytes = brotli_commands_copy_bytes(commands)

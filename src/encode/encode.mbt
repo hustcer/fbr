@@ -2126,6 +2126,15 @@ fn brotli_make_encode_command_with_distance_code(
 }
 
 ///|
+fn[T] brotli_try_optional(f : () -> T raise @common.FbrError) -> T? {
+  try f() catch {
+    _ => None
+  } noraise {
+    value => Some(value)
+  }
+}
+
+///|
 fn brotli_try_make_encode_command_with_distance_code(
   insert_start : Int,
   insert_length : Int,
@@ -2133,13 +2142,11 @@ fn brotli_try_make_encode_command_with_distance_code(
   distance : Int,
   distance_code : Int,
 ) -> BrotliEncodeCommand? {
-  let result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command_with_distance_code(
-    insert_start, insert_length, copy_length, distance, distance_code,
-  )
-  match result {
-    Ok(command) => Some(command)
-    Err(_) => None
-  }
+  brotli_try_optional(() => {
+    brotli_make_encode_command_with_distance_code(
+      insert_start, insert_length, copy_length, distance, distance_code,
+    )
+  })
 }
 
 ///|
@@ -2151,13 +2158,11 @@ fn brotli_try_make_encode_command_with_distance_mode(
   has_copy : Bool,
   explicit_distance : Bool,
 ) -> BrotliEncodeCommand? {
-  let result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command_with_distance_mode(
-    insert_start, insert_length, copy_length, distance, has_copy, explicit_distance,
-  )
-  match result {
-    Ok(command) => Some(command)
-    Err(_) => None
-  }
+  brotli_try_optional(() => {
+    brotli_make_encode_command_with_distance_mode(
+      insert_start, insert_length, copy_length, distance, has_copy, explicit_distance,
+    )
+  })
 }
 
 ///|
@@ -2230,16 +2235,12 @@ fn brotli_build_literal_only_command(
   if !brotli_literal_only_may_beat_stored(data) {
     return None
   }
-  let command_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command(
-    0,
-    data.length(),
-    0,
-    0,
-    false,
-  )
-  match command_result {
-    Ok(command) => Some([command])
-    Err(_) => None
+  match
+    brotli_try_optional(() => {
+      brotli_make_encode_command(0, data.length(), 0, 0, false)
+    }) {
+    Some(command) => Some([command])
+    None => None
   }
 }
 
@@ -2823,16 +2824,18 @@ fn brotli_build_simple_lz77_commands_with_distance_cache_and_previous(
     }
   }
   if literal_start < data.length() {
-    let final_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command(
-      literal_start,
-      data.length() - literal_start,
-      0,
-      0,
-      false,
-    )
-    match final_result {
-      Ok(command) => commands.push(command)
-      Err(_) => return None
+    match
+      brotli_try_optional(() => {
+        brotli_make_encode_command(
+          literal_start,
+          data.length() - literal_start,
+          0,
+          0,
+          false,
+        )
+      }) {
+      Some(command) => commands.push(command)
+      None => return None
     }
   }
   if commands.length() == 0 {
@@ -2993,13 +2996,10 @@ fn brotli_bounded_shortest_path_copy_cost(
   let distance_bits = if distance_code == 0 {
     0
   } else {
-    match
-      (
-        try? brotli_distance_prefix_for_code(distance_code) :
-        Result[BrotliCommandPrefix, @common.FbrError]) {
-      Ok(prefix) =>
-        model.distance_bits[prefix.symbol] + prefix.insert_extra_bits
-      Err(_) => 24
+    try brotli_distance_prefix_for_code(distance_code) catch {
+      _ => 24
+    } noraise {
+      prefix => model.distance_bits[prefix.symbol] + prefix.insert_extra_bits
     }
   }
   let length_extra_bits = match length {
@@ -3420,12 +3420,14 @@ fn brotli_build_bounded_shortest_path_command_candidate(
       copy_length
     }
     let command = if copy_output_length > 0 {
-      let cmd_res : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_dictionary_encode_command(
-        literal_start, insert_length, copy_length, output_length, distance,
-      )
-      match cmd_res {
-        Ok(cmd) => cmd
-        Err(_) => return None
+      match
+        brotli_try_optional(() => {
+          brotli_make_dictionary_encode_command(
+            literal_start, insert_length, copy_length, output_length, distance,
+          )
+        }) {
+        Some(cmd) => cmd
+        None => return None
       }
     } else {
       let distance_code = brotli_compute_distance_code(
@@ -3459,16 +3461,18 @@ fn brotli_build_bounded_shortest_path_command_candidate(
     literal_start = copy_start + output_length
   }
   if literal_start < len {
-    let final_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command(
-      literal_start,
-      len - literal_start,
-      0,
-      0,
-      false,
-    )
-    match final_result {
-      Ok(command) => commands.push(command)
-      Err(_) => return None
+    match
+      brotli_try_optional(() => {
+        brotli_make_encode_command(
+          literal_start,
+          len - literal_start,
+          0,
+          0,
+          false,
+        )
+      }) {
+      Some(command) => commands.push(command)
+      None => return None
     }
   }
   if copy_bytes * 100 < len * config.min_copy_ratio_percent {
@@ -3527,16 +3531,18 @@ fn brotli_encode_prefix_stored_single_copy_match(
   if match_.insert_length <= 0 || match_.copy_length <= 0 {
     return None
   }
-  let command_result : Result[BrotliEncodeCommand, @common.FbrError] = try? brotli_make_encode_command(
-    0,
-    0,
-    match_.copy_length,
-    match_.distance,
-    true,
-  )
-  let command = match command_result {
-    Ok(command) => command
-    Err(_) => return None
+  let command = match
+    brotli_try_optional(() => {
+      brotli_make_encode_command(
+        0,
+        0,
+        match_.copy_length,
+        match_.distance,
+        true,
+      )
+    }) {
+    Some(command) => command
+    None => return None
   }
   let commands : Array[BrotliEncodeCommand] = []
   commands.push(command)

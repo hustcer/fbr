@@ -1,12 +1,22 @@
 ///|
+fn[T] assert_fbr_error(
+  f : () -> T raise FbrError,
+  expected : FbrErrorCode,
+  message : String,
+) -> Unit raise {
+  try f() catch {
+    FbrError(code~, ..) => assert_eq(code, expected)
+  } noraise {
+    _ => fail(message)
+  }
+}
+
+///|
 fn assert_brotli_error(
-  result : Result[FixedArray[Byte], FbrError],
+  f : () -> FixedArray[Byte] raise FbrError,
   expected : FbrErrorCode,
 ) -> Unit raise {
-  guard result is Err(FbrError(code~, ..)) else {
-    fail("expected Brotli FbrError")
-  }
-  assert_eq(code, expected)
+  assert_fbr_error(f, expected, "expected Brotli FbrError")
 }
 
 ///|
@@ -195,11 +205,11 @@ test "BrotliBitReader zero-width read does not prefetch" {
 test "BrotliBitReader align_to_byte rejects non-zero padding" {
   let reader = BrotliBitReader::new([0x09], 0, 1)
   inspect(reader.take_bits(1), content="1")
-  let result : Result[Unit, FbrError] = try? reader.align_to_byte()
-  guard result is Err(FbrError(code~, ..)) else {
-    fail("expected padding error")
-  }
-  assert_eq(code, BrotliInvalidPadding)
+  assert_fbr_error(
+    () => reader.align_to_byte(),
+    BrotliInvalidPadding,
+    "expected padding error",
+  )
 }
 
 ///|
@@ -293,13 +303,11 @@ test "brotli_read_huffman_code rejects malformed simple tables" {
   pos += 2
   wbits(duplicate, pos, 1)
   let duplicate_reader = BrotliBitReader::new(duplicate, 0, duplicate.length())
-  let duplicate_result : Result[FixedArray[Int], FbrError] = try? brotli_read_huffman_code(
-    duplicate_reader, 4, 4, 3,
+  assert_fbr_error(
+    () => brotli_read_huffman_code(duplicate_reader, 4, 4, 3),
+    BrotliInvalidHuffman,
+    "expected duplicate simple Huffman error",
   )
-  guard duplicate_result is Err(FbrError(code=duplicate_code, ..)) else {
-    fail("expected duplicate simple Huffman error")
-  }
-  assert_eq(duplicate_code, BrotliInvalidHuffman)
 
   let out_of_range = FixedArray::make(2, b'\x00')
   pos = 0
@@ -313,13 +321,11 @@ test "brotli_read_huffman_code rejects malformed simple tables" {
     0,
     out_of_range.length(),
   )
-  let out_of_range_result : Result[FixedArray[Int], FbrError] = try? brotli_read_huffman_code(
-    out_of_range_reader, 4, 3, 3,
+  assert_fbr_error(
+    () => brotli_read_huffman_code(out_of_range_reader, 4, 3, 3),
+    BrotliInvalidHuffman,
+    "expected out-of-range simple Huffman error",
   )
-  guard out_of_range_result is Err(FbrError(code=range_code, ..)) else {
-    fail("expected out-of-range simple Huffman error")
-  }
-  assert_eq(range_code, BrotliInvalidHuffman)
 }
 
 ///|
@@ -361,13 +367,11 @@ test "brotli_read_huffman_code rejects complex repeat overflow" {
   }
   wbits(encoded, pos, 7) // repeat-zero extra bits: 10 zeros for alphabet 4
   let reader = BrotliBitReader::new(encoded, 0, encoded.length())
-  let result : Result[FixedArray[Int], FbrError] = try? brotli_read_huffman_code(
-    reader, 4, 4, 2,
+  assert_fbr_error(
+    () => brotli_read_huffman_code(reader, 4, 4, 2),
+    BrotliInvalidHuffman,
+    "expected complex repeat overflow error",
   )
-  guard result is Err(FbrError(code~, ..)) else {
-    fail("expected complex repeat overflow error")
-  }
-  assert_eq(code, BrotliInvalidHuffman)
 }
 
 ///|
@@ -468,13 +472,15 @@ test "brotli_read_context_map decodes direct map values" {
 ///|
 test "brotli_context_map_tree_index rejects invalid mapped tree" {
   let context_map = BrotliContextMap::{ num_trees: 1, map: [1, 0, 0, 0] }
-  let result : Result[Int, FbrError] = try? brotli_context_map_tree_index(
-    context_map, 0, brotli_distance_context_bits, 0,
+  assert_fbr_error(
+    () => {
+      brotli_context_map_tree_index(
+        context_map, 0, brotli_distance_context_bits, 0,
+      )
+    },
+    BrotliInvalidContextMap,
+    "expected invalid context-map tree",
   )
-  guard result is Err(FbrError(code~, ..)) else {
-    fail("expected invalid context-map tree")
-  }
-  assert_eq(code, BrotliInvalidContextMap)
 }
 
 ///|
@@ -506,13 +512,11 @@ test "brotli_read_context_map rejects RLE overflow" {
   pos += 2
   wbits(encoded, pos, 1) // reps = 3 for a 2-entry map
   let reader = BrotliBitReader::new(encoded, 0, encoded.length())
-  let result : Result[BrotliContextMap, FbrError] = try? brotli_read_context_map(
-    reader, 2,
+  assert_fbr_error(
+    () => brotli_read_context_map(reader, 2),
+    BrotliInvalidContextMap,
+    "expected context map repeat overflow",
   )
-  guard result is Err(FbrError(code~, ..)) else {
-    fail("expected context map repeat overflow")
-  }
-  assert_eq(code, BrotliInvalidContextMap)
 }
 
 ///|
@@ -547,21 +551,17 @@ test "brotli_read_huffman_tree_group reads consecutive trees" {
 ///|
 test "brotli_read_huffman_tree_group validates parameters" {
   let reader = BrotliBitReader::new([0x00], 0, 1)
-  let empty : Result[BrotliHuffmanTreeGroup, FbrError] = try? brotli_read_huffman_tree_group(
-    reader, 4, 4, 0, 3,
+  assert_fbr_error(
+    () => brotli_read_huffman_tree_group(reader, 4, 4, 0, 3),
+    BrotliInvalidHuffman,
+    "expected empty tree group error",
   )
-  guard empty is Err(FbrError(code=empty_code, ..)) else {
-    fail("expected empty tree group error")
-  }
-  assert_eq(empty_code, BrotliInvalidHuffman)
 
-  let invalid_alphabet : Result[BrotliHuffmanTreeGroup, FbrError] = try? brotli_read_huffman_tree_group(
-    reader, 2, 4, 1, 3,
+  assert_fbr_error(
+    () => brotli_read_huffman_tree_group(reader, 2, 4, 1, 3),
+    BrotliInvalidHuffman,
+    "expected invalid alphabet error",
   )
-  guard invalid_alphabet is Err(FbrError(code=alphabet_code, ..)) else {
-    fail("expected invalid alphabet error")
-  }
-  assert_eq(alphabet_code, BrotliInvalidHuffman)
 }
 
 ///|
@@ -1011,12 +1011,16 @@ test "unbrotli_sync decodes q0 uncompressed Brotli stream from CLI" {
 ///|
 test "unbrotli_sync enforces max_input_size" {
   let compressed : FixedArray[Byte] = [0xa1, 0x01]
-  let result = try? unbrotli_sync(compressed, opts={
-    out: None,
-    max_output_size: default_max_output_size,
-    max_input_size: 1,
-  })
-  assert_brotli_error(result, InvalidZipData)
+  assert_brotli_error(
+    () => {
+      unbrotli_sync(compressed, opts={
+        out: None,
+        max_output_size: default_max_output_size,
+        max_input_size: 1,
+      })
+    },
+    InvalidZipData,
+  )
 }
 
 ///|
@@ -1024,8 +1028,7 @@ test "unbrotli_sync rejects invalid compressed back-reference distance" {
   let compressed = FixedArray::make(12, b'\x00')
   let pos = write_window10_final_metablock_header(compressed, 2)
   ignore(write_trivial_compressed_header(compressed, pos, 0))
-  let result = try? unbrotli_sync(compressed)
-  assert_brotli_error(result, BrotliInvalidDistance)
+  assert_brotli_error(() => unbrotli_sync(compressed), BrotliInvalidDistance)
 }
 
 ///|
@@ -1063,17 +1066,19 @@ test "unbrotli_sync decodes compressed explicit-distance copy" {
 
 ///|
 test "compressed body rejects command lengths past meta-block boundary" {
-  let insert_result : Result[Unit, FbrError] = try? brotli_decode_compressed_metablock_body(
-    BrotliBitReader::new([0x00], 0, 1),
-    make_single_block_body_header(24, 0),
-    BrotliOutputBuilder::new(UnbrotliOptions::default()),
-    2,
-    BrotliDecoderState::new_with_window_bits(24),
+  assert_fbr_error(
+    () => {
+      brotli_decode_compressed_metablock_body(
+        BrotliBitReader::new([0x00], 0, 1),
+        make_single_block_body_header(24, 0),
+        BrotliOutputBuilder::new(UnbrotliOptions::default()),
+        2,
+        BrotliDecoderState::new_with_window_bits(24),
+      )
+    },
+    BrotliInvalidMetablock,
+    "expected insert length overflow",
   )
-  guard insert_result is Err(FbrError(code=insert_code, ..)) else {
-    fail("expected insert length overflow")
-  }
-  assert_eq(insert_code, BrotliInvalidMetablock)
 }
 
 ///|
@@ -1108,8 +1113,7 @@ test "BrotliOutputBuilder copy_from_distance keeps overlap semantics" {
 ///|
 test "unbrotli_sync rejects non-zero final padding" {
   let compressed : FixedArray[Byte] = [0xa1, 0x03]
-  let result = try? unbrotli_sync(compressed)
-  assert_brotli_error(result, BrotliInvalidPadding)
+  assert_brotli_error(() => unbrotli_sync(compressed), BrotliInvalidPadding)
 }
 
 ///|
@@ -1126,19 +1130,25 @@ test "unbrotli_sync returns caller buffer slice for empty output" {
 ///|
 test "unbrotli_sync rejects large-window header path" {
   let compressed : FixedArray[Byte] = [0x11]
-  let result = try? unbrotli_sync(compressed)
-  assert_brotli_error(result, BrotliLargeWindowNotSupported)
+  assert_brotli_error(
+    () => unbrotli_sync(compressed),
+    BrotliLargeWindowNotSupported,
+  )
 }
 
 ///|
 test "unbrotli_sync rejects uncompressed output bomb before allocation" {
   let compressed = make_uncompressed_bomb_header()
-  let result = try? unbrotli_sync(compressed, opts={
-    out: None,
-    max_output_size: (1 << 16) - 1,
-    max_input_size: default_max_input_size,
-  })
-  assert_brotli_error(result, InvalidZipData)
+  assert_brotli_error(
+    () => {
+      unbrotli_sync(compressed, opts={
+        out: None,
+        max_output_size: (1 << 16) - 1,
+        max_input_size: default_max_input_size,
+      })
+    },
+    InvalidZipData,
+  )
 }
 
 ///|
@@ -1222,13 +1232,15 @@ test "brotli metadata header rejects reserved and exuberant lengths" {
   wbits(reserved, pos, 3)
   pos += 2
   wbits(reserved, pos, 1)
-  let reserved_result : Result[BrotliMetablockHeader, FbrError] = try? brotli_decode_metablock_header(
-    BrotliBitReader::new(reserved, 0, reserved.length()),
+  assert_fbr_error(
+    () => {
+      brotli_decode_metablock_header(
+        BrotliBitReader::new(reserved, 0, reserved.length()),
+      )
+    },
+    BrotliReserved,
+    "expected reserved metadata bit error",
   )
-  guard reserved_result is Err(FbrError(code=reserved_code, ..)) else {
-    fail("expected reserved metadata bit error")
-  }
-  assert_eq(reserved_code, BrotliReserved)
 
   let exuberant = FixedArray::make(4, b'\x00')
   pos = 0
@@ -1243,13 +1255,15 @@ test "brotli metadata header rejects reserved and exuberant lengths" {
   wbits(exuberant, pos, 1)
   pos += 8
   wbits(exuberant, pos, 0)
-  let exuberant_result : Result[BrotliMetablockHeader, FbrError] = try? brotli_decode_metablock_header(
-    BrotliBitReader::new(exuberant, 0, exuberant.length()),
+  assert_fbr_error(
+    () => {
+      brotli_decode_metablock_header(
+        BrotliBitReader::new(exuberant, 0, exuberant.length()),
+      )
+    },
+    BrotliInvalidMetablock,
+    "expected exuberant metadata length error",
   )
-  guard exuberant_result is Err(FbrError(code=exuberant_code, ..)) else {
-    fail("expected exuberant metadata length error")
-  }
-  assert_eq(exuberant_code, BrotliInvalidMetablock)
 }
 
 ///|
@@ -1265,13 +1279,15 @@ test "brotli meta-block header handles six-nibble and exuberant lengths" {
     pos += 4
   }
   wbits(exuberant, pos, 0)
-  let exuberant_result : Result[BrotliMetablockHeader, FbrError] = try? brotli_decode_metablock_header(
-    BrotliBitReader::new(exuberant, 0, exuberant.length()),
+  assert_fbr_error(
+    () => {
+      brotli_decode_metablock_header(
+        BrotliBitReader::new(exuberant, 0, exuberant.length()),
+      )
+    },
+    BrotliInvalidMetablock,
+    "expected exuberant meta-block length error",
   )
-  guard exuberant_result is Err(FbrError(code=exuberant_code, ..)) else {
-    fail("expected exuberant meta-block length error")
-  }
-  assert_eq(exuberant_code, BrotliInvalidMetablock)
 
   let max_length = FixedArray::make(4, b'\x00')
   pos = 0
@@ -1291,13 +1307,11 @@ test "brotli meta-block header handles six-nibble and exuberant lengths" {
 
 ///|
 test "BrotliOutputBuilder covers fixed buffer, growth, and error paths" {
-  let invalid_window : Result[Unit, FbrError] = try? brotli_validate_window_bits(
-    9,
+  assert_fbr_error(
+    () => brotli_validate_window_bits(9),
+    BrotliInvalidWindowBits,
+    "expected invalid window bits",
   )
-  guard invalid_window is Err(FbrError(code=window_code, ..)) else {
-    fail("expected invalid window bits")
-  }
-  assert_eq(window_code, BrotliInvalidWindowBits)
 
   inspect(brotli_initial_output_capacity(0, 100), content="0")
   inspect(
@@ -1310,11 +1324,11 @@ test "BrotliOutputBuilder covers fixed buffer, growth, and error paths" {
     max_output_size: 8,
     max_input_size: default_max_input_size,
   })
-  let fixed_result : Result[Unit, FbrError] = try? fixed.ensure(2)
-  guard fixed_result is Err(FbrError(code=fixed_code, ..)) else {
-    fail("expected fixed output buffer error")
-  }
-  assert_eq(fixed_code, InvalidZipData)
+  assert_fbr_error(
+    () => fixed.ensure(2),
+    InvalidZipData,
+    "expected fixed output buffer error",
+  )
 
   let grown = BrotliOutputBuilder::{
     buf: FixedArray::make(0, b'\x00'),
@@ -1325,27 +1339,23 @@ test "BrotliOutputBuilder covers fixed buffer, growth, and error paths" {
   grown.ensure(3)
   assert_eq(grown.buf.length(), 3)
 
-  let negative_ensure : Result[Unit, FbrError] = try? grown.ensure(-1)
-  guard negative_ensure is Err(FbrError(code=ensure_code, ..)) else {
-    fail("expected negative ensure error")
-  }
-  assert_eq(ensure_code, BrotliInvalidMetablock)
-
-  let negative_copy : Result[Unit, FbrError] = try? grown.copy_from_distance(
-    1, -1,
+  assert_fbr_error(
+    () => grown.ensure(-1),
+    BrotliInvalidMetablock,
+    "expected negative ensure error",
   )
-  guard negative_copy is Err(FbrError(code=copy_code, ..)) else {
-    fail("expected negative copy error")
-  }
-  assert_eq(copy_code, BrotliInvalidMetablock)
 
-  let invalid_distance : Result[Unit, FbrError] = try? grown.copy_from_distance(
-    0, 1,
+  assert_fbr_error(
+    () => grown.copy_from_distance(1, -1),
+    BrotliInvalidMetablock,
+    "expected negative copy error",
   )
-  guard invalid_distance is Err(FbrError(code=distance_code, ..)) else {
-    fail("expected invalid distance error")
-  }
-  assert_eq(distance_code, BrotliInvalidDistance)
+
+  assert_fbr_error(
+    () => grown.copy_from_distance(0, 1),
+    BrotliInvalidDistance,
+    "expected invalid distance error",
+  )
 
   grown.buf[0] = b'Z'
   grown.len = 1
@@ -1356,72 +1366,66 @@ test "BrotliOutputBuilder covers fixed buffer, growth, and error paths" {
 ///|
 test "BrotliBitReader rejects malformed bit and byte reads" {
   let empty_reader = BrotliBitReader::new([], 0, 0)
-  let eof_bits : Result[UInt, FbrError] = try? empty_reader.take_bits(1)
-  guard eof_bits is Err(FbrError(code=eof_bits_code, ..)) else {
-    fail("expected bit EOF")
-  }
-  assert_eq(eof_bits_code, UnexpectedEOF)
+  assert_fbr_error(
+    () => empty_reader.take_bits(1),
+    UnexpectedEOF,
+    "expected bit EOF",
+  )
 
   let width_reader = BrotliBitReader::new([0], 0, 1)
-  let bad_width : Result[UInt, FbrError] = try? width_reader.peek_bits(25)
-  guard bad_width is Err(FbrError(code=width_code, ..)) else {
-    fail("expected invalid bit width")
-  }
-  assert_eq(width_code, BrotliInvalidMetablock)
+  assert_fbr_error(
+    () => width_reader.peek_bits(25),
+    BrotliInvalidMetablock,
+    "expected invalid bit width",
+  )
 
   let drop_reader = BrotliBitReader::new([0], 0, 1)
-  let bad_drop : Result[Unit, FbrError] = try? drop_reader.drop_bits(1)
-  guard bad_drop is Err(FbrError(code=drop_code, ..)) else {
-    fail("expected invalid bit drop")
-  }
-  assert_eq(drop_code, BrotliInvalidMetablock)
+  assert_fbr_error(
+    () => drop_reader.drop_bits(1),
+    BrotliInvalidMetablock,
+    "expected invalid bit drop",
+  )
 
   let out = FixedArray::make(1, b'\x00')
-  let bad_offset : Result[Unit, FbrError] = try? BrotliBitReader::new([0], 0, 1).take_bytes(
-    out, 1, 1,
+  assert_fbr_error(
+    () => BrotliBitReader::new([0], 0, 1).take_bytes(out, 1, 1),
+    InvalidZipData,
+    "expected output buffer error",
   )
-  guard bad_offset is Err(FbrError(code=offset_code, ..)) else {
-    fail("expected output buffer error")
-  }
-  assert_eq(offset_code, InvalidZipData)
 
-  let eof_bytes : Result[Unit, FbrError] = try? BrotliBitReader::new([0], 0, 1).take_bytes(
-    FixedArray::make(2, b'\x00'),
-    0,
-    2,
+  assert_fbr_error(
+    () => {
+      BrotliBitReader::new([0], 0, 1).take_bytes(
+        FixedArray::make(2, b'\x00'),
+        0,
+        2,
+      )
+    },
+    UnexpectedEOF,
+    "expected byte EOF",
   )
-  guard eof_bytes is Err(FbrError(code=eof_bytes_code, ..)) else {
-    fail("expected byte EOF")
-  }
-  assert_eq(eof_bytes_code, UnexpectedEOF)
 }
 
 ///|
 test "BrotliBlockTracker rejects invalid block switch state" {
-  let invalid_types : Result[BrotliBlockTracker, FbrError] = try? BrotliBlockTracker::new_with_length(
-    0, 1,
+  assert_fbr_error(
+    () => BrotliBlockTracker::new_with_length(0, 1),
+    BrotliInvalidMetablock,
+    "expected invalid block type count",
   )
-  guard invalid_types is Err(FbrError(code=type_count_code, ..)) else {
-    fail("expected invalid block type count")
-  }
-  assert_eq(type_count_code, BrotliInvalidMetablock)
 
-  let invalid_length : Result[BrotliBlockTracker, FbrError] = try? BrotliBlockTracker::new_with_length(
-    1, 0,
+  assert_fbr_error(
+    () => BrotliBlockTracker::new_with_length(1, 0),
+    BrotliInvalidMetablock,
+    "expected invalid initial block length",
   )
-  guard invalid_length is Err(FbrError(code=length_code, ..)) else {
-    fail("expected invalid initial block length")
-  }
-  assert_eq(length_code, BrotliInvalidMetablock)
 
   let tracker = BrotliBlockTracker::new_with_length(2, 1)
-  let switch_result : Result[Unit, FbrError] = try? tracker.switch_with_code(
-    0, 0,
+  assert_fbr_error(
+    () => tracker.switch_with_code(0, 0),
+    BrotliInvalidMetablock,
+    "expected invalid switch length",
   )
-  guard switch_result is Err(FbrError(code=switch_code, ..)) else {
-    fail("expected invalid switch length")
-  }
-  assert_eq(switch_code, BrotliInvalidMetablock)
 
   let missing_header : BrotliBlockSwitchHeader = {
     num_types: 2,
@@ -1430,14 +1434,11 @@ test "BrotliBlockTracker rejects invalid block switch state" {
     first_length: 1,
   }
   tracker.remaining = 0
-  let missing_tree : Result[Unit, FbrError] = try? tracker.ensure_ready(
-    BrotliBitReader::new([], 0, 0),
-    missing_header,
+  assert_fbr_error(
+    () => tracker.ensure_ready(BrotliBitReader::new([], 0, 0), missing_header),
+    BrotliInvalidMetablock,
+    "expected missing block tree",
   )
-  guard missing_tree is Err(FbrError(code=missing_code, ..)) else {
-    fail("expected missing block tree")
-  }
-  assert_eq(missing_code, BrotliInvalidMetablock)
 }
 
 ///|
@@ -1446,29 +1447,21 @@ test "brotli_read_symbol rejects EOF and uninitialized table entries" {
     @common.brotli_huffman_code(1, 0),
     @common.brotli_huffman_code(1, 1),
   ]
-  let eof_result : Result[Int, FbrError] = try? brotli_read_symbol(
-    BrotliBitReader::new([], 0, 0),
-    one_bit_table,
-    1,
+  assert_fbr_error(
+    () => brotli_read_symbol(BrotliBitReader::new([], 0, 0), one_bit_table, 1),
+    UnexpectedEOF,
+    "expected Huffman EOF",
   )
-  guard eof_result is Err(FbrError(code=eof_code, ..)) else {
-    fail("expected Huffman EOF")
-  }
-  assert_eq(eof_code, UnexpectedEOF)
 
   let root_empty : FixedArray[Int] = [
     @common.brotli_huffman_code_empty,
     @common.brotli_huffman_code(1, 1),
   ]
-  let root_result : Result[Int, FbrError] = try? brotli_read_symbol(
-    BrotliBitReader::new([0], 0, 1),
-    root_empty,
-    1,
+  assert_fbr_error(
+    () => brotli_read_symbol(BrotliBitReader::new([0], 0, 1), root_empty, 1),
+    BrotliInvalidHuffman,
+    "expected uninitialized root Huffman entry",
   )
-  guard root_result is Err(FbrError(code=root_code, ..)) else {
-    fail("expected uninitialized root Huffman entry")
-  }
-  assert_eq(root_code, BrotliInvalidHuffman)
 
   let sub_empty : FixedArray[Int] = [
     @common.brotli_huffman_code(2, 2),
@@ -1476,82 +1469,78 @@ test "brotli_read_symbol rejects EOF and uninitialized table entries" {
     @common.brotli_huffman_code_empty,
     @common.brotli_huffman_code(1, 2),
   ]
-  let sub_result : Result[Int, FbrError] = try? brotli_read_symbol(
-    BrotliBitReader::new([0], 0, 1),
-    sub_empty,
-    1,
+  assert_fbr_error(
+    () => brotli_read_symbol(BrotliBitReader::new([0], 0, 1), sub_empty, 1),
+    BrotliInvalidHuffman,
+    "expected uninitialized sub-table Huffman entry",
   )
-  guard sub_result is Err(FbrError(code=sub_code, ..)) else {
-    fail("expected uninitialized sub-table Huffman entry")
-  }
-  assert_eq(sub_code, BrotliInvalidHuffman)
 }
 
 ///|
 test "complex Huffman code-length decoding rejects invalid spaces and repeats" {
-  let invalid_space : Result[FixedArray[Byte], FbrError] = try? brotli_read_code_length_code_lengths(
-    BrotliBitReader::new(FixedArray::make(8, b'\x00'), 0, 8),
-    0,
+  assert_fbr_error(
+    () => {
+      brotli_read_code_length_code_lengths(
+        BrotliBitReader::new(FixedArray::make(8, b'\x00'), 0, 8),
+        0,
+      )
+    },
+    BrotliInvalidHuffman,
+    "expected invalid code-length-code space",
   )
-  guard invalid_space is Err(FbrError(code=space_code, ..)) else {
-    fail("expected invalid code-length-code space")
-  }
-  assert_eq(space_code, BrotliInvalidHuffman)
 
   let zero_length_table = make_one_symbol_tree(
     0, @common.brotli_num_code_length_codes,
   )
-  let under : Result[FixedArray[Byte], FbrError] = try? brotli_decode_symbol_code_lengths(
-    BrotliBitReader::new([], 0, 0),
-    zero_length_table,
-    2,
+  assert_fbr_error(
+    () => {
+      brotli_decode_symbol_code_lengths(
+        BrotliBitReader::new([], 0, 0),
+        zero_length_table,
+        2,
+      )
+    },
+    BrotliInvalidHuffman,
+    "expected under-subscribed symbol lengths",
   )
-  guard under is Err(FbrError(code=under_code, ..)) else {
-    fail("expected under-subscribed symbol lengths")
-  }
-  assert_eq(under_code, BrotliInvalidHuffman)
 
   let repeat_previous_table = make_one_symbol_tree(
     @common.brotli_repeat_previous_code_length, @common.brotli_num_code_length_codes,
   )
-  let repeat_overflow : Result[FixedArray[Byte], FbrError] = try? brotli_decode_symbol_code_lengths(
-    BrotliBitReader::new([0], 0, 1),
-    repeat_previous_table,
-    2,
+  assert_fbr_error(
+    () => {
+      brotli_decode_symbol_code_lengths(
+        BrotliBitReader::new([0], 0, 1),
+        repeat_previous_table,
+        2,
+      )
+    },
+    BrotliInvalidHuffman,
+    "expected repeat overflow",
   )
-  guard repeat_overflow is Err(FbrError(code=repeat_code, ..)) else {
-    fail("expected repeat overflow")
-  }
-  assert_eq(repeat_code, BrotliInvalidHuffman)
 }
 
 ///|
 test "dictionary copy rejects invalid distance and transform boundaries" {
   let output = BrotliOutputBuilder::new(UnbrotliOptions::default())
-  let bad_length : Result[Unit, FbrError] = try? output.copy_from_dictionary_after_max_distance(
-    1, 3, 0,
+  assert_fbr_error(
+    () => output.copy_from_dictionary_after_max_distance(1, 3, 0),
+    BrotliInvalidDistance,
+    "expected dictionary length error",
   )
-  guard bad_length is Err(FbrError(code=length_code, ..)) else {
-    fail("expected dictionary length error")
-  }
-  assert_eq(length_code, BrotliInvalidDistance)
 
-  let bad_address : Result[Unit, FbrError] = try? output.copy_from_dictionary_after_max_distance(
-    1, 4, 10,
+  assert_fbr_error(
+    () => output.copy_from_dictionary_after_max_distance(1, 4, 10),
+    BrotliInvalidDistance,
+    "expected dictionary address error",
   )
-  guard bad_address is Err(FbrError(code=address_code, ..)) else {
-    fail("expected dictionary address error")
-  }
-  assert_eq(address_code, BrotliInvalidDistance)
 
   let transform_count = @common.brotli_transform_count()
-  let bad_transform : Result[Unit, FbrError] = try? output.copy_transformed_dictionary_word(
-    0, 4, transform_count,
+  assert_fbr_error(
+    () => output.copy_transformed_dictionary_word(0, 4, transform_count),
+    BrotliInvalidTransform,
+    "expected transform index error",
   )
-  guard bad_transform is Err(FbrError(code=transform_code, ..)) else {
-    fail("expected transform index error")
-  }
-  assert_eq(transform_code, BrotliInvalidTransform)
 }
 
 ///|
@@ -1565,41 +1554,33 @@ test "dictionary transforms reject over-omit cases" {
     }
   }
   assert_true(omit_index >= 0)
-  let omit_result : Result[Unit, FbrError] = try? output.copy_transformed_dictionary_word(
-    0, 4, omit_index,
+  assert_fbr_error(
+    () => output.copy_transformed_dictionary_word(0, 4, omit_index),
+    BrotliInvalidTransform,
+    "expected over-omit transform",
   )
-  guard omit_result is Err(FbrError(code=omit_code, ..)) else {
-    fail("expected over-omit transform")
-  }
-  assert_eq(omit_code, BrotliInvalidTransform)
 }
 
 ///|
 test "context map indexing rejects negative and out-of-range contexts" {
   let context_map = BrotliContextMap::{ num_trees: 2, map: [0, 1, 0, 1] }
-  let negative : Result[Int, FbrError] = try? brotli_context_map_tree_index(
-    context_map, -1, 1, 0,
+  assert_fbr_error(
+    () => brotli_context_map_tree_index(context_map, -1, 1, 0),
+    BrotliInvalidContextMap,
+    "expected negative context-map index",
   )
-  guard negative is Err(FbrError(code=negative_code, ..)) else {
-    fail("expected negative context-map index")
-  }
-  assert_eq(negative_code, BrotliInvalidContextMap)
 
-  let context_out : Result[Int, FbrError] = try? brotli_context_map_tree_index(
-    context_map, 0, 1, 2,
+  assert_fbr_error(
+    () => brotli_context_map_tree_index(context_map, 0, 1, 2),
+    BrotliInvalidContextMap,
+    "expected context out of range",
   )
-  guard context_out is Err(FbrError(code=context_code, ..)) else {
-    fail("expected context out of range")
-  }
-  assert_eq(context_code, BrotliInvalidContextMap)
 
-  let index_out : Result[Int, FbrError] = try? brotli_context_map_tree_index(
-    context_map, 2, 1, 0,
+  assert_fbr_error(
+    () => brotli_context_map_tree_index(context_map, 2, 1, 0),
+    BrotliInvalidContextMap,
+    "expected context map index out of range",
   )
-  guard index_out is Err(FbrError(code=index_code, ..)) else {
-    fail("expected context map index out of range")
-  }
-  assert_eq(index_code, BrotliInvalidContextMap)
 }
 
 ///|

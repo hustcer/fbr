@@ -1,4 +1,17 @@
 ///|
+fn[T] assert_fbr_error(
+  f : () -> T raise FbrError,
+  expected : FbrErrorCode,
+  message : String,
+) -> Unit raise {
+  try f() catch {
+    FbrError(code~, ..) => assert_eq(code, expected)
+  } noraise {
+    _ => fail(message)
+  }
+}
+
+///|
 test "brotli error codes show stable names" {
   inspect(BrotliInvalidWindowBits, content="BrotliInvalidWindowBits")
   inspect(BrotliInvalidMetablock, content="BrotliInvalidMetablock")
@@ -84,31 +97,25 @@ test "brotli_huffman_code packs bits and value losslessly" {
 ///|
 test "brotli_build_huffman_table rejects malformed length sets" {
   let empty : FixedArray[Byte] = [0, 0, 0, 0]
-  let empty_result : Result[FixedArray[Int], FbrError] = try? brotli_build_huffman_table(
-    empty, 4, 3,
+  assert_fbr_error(
+    () => brotli_build_huffman_table(empty, 4, 3),
+    BrotliInvalidHuffman,
+    "expected empty Huffman error",
   )
-  guard empty_result is Err(FbrError(code=empty_code, ..)) else {
-    fail("expected empty Huffman error")
-  }
-  assert_eq(empty_code, BrotliInvalidHuffman)
 
   let over : FixedArray[Byte] = [1, 1, 1]
-  let over_result : Result[FixedArray[Int], FbrError] = try? brotli_build_huffman_table(
-    over, 3, 3,
+  assert_fbr_error(
+    () => brotli_build_huffman_table(over, 3, 3),
+    BrotliInvalidHuffman,
+    "expected over-subscribed Huffman error",
   )
-  guard over_result is Err(FbrError(code=over_code, ..)) else {
-    fail("expected over-subscribed Huffman error")
-  }
-  assert_eq(over_code, BrotliInvalidHuffman)
 
   let under : FixedArray[Byte] = [2, 2, 0, 0]
-  let under_result : Result[FixedArray[Int], FbrError] = try? brotli_build_huffman_table(
-    under, 4, 3,
+  assert_fbr_error(
+    () => brotli_build_huffman_table(under, 4, 3),
+    BrotliInvalidHuffman,
+    "expected under-subscribed Huffman error",
   )
-  guard under_result is Err(FbrError(code=under_code, ..)) else {
-    fail("expected under-subscribed Huffman error")
-  }
-  assert_eq(under_code, BrotliInvalidHuffman)
 }
 
 ///|
@@ -147,25 +154,17 @@ test "public Brotli error-code mapping stays aligned with default messages" {
 
 ///|
 test "brotli Huffman builders validate bounds and four-symbol simple layout" {
-  let invalid_alphabet : Result[FixedArray[Int], FbrError] = try? brotli_build_huffman_table(
-    [1],
-    0,
-    1,
+  assert_fbr_error(
+    () => brotli_build_huffman_table([1], 0, 1),
+    BrotliInvalidHuffman,
+    "expected invalid alphabet size",
   )
-  guard invalid_alphabet is Err(FbrError(code=alphabet_code, ..)) else {
-    fail("expected invalid alphabet size")
-  }
-  assert_eq(alphabet_code, BrotliInvalidHuffman)
 
-  let invalid_root : Result[FixedArray[Int], FbrError] = try? brotli_build_huffman_table(
-    [1],
-    1,
-    0,
+  assert_fbr_error(
+    () => brotli_build_huffman_table([1], 1, 0),
+    BrotliInvalidHuffman,
+    "expected invalid root width",
   )
-  guard invalid_root is Err(FbrError(code=root_code, ..)) else {
-    fail("expected invalid root width")
-  }
-  assert_eq(root_code, BrotliInvalidHuffman)
 
   let symbols : FixedArray[Int] = [10, 20, 40, 30]
   let table = brotli_build_simple_huffman_table(symbols, 4, 3)
@@ -178,13 +177,11 @@ test "brotli Huffman builders validate bounds and four-symbol simple layout" {
   assert_eq(brotli_huffman_code_value(table[7]), 40)
   assert_eq(brotli_huffman_code_bits(table[7]), 3)
 
-  let invalid_simple : Result[FixedArray[Int], FbrError] = try? brotli_build_simple_huffman_table(
-    symbols, 5, 3,
+  assert_fbr_error(
+    () => brotli_build_simple_huffman_table(symbols, 5, 3),
+    BrotliInvalidHuffman,
+    "expected invalid simple Huffman size",
   )
-  guard invalid_simple is Err(FbrError(code=simple_code, ..)) else {
-    fail("expected invalid simple Huffman size")
-  }
-  assert_eq(simple_code, BrotliInvalidHuffman)
 }
 
 ///|
@@ -331,41 +328,37 @@ test "brotli transform helpers cover ASCII and multi-byte uppercase paths" {
 test "brotli transform string lookup validates bounds" {
   let first_len = brotli_transform_string_length(0)
   assert_true(first_len >= 0)
-  let invalid : Result[Int, FbrError] = try? brotli_transform_string_offset(-1)
-  guard invalid is Err(FbrError(code~, ..)) else {
-    fail("expected invalid transform id")
-  }
-  assert_eq(code, BrotliInvalidTransform)
+  assert_fbr_error(
+    () => brotli_transform_string_offset(-1),
+    BrotliInvalidTransform,
+    "expected invalid transform id",
+  )
 }
 
 ///|
 test "brotli distance helpers reject invalid inputs" {
   let ring = BrotliDistanceRing::new()
-  let invalid_short : Result[Int, FbrError] = try? ring.take_short_code(16)
-  guard invalid_short is Err(FbrError(code=short_code, ..)) else {
-    fail("expected invalid short code")
-  }
-  assert_eq(short_code, BrotliInvalidDistance)
-
-  let invalid_record : Result[Unit, FbrError] = try? ring.record(0)
-  guard invalid_record is Err(FbrError(code=record_code, ..)) else {
-    fail("expected invalid recorded distance")
-  }
-  assert_eq(record_code, BrotliInvalidDistance)
-
-  let negative_extra : Result[Int, FbrError] = try? brotli_distance_extra_bits(
-    -1, 0, 0,
+  assert_fbr_error(
+    () => ring.take_short_code(16),
+    BrotliInvalidDistance,
+    "expected invalid short code",
   )
-  guard negative_extra is Err(FbrError(code=extra_code, ..)) else {
-    fail("expected negative distance code")
-  }
-  assert_eq(extra_code, BrotliInvalidDistance)
 
-  let short_offset : Result[Int, FbrError] = try? brotli_distance_offset(
-    0, 0, 0,
+  assert_fbr_error(
+    () => ring.record(0),
+    BrotliInvalidDistance,
+    "expected invalid recorded distance",
   )
-  guard short_offset is Err(FbrError(code=offset_code, ..)) else {
-    fail("expected short-code offset error")
-  }
-  assert_eq(offset_code, BrotliInvalidDistance)
+
+  assert_fbr_error(
+    () => brotli_distance_extra_bits(-1, 0, 0),
+    BrotliInvalidDistance,
+    "expected negative distance code",
+  )
+
+  assert_fbr_error(
+    () => brotli_distance_offset(0, 0, 0),
+    BrotliInvalidDistance,
+    "expected short-code offset error",
+  )
 }

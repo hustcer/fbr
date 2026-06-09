@@ -5,6 +5,13 @@
 type FbrError = @fbr.FbrError
 
 ///|
+fn brotli_fixture_decode(
+  compressed : FixedArray[Byte],
+) -> FixedArray[Byte] raise FbrError {
+  @fbr.unbrotli_sync(compressed)
+}
+
+///|
 let brotli_fixture_empty_compressed : FixedArray[Byte] = [0x06]
 
 ///|
@@ -16,15 +23,7 @@ let brotli_fixture_empty_expected : FixedArray[Byte] = FixedArray::make(
 test "brotli fixture empty" {
   let compressed = brotli_fixture_empty_compressed
   let expected = brotli_fixture_empty_expected
-  let result : Result[FixedArray[Byte], FbrError] = try? @fbr.unbrotli_sync(
-    compressed,
-  )
-  guard result is Ok(actual) else {
-    guard result is Err(FbrError(code~, message~)) else {
-      fail("expected Brotli fixture decode result")
-    }
-    fail("brotli fixture decode failed: \{code}: \{message}")
-  }
+  let actual = brotli_fixture_decode(compressed)
   assert_eq(actual.length(), expected.length())
   for i in 0..<expected.length() {
     assert_eq(actual[i], expected[i])
@@ -46,15 +45,7 @@ let brotli_fixture_10x10y_expected : FixedArray[Byte] = [
 test "brotli fixture 10x10y" {
   let compressed = brotli_fixture_10x10y_compressed
   let expected = brotli_fixture_10x10y_expected
-  let result : Result[FixedArray[Byte], FbrError] = try? @fbr.unbrotli_sync(
-    compressed,
-  )
-  guard result is Ok(actual) else {
-    guard result is Err(FbrError(code~, message~)) else {
-      fail("expected Brotli fixture decode result")
-    }
-    fail("brotli fixture decode failed: \{code}: \{message}")
-  }
+  let actual = brotli_fixture_decode(compressed)
   assert_eq(actual.length(), expected.length())
   for i in 0..<expected.length() {
     assert_eq(actual[i], expected[i])
@@ -79,15 +70,7 @@ let brotli_fixture_64x_expected : FixedArray[Byte] = [
 test "brotli fixture 64x" {
   let compressed = brotli_fixture_64x_compressed
   let expected = brotli_fixture_64x_expected
-  let result : Result[FixedArray[Byte], FbrError] = try? @fbr.unbrotli_sync(
-    compressed,
-  )
-  guard result is Ok(actual) else {
-    guard result is Err(FbrError(code~, message~)) else {
-      fail("expected Brotli fixture decode result")
-    }
-    fail("brotli fixture decode failed: \{code}: \{message}")
-  }
+  let actual = brotli_fixture_decode(compressed)
   assert_eq(actual.length(), expected.length())
   for i in 0..<expected.length() {
     assert_eq(actual[i], expected[i])
@@ -114,15 +97,7 @@ let brotli_fixture_quickfox_expected : FixedArray[Byte] = [
 test "brotli fixture quickfox" {
   let compressed = brotli_fixture_quickfox_compressed
   let expected = brotli_fixture_quickfox_expected
-  let result : Result[FixedArray[Byte], FbrError] = try? @fbr.unbrotli_sync(
-    compressed,
-  )
-  guard result is Ok(actual) else {
-    guard result is Err(FbrError(code~, message~)) else {
-      fail("expected Brotli fixture decode result")
-    }
-    fail("brotli fixture decode failed: \{code}: \{message}")
-  }
+  let actual = brotli_fixture_decode(compressed)
   assert_eq(actual.length(), expected.length())
   for i in 0..<expected.length() {
     assert_eq(actual[i], expected[i])
@@ -157,15 +132,7 @@ let brotli_fixture_quickfox_repeated_expected : FixedArray[Byte] = {
 test "brotli fixture quickfox_repeated" {
   let compressed = brotli_fixture_quickfox_repeated_compressed
   let expected = brotli_fixture_quickfox_repeated_expected
-  let result : Result[FixedArray[Byte], FbrError] = try? @fbr.unbrotli_sync(
-    compressed,
-  )
-  guard result is Ok(actual) else {
-    guard result is Err(FbrError(code~, message~)) else {
-      fail("expected Brotli fixture decode result")
-    }
-    fail("brotli fixture decode failed: \{code}: \{message}")
-  }
+  let actual = brotli_fixture_decode(compressed)
   assert_eq(actual.length(), expected.length())
   for i in 0..<expected.length() {
     assert_eq(actual[i], expected[i])
@@ -198,15 +165,7 @@ let brotli_fixture_ukkonooa_expected : FixedArray[Byte] = [
 test "brotli fixture ukkonooa" {
   let compressed = brotli_fixture_ukkonooa_compressed
   let expected = brotli_fixture_ukkonooa_expected
-  let result : Result[FixedArray[Byte], FbrError] = try? @fbr.unbrotli_sync(
-    compressed,
-  )
-  guard result is Ok(actual) else {
-    guard result is Err(FbrError(code~, message~)) else {
-      fail("expected Brotli fixture decode result")
-    }
-    fail("brotli fixture decode failed: \{code}: \{message}")
-  }
+  let actual = brotli_fixture_decode(compressed)
   assert_eq(actual.length(), expected.length())
   for i in 0..<expected.length() {
     assert_eq(actual[i], expected[i])
@@ -317,15 +276,7 @@ let brotli_fixture_monkey_expected : FixedArray[Byte] = [
 test "brotli fixture monkey" {
   let compressed = brotli_fixture_monkey_compressed
   let expected = brotli_fixture_monkey_expected
-  let result : Result[FixedArray[Byte], FbrError] = try? @fbr.unbrotli_sync(
-    compressed,
-  )
-  guard result is Ok(actual) else {
-    guard result is Err(FbrError(code~, message~)) else {
-      fail("expected Brotli fixture decode result")
-    }
-    fail("brotli fixture decode failed: \{code}: \{message}")
-  }
+  let actual = brotli_fixture_decode(compressed)
   assert_eq(actual.length(), expected.length())
   for i in 0..<expected.length() {
     assert_eq(actual[i], expected[i])
@@ -1774,15 +1725,7 @@ let brotli_fixture_random_org_10k_bin_expected : FixedArray[Byte] = [
 test "brotli fixture random_org_10k_bin" {
   let compressed = brotli_fixture_random_org_10k_bin_compressed
   let expected = brotli_fixture_random_org_10k_bin_expected
-  let result : Result[FixedArray[Byte], FbrError] = try? @fbr.unbrotli_sync(
-    compressed,
-  )
-  guard result is Ok(actual) else {
-    guard result is Err(FbrError(code~, message~)) else {
-      fail("expected Brotli fixture decode result")
-    }
-    fail("brotli fixture decode failed: \{code}: \{message}")
-  }
+  let actual = brotli_fixture_decode(compressed)
   assert_eq(actual.length(), expected.length())
   for i in 0..<expected.length() {
     assert_eq(actual[i], expected[i])

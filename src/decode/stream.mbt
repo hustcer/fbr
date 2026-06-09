@@ -111,24 +111,22 @@ fn UnbrotliStream::process_available(
 ) -> Unit raise @common.FbrError {
   if !self.header_read {
     let reader = BrotliBitReader::new(self.input, 0, self.input.length())
-    let result : Result[Int, @common.FbrError] = try? brotli_decode_window_bits(
-      reader,
-    )
-    match result {
-      Ok(window_bits) => {
+    try brotli_decode_window_bits(reader) catch {
+      FbrError(code=UnexpectedEOF, ..) =>
+        if final_ {
+          raise @common.fbr_err(UnexpectedEOF)
+        } else {
+          return
+        }
+      e => raise e
+    } noraise {
+      window_bits => {
         brotli_validate_window_bits(window_bits)
         self.header_read = true
         self.reader = Some(reader)
         self.state = Some(BrotliDecoderState::new_with_window_bits(window_bits))
         self.compact_input()
       }
-      Err(FbrError(code=UnexpectedEOF, ..)) =>
-        if final_ {
-          raise @common.fbr_err(UnexpectedEOF)
-        } else {
-          return
-        }
-      Err(e) => raise e
     }
   }
   while !self.finished {
@@ -137,11 +135,18 @@ fn UnbrotliStream::process_available(
     let trial_reader = reader.clone()
     let trial_output = self.output.clone()
     let trial_state = state.clone()
-    let result : Result[Bool, @common.FbrError] = try? brotli_decode_next_metablock(
-      trial_reader, trial_output, trial_state,
-    )
-    match result {
-      Ok(done) => {
+    try
+      brotli_decode_next_metablock(trial_reader, trial_output, trial_state)
+    catch {
+      FbrError(code=UnexpectedEOF, ..) =>
+        if final_ {
+          raise @common.fbr_err(UnexpectedEOF)
+        } else {
+          return
+        }
+      e => raise e
+    } noraise {
+      done => {
         let produced = trial_output.len > self.emitted_len
         self.reader = Some(trial_reader)
         self.output = trial_output
@@ -156,13 +161,6 @@ fn UnbrotliStream::process_available(
           return
         }
       }
-      Err(FbrError(code=UnexpectedEOF, ..)) =>
-        if final_ {
-          raise @common.fbr_err(UnexpectedEOF)
-        } else {
-          return
-        }
-      Err(e) => raise e
     }
   }
 }
