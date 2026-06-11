@@ -241,7 +241,9 @@ fn brotli_read_symbol(
   let mask_root = brotli_low_mask_lut[root_bits]
   // index < 2^root_bits <= table.length(), so no separate bound check is
   // needed: the root table always spans the first 2^root_bits entries.
-  let index = (reader.bit_buf & mask_root).reinterpret_as_int()
+  // `to_uint()` truncates the 64-bit accumulator to its low 32 bits, which
+  // is enough because root_bits <= 15.
+  let index = (reader.bit_buf.to_uint() & mask_root).reinterpret_as_int()
   let entry = table[index]
   let entry_bits = entry << 16 >> 16
   if entry_bits < 0 {
@@ -270,7 +272,7 @@ fn brotli_read_symbol(
     reader.refill_to(extra_bits)
   }
   let mask_extra = brotli_low_mask_lut[extra_bits]
-  let sub_index = (reader.bit_buf & mask_extra).reinterpret_as_int()
+  let sub_index = (reader.bit_buf.to_uint() & mask_extra).reinterpret_as_int()
   let sub_entry = table[(entry >> 16) + sub_index]
   let sub_bits = sub_entry << 16 >> 16
   if sub_bits < 0 {

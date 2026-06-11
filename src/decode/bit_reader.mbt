@@ -1,10 +1,15 @@
 ///|
 /// LSB-first bit reader used by the Brotli decoder.
+///
+/// The accumulator is 64-bit so a single 4-byte load refills enough bits for
+/// several Huffman symbols. Callers never request more than 24 bits at once,
+/// so whenever a refill is needed (`bits_avail < n <= 24`) there is always
+/// room for a whole 32-bit load (`bits_avail <= 23`, `23 + 32 = 55 < 64`).
 priv struct BrotliBitReader {
   buf : FixedArray[Byte]
   mut byte_pos : Int
   byte_end : Int
-  mut bit_buf : UInt
+  mut bit_buf : UInt64
   mut bits_avail : Int
 }
 
@@ -18,7 +23,7 @@ fn BrotliBitReader::new(
     buf,
     byte_pos: offset,
     byte_end: offset + length,
-    bit_buf: 0U,
+    bit_buf: 0UL,
     bits_avail: 0,
   }
 }
@@ -56,35 +61,21 @@ fn BrotliBitReader::refill_to(
   if self.bits_avail >= n {
     return
   }
-  if self.bits_avail == 0 && self.byte_pos + 3 < self.byte_end {
+  // Fast path: every caller requests at most 24 bits, so on entry
+  // `bits_avail <= 23` and the 64-bit accumulator always has room for a
+  // whole 32-bit load. One 4-byte load refills enough bits for several
+  // Huffman symbols.
+  if self.byte_pos + 3 < self.byte_end {
     let p = self.byte_pos
     let buf = self.buf
-    self.bit_buf = buf[p].to_uint() |
+    let word = buf[p].to_uint() |
       (buf[p + 1].to_uint() << 8) |
       (buf[p + 2].to_uint() << 16) |
       (buf[p + 3].to_uint() << 24)
+    self.bit_buf = self.bit_buf | (word.to_uint64() << self.bits_avail)
     self.byte_pos = p + 4
-    self.bits_avail = 32
+    self.bits_avail += 32
     return
-  }
-  // Fast path: when at least one byte of room remains in the accumulator
-  // (bits_avail <= 24) and at least 3 bytes of input are available, fill
-  // three bytes at once. Branch-free, no EOF check needed for the fast
-  // path because we only take it when 3 input bytes are guaranteed.
-  if self.bits_avail < n &&
-    self.bits_avail <= 8 &&
-    self.byte_pos + 2 < self.byte_end {
-    let p = self.byte_pos
-    let buf = self.buf
-    self.bit_buf = self.bit_buf |
-      (buf[p].to_uint() << self.bits_avail) |
-      (buf[p + 1].to_uint() << (self.bits_avail + 8)) |
-      (buf[p + 2].to_uint() << (self.bits_avail + 16))
-    self.byte_pos = p + 3
-    self.bits_avail += 24
-    if self.bits_avail >= n {
-      return
-    }
   }
   while self.bits_avail < n {
     if self.byte_pos >= self.byte_end {
@@ -94,7 +85,7 @@ fn BrotliBitReader::refill_to(
       )
     }
     self.bit_buf = self.bit_buf |
-      (self.buf[self.byte_pos].to_uint() << self.bits_avail)
+      (self.buf[self.byte_pos].to_uint().to_uint64() << self.bits_avail)
     self.byte_pos += 1
     self.bits_avail += 8
   }
@@ -128,7 +119,7 @@ fn BrotliBitReader::peek_bits(
     )
   }
   self.refill_to(n)
-  self.bit_buf & brotli_low_mask(n)
+  self.bit_buf.to_uint() & brotli_low_mask(n)
 }
 
 ///|
@@ -186,7 +177,7 @@ fn BrotliBitReader::take_bytes(
   let mut dst = offset
   let end = offset + length
   while dst < end && self.bits_avail >= 8 {
-    out[dst] = (self.bit_buf & 0xffU).to_byte()
+    out[dst] = (self.bit_buf.to_uint() & 0xffU).to_byte()
     self.bit_buf = self.bit_buf >> 8
     self.bits_avail -= 8
     dst += 1
@@ -214,8 +205,10 @@ fn BrotliBitReader::expect_final_padding_zero(
   self : BrotliBitReader,
 ) -> Unit raise @common.FbrError {
   if self.bits_avail > 0 {
-    let mask = brotli_low_mask(self.bits_avail)
-    if (self.bit_buf & mask) != 0U {
+    // bits_avail never exceeds 55 (a 32-bit refill only happens when
+    // bits_avail <= 23), so the shift below is always in range.
+    let mask = (1UL << self.bits_avail) - 1UL
+    if (self.bit_buf & mask) != 0UL {
       raise @common.fbr_err(@common.BrotliInvalidPadding)
     }
   }
