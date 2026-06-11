@@ -6,7 +6,6 @@ const temp_test = "src/brotli_target_perf_wbtest.mbt"
 const temp_main_dir = "src/brotli_target_perf_main"
 const temp_main_pkg = "src/brotli_target_perf_main/moon.pkg"
 const temp_main = "src/brotli_target_perf_main/main.mbt"
-const native_cc_o0 = "tools/bench/native-cc-o0.nu"
 
 def process-alive [pid: int]: nothing -> bool {
   let probe = (^ps -p ($pid | into string) | complete)
@@ -104,11 +103,7 @@ def parse-size-marker [text: string]: nothing -> int {
 }
 
 def native-cc-label [target: string, release: bool]: nothing -> string {
-  if $target == "native" and $release {
-    "cc-o0"
-  } else {
-    "default"
-  }
+  "default"
 }
 
 def run-moon-main [
@@ -116,14 +111,7 @@ def run-moon-main [
   release_flag: list<string>
   release: bool
 ]: nothing -> record {
-  if $target == "native" and $release {
-    let cc = ($native_cc_o0 | path expand)
-    with-env { MOON_CC: $cc } {
-      ^moon run --target $target ...$release_flag $temp_main_dir | complete
-    }
-  } else {
-    ^moon run --target $target ...$release_flag $temp_main_dir | complete
-  }
+  ^moon run --target $target ...$release_flag $temp_main_dir | complete
 }
 
 def make-temp-main [
