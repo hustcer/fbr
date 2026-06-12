@@ -355,6 +355,7 @@ def render-report [
       "## Notes"
       ""
       "- Timing is command-harness timing, not an isolated in-process library microbenchmark."
+      "- MoonBit per-operation times amortize one `moon run` process start across all repeats; Google per-operation times include one `brotli` process spawn per repeat. Higher repeat counts keep the fixed process overhead from dominating per-operation numbers."
       "- Use the same `just bench` entry point when comparing future changes."
       ""
     ]
@@ -369,7 +370,7 @@ def main [
   --decode-input: string = $default_decode_input
   --qualities (-q): string = $default_qualities
   --targets (-t): string = "wasm-gc,native"
-  --repeats (-r): int = 3
+  --repeats (-r): int = 20
   --samples (-s): int = 3
 ]: nothing -> nothing {
   require-command moon

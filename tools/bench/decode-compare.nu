@@ -103,7 +103,7 @@ def main [
   --base: string = "HEAD"               # baseline git ref to compare the working tree against
   --qualities: string = "0,5,9,11"      # comma-separated Google qualities to screen
   --targets: string = "wasm-gc,native"  # comma-separated MoonBit targets
-  --repeats: int = 5                     # decode loop iterations per timed sample
+  --repeats: int = 20                    # decode loop iterations per timed sample
   --samples: int = 3                     # timed samples per measurement; the min is kept
   --rounds: int = 2                      # interleaved rounds; the min across rounds is used
   --tolerance: float = 0.0               # per-row regression allowance, in percent

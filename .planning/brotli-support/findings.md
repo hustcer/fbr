@@ -49,8 +49,20 @@ reference, not a full session transcript.
   q10/q11 improved to +9.72%/+11.18% while native `cc-o0` encode regressed by
   roughly 17-36%. Do not retry a plain larger chunk without a parser/pruning
   change that offsets cost and closes more of the gap.
-- Native target-perf currently reports `native_cc: "cc-o0"` because default
-  generated-C `clang -O2` does not finish reliably on this package.
+- (2026-06-12) The historical "generated-C `clang -O2` does not finish"
+  failure no longer reproduces on moon 0.1.20260529+ / moonc v0.10.0 with
+  Apple clang (Darwin 24.6.0): decode main compiles at -O2 in 0.84s, the
+  3 MB full main in 2.4s. The cc-o0 MOON_CC workaround was removed from
+  `tools/bench/target-perf.nu`; native release rows now report
+  `native_cc: "default"` and run roughly 4-5x faster than the old cc-o0
+  rows (decode q5 ~38 -> ~9 ms/op at repeats=10).
+- (2026-06-12) Harness fixed-overhead caveat: one `moon run` process start
+  (~110 ms wasm-gc, ~28 ms native) is amortized across `--repeats`. At the
+  old repeats=3 the per-op decode numbers were dominated by startup, not
+  decoding. `report.nu` and `decode-compare.nu` now default to repeats=20.
+  True per-op decode on silesia-1m (repeats=25, 2026-06-12 session):
+  wasm-gc ~13-18 ms, native ~6.5-8.6 ms versus Google CLI ~8-10 ms
+  (which includes one process spawn per op).
 
 ## P3 Release-Corpus Notes
 
@@ -120,6 +132,20 @@ validation invariants:
 
 Rejected decode strategies. Do not retry unchanged:
 
+- (post-O2, 2026-06-12) Raising the `brotli_read_symbol` refill trigger from
+  `bits_avail < root_bits` to `bits_avail < 15` (refill once for root +
+  sub-table). wasm-gc improved slightly but native -O2 regressed
+  (q0 +0.34%, q9 +0.50%, q11 +1.45%); strict decode-compare gate FAIL.
+  Keep the root_bits trigger; the 64-bit accumulator already makes the
+  sub-table refill branch rare.
+- (post-O2, 2026-06-12) Inlined root-table literal fast path in the literal
+  loops (lookup + length-fits-bits_avail guard, falling back to
+  `brotli_read_symbol`), in both the single-tree loops and the multi-tree
+  general loop. Aggregate only -0.4..-0.7% with different rows regressing
+  on each run (noise around zero); cannot pass the strict all-rows gate.
+- (post-O2, 2026-06-12) `#inline` attribute on `brotli_read_symbol`.
+  Wash: aggregate -0.2..-0.3% with mixed row signs at repeats=25.
+
 - Single distance-tree/block fast paths.
 - Distance-1 exponential copy fill.
 - Exact final meta-block capacity fitting and lower initial output capacity.
@@ -151,10 +177,17 @@ Rejected decode strategies. Do not retry unchanged:
 - Unsafe `FixedArray` access in Huffman table reads. Same-time comparison
   showed bounds checks are not the current material cost.
 
-High-level decode lesson: current native target-perf uses `cc-o0`, so added
-branches, locals, aliases, and helper reshaping often cost more than they save.
-Accepted changes removed operations; rejected changes usually changed code
-shape or added a branch for a narrow stream shape.
+High-level decode lesson: most of the rejected-trial cache above was measured
+while native release benchmarks were built with the cc-o0 workaround, where
+added branches, locals, aliases, and helper reshaping often cost more than
+they saved. Since 2026-06-12 native builds with default clang -O2; one cc-o0
+era rejection (the 64-bit accumulator bit reader) requalified and landed with
+a uniform all-rows win (~-1.1% aggregate at repeats=5, diluted by harness
+startup). Post-O2 retries of refill-threshold, inlined literal fast paths,
+and `#inline` hints all landed in the +-1% noise band and stayed rejected:
+the remaining per-symbol work is already tight, and wasm-gc's residual gap
+versus native (~1.7x true per-op) looks engine-bound rather than
+code-shape-bound.
 
 ## Validation Invariants Worth Preserving
 

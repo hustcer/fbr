@@ -42,9 +42,13 @@ JavaScript, and wasm-gc:
   dictionary, block-layout, or shortest-path improvements can reach the target.
 - q0/q1 stored output remains valid behavior and is not part of the q2..q11
   ratio target.
-- Native `target-perf.nu` rows labelled `native_cc: "cc-o0"` are MoonBit native
-  codegen measurements with the current C compiler optimization workaround.
-  Do not describe them as default `clang -O2` release throughput.
+- Since 2026-06-12 native release benchmarks build with default `clang -O2`
+  (`native_cc: "default"`); the historical cc-o0 MOON_CC workaround is gone.
+  Rows labelled `cc-o0` in older recorded data are not comparable to current
+  native rows (roughly 4-5x slower).
+- Benchmark per-operation times amortize one `moon run` process start across
+  `--repeats`; use repeats >= 20 (the current report/compare defaults) so
+  startup does not dominate per-op numbers.
 - Optimization commits should include same-time or otherwise comparable
   wasm-gc/native target-perf data plus encoded-size evidence.
 
@@ -67,9 +71,12 @@ JavaScript, and wasm-gc:
    shortest-path/Zopfli-style work only if those cheaper candidates stall.
 
 4. **Keep decode optimization conservative.**
-   The decode hot path has a large negative cache in `findings.md`. Future
-   decode changes should improve both wasm-gc and native `cc-o0` across
-   q0/q5/q9/q11 before running full `just bench`.
+   The decode hot path has a large negative cache in `findings.md`, including
+   a post-O2 retry round (2026-06-12). Future decode changes should improve
+   both wasm-gc and native (default -O2) across q0/q5/q9/q11 on the strict
+   all-rows `just decode-compare` gate before running full `just bench`.
+   Remaining wasm-gc decode gap versus native looks engine-bound; prefer
+   algorithmic levers over code-shape tweaks.
 
 5. **Run final release readiness gates.**
    Before a public release, rerun the practical aggregate gate, generated fuzz
