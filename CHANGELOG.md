@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.7.1
+
+### Performance
+
+- Widened the Brotli decoder bit-reader accumulator to 64 bits so a 4-byte
+  refill can be appended without discarding remaining buffered bits. Same-time
+  `decode-compare` validation passed across the checked `wasm-gc` and native
+  rows, with an aggregate decode improvement of about 1.1% in that run.
+
+### Compatibility
+
+- Updated internal checked-error handling and tests for `moonc` v0.10.0
+  warnings without changing the public API.
+
+### Tools and docs
+
+- Removed the native benchmark `cc-o0` compiler workaround now that default
+  native release builds complete reliably with the current MoonBit toolchain.
+- Changed the benchmark report and decode comparison defaults to
+  `--repeats 20`, and documented that MoonBit timings amortize one `moon run`
+  process startup across repeats.
+- Regenerated `docs/brotli_release_report.md` and the checked-in current
+  benchmark JSONL files with the updated harness.
+
 ## v0.7.0
 
 ### Changed
