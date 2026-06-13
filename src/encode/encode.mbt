@@ -5655,7 +5655,7 @@ fn brotli_write_best_lz77_metablock(
   let mut best = weighted
   if quality <= 2 && data.length() >= 8192 {
     let split = brotli_best_command_literal_split_point(data, commands)
-    if split > 0 {
+    if quality > 1 && split > 0 {
       match brotli_write_split_lz77_metablock(data, commands, split, is_last) {
         Some(candidate) =>
           if candidate.bit_pos < best.bit_pos {
@@ -5665,10 +5665,16 @@ fn brotli_write_best_lz77_metablock(
       }
     }
     if allow_contexts {
-      match
+      let context_candidate = if quality == 1 {
+        brotli_write_context8_lz77_metablock(
+          data, commands, is_last, initial_previous_byte_1, initial_previous_byte_2,
+        )
+      } else {
         brotli_write_context16_lz77_metablock(
           data, commands, is_last, initial_previous_byte_1, initial_previous_byte_2,
-        ) {
+        )
+      }
+      match context_candidate {
         Some(candidate) =>
           if candidate.bit_pos < best.bit_pos {
             best = candidate
@@ -6059,6 +6065,21 @@ fn brotli_try_compressed_chunk(
   // UTF-8 literal contexts depend on the two bytes before this meta-block; for
   // non-first chunks they come from the previous chunk, not from zero padding.
   let allow_contexts = true
+  if quality == 0 {
+    let natural_config = brotli_natural_hash_config_for_quality(quality)
+    return brotli_try_compressed_command_candidate(
+      data,
+      brotli_build_simple_lz77_command_candidate(
+        data, natural_config, distance_cache,
+      ),
+      is_last,
+      None,
+      quality,
+      false,
+      initial_previous_byte_1,
+      initial_previous_byte_2,
+    )
+  }
   if quality <= 2 && data.length() >= 8192 {
     let natural_config = brotli_natural_hash_config_for_quality(quality)
     return brotli_try_compressed_command_candidate(
@@ -6461,6 +6482,9 @@ fn brotli_encode_standard(
   if data.length() > 65536 {
     return brotli_encode_chunked_standard(data, opts)
   }
+  if opts.quality <= 1 {
+    return brotli_encode_chunked_standard(data, opts)
+  }
   let hash_config = brotli_hash_config_for_quality(opts.quality)
   if data.length() <= @common.brotli_max_metablock_bytes {
     let mut best : BrotliBitWriter? = None
@@ -6721,10 +6745,7 @@ fn brotli_validate_options(opts : BrotliOptions) -> Unit raise @common.FbrError 
 ///|
 /// Compress bytes into a Brotli stream.
 ///
-/// The current encoder backend supports Brotli quality levels 0 through 11. It
-/// emits valid uncompressed meta-blocks with a final empty terminator, which
-/// prioritizes interoperability and decoder round-trip correctness while the
-/// higher-ratio search and entropy-coding work is built.
+/// The current encoder backend supports Brotli quality levels 0 through 11.
 pub fn brotli_sync(
   data : FixedArray[Byte],
   opts? : BrotliOptions = BrotliOptions::default(),
@@ -6743,8 +6764,7 @@ pub fn brotli_sync(
     )
   }
   match opts.quality {
-    0 | 1 => brotli_encode_uncompressed(data, opts)
-    2..=11 => brotli_encode_standard(data, opts)
+    0..=11 => brotli_encode_standard(data, opts)
     _ =>
       raise @common.fbr_err(
         @common.InvalidZipData,

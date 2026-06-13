@@ -13,7 +13,9 @@ reference, not a full session transcript.
 - `compress_sync` / `decompress_sync` must not auto-detect Brotli. Brotli is
   exposed through explicit peer APIs.
 - Stream wrappers buffer chunks until `final_=true`.
-- Tooling should be Nushell and should live under `tools/brotli/`.
+- Tooling should be Nushell; the current benchmark, encode, fuzz, and release
+  entry points live under `tools/bench/`, `tools/encode/`, `tools/fuzz/`, and
+  `tools/release/`.
 
 ## Current Implementation Facts
 
@@ -25,7 +27,10 @@ reference, not a full session transcript.
 - Decoder window validation uses `(1 << window_bits) - 16`, capped by current
   output position. Older total-output-length validation would accept stale
   window references after output grew beyond the Brotli window.
-- q0/q1 encoder emits valid stored meta-blocks.
+- q0/q1 encoder now routes through the standard compressed path. q0 uses a
+  q0-specific natural low-quality LZ77 candidate without literal contexts;
+  q1 uses the natural low-quality path with a context8 writer. Guard q2..q11
+  for obvious regressions when changing this code.
 - q2 is the fast P3 profile. q3..q9 use progressively stronger parser,
   dictionary, block-layout, and chunk strategies.
 - q10/q11 share the current high-quality mixed-dictionary output on the
@@ -40,6 +45,70 @@ reference, not a full session transcript.
 
 - Revised policy: q2..q11 target encoded-size overhead is approximately <=5%
   versus Google Brotli on agreed corpora. q0/q1 are excluded unless reopened.
+- Reopened q0/q1 target from 2026-06-14: work toward roughly -7%..+7%
+  encoded-size overhead versus Google Brotli on the release-report Silesia
+  windows, then optimize speed within that size envelope. User clarified that
+  entering the target band is not enough by itself; continue looking for better
+  q0/q1 performance and size while preserving other qualities.
+- Rejected q0 trial (2026-06-14): routing q0 through only the default
+  `hash_config` simple LZ77 candidate with `allow_contexts=false` failed the
+  ratio objective. On `silesia-64k.bin`, the candidate was not smaller than
+  stored according to the existing exact-size guard, so output fell back to
+  65,540 bytes (+140.73% vs Google q0). Do not retry unchanged.
+- Rejected q0 trial (2026-06-14): lowering q0 natural hash-chain checks from
+  4 to 2 exceeded the reopened ratio target. Silesia 64 KiB became 29,961
+  bytes (+10.05% vs Google q0) and 128 KiB became 55,507 bytes (+9.18%).
+  The accepted follow-up point is 3 checks with a longer minimum match.
+- Rejected q0 trial (2026-06-14): lowering q0 minimum match length from 7 to
+  6 over-compressed outside the requested -7% lower bound. Silesia 64 KiB
+  became 25,123 bytes (-7.72% vs Google q0) and 128 KiB became 46,147 bytes
+  (-9.23%).
+- Rejected q0 trial (2026-06-14): raising q0 minimum match length from 8 to
+  9 stayed inside the target but gave a worse tradeoff. Silesia 64 KiB became
+  28,540 bytes (+4.83% vs Google q0) and 128 KiB became 52,586 bytes
+  (+3.43%), while target-perf barely improved and 128 KiB wasm-gc was noisier.
+- q0 accepted candidate (2026-06-14): natural low-quality hash config with
+  3 hash-chain checks, min match length 8, no literal-context writer, and no
+  low-quality split writer. Silesia 64 KiB: 27,541 bytes (+1.16% vs Google
+  q0), target-perf min about wasm-gc 5.42 ms / native 3.95 ms at repeats=20;
+  128 KiB: 50,842 bytes (+0.00%), target-perf min about wasm-gc 9.04 ms /
+  native 5.85 ms after re-running one native outlier.
+- Rejected q1 trial (2026-06-14): disabling literal contexts for q1 and using
+  only the weighted LZ77 writer exceeded the target. Silesia 64 KiB became
+  28,302 bytes (+9.25% vs Google q1) and 128 KiB became 51,717 bytes
+  (+8.93%). Keep a context writer for q1 unless another candidate recovers
+  the lost ratio.
+- Rejected q1 trial (2026-06-14): replacing the q1 context8 writer with
+  context4 kept ratio inside the target but was worse overall. Silesia 64 KiB
+  grew to 26,792 bytes (+3.42% vs Google q1) and target-perf did not improve
+  versus context8 (native about 5.37 ms vs context8 about 5.26 ms). Keep
+  context8 for the current q1 balance.
+- Rejected q1 trial (2026-06-14): q1 131,072-entry natural hash table matched
+  Google's nominal q1 table size but produced identical Silesia bytes to the
+  32,768-entry table while adding memory footprint. Keep the smaller table
+  unless a broader corpus shows a real size or speed win.
+- Rejected q1 trial (2026-06-14): lowering q1 minimum match length from 8 to
+  7 over-compressed outside the requested lower bound. Silesia 64 KiB became
+  23,830 bytes (-8.01% vs Google q1) and 128 KiB became 43,476 bytes
+  (-8.43%). Final q1 restored min match length 10 to preserve q2-vs-q1
+  quality expectations and test semantics.
+- Rejected q1 trial (2026-06-14): reducing q1 natural hash-chain checks from
+  4 to 3 stayed inside the target but cost too much size for a small speed
+  gain. Silesia 64 KiB became 26,810 bytes (+3.49% vs Google q1) and 128 KiB
+  became 49,355 bytes (+3.95%). Keep 4 checks for the current balance.
+- q1 accepted candidate (2026-06-14): chunked natural low-quality path with
+  4 hash-chain checks, min match length 10, context8 writer, no low-quality
+  split writer, and the smaller 32,768-entry table. Silesia 64 KiB:
+  26,501 bytes (+2.30% vs Google q1), target-perf min about wasm-gc
+  6.90 ms / native 4.85 ms at repeats=20; 128 KiB: 48,610 bytes (+2.38%),
+  target-perf min about wasm-gc 11.47 ms / native 7.54 ms.
+- Syntax pitfall (2026-06-14): MoonBit rejects `match if ... { ... } { ... }`
+  without wrapping/binding the `if` expression. Bind the context candidate to a
+  local before `match`.
+- Tooling caution (2026-06-14): do not run `moon check` concurrently with
+  `tools/bench/target-perf.nu`. The benchmark rewrites
+  `src/brotli_target_perf_main/`; a concurrent check can observe a transient
+  invalid package and report spurious "Package fbr not found" errors.
 - q2..q9 are inside the measured 1 MiB, 2 MiB, and 64 KiB Silesia windows.
   Recorded `silesia-2m.bin` overheads: q2 +2.41%, q3 -0.94%, q4 -0.43%,
   q5 +1.99%, q6 +4.20%, q7 +3.38%, q8 +4.47%, q9 +4.69%.

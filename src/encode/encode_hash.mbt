@@ -57,9 +57,21 @@ fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
     table_size: 32768,
     table_mask: 32767,
     hash_bytes: 3,
-    max_match_checks: 8,
+    max_match_checks: if quality == 0 {
+      3
+    } else if quality == 1 {
+      4
+    } else {
+      8
+    },
     max_match_length: 16384,
-    min_match_length: 10,
+    min_match_length: if quality == 0 {
+      8
+    } else if quality == 1 {
+      10
+    } else {
+      10
+    },
     max_distance_cache_codes,
     lazy_lookahead: if quality <= 2 {
       1

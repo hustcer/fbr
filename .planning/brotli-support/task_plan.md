@@ -20,9 +20,10 @@ JavaScript, and wasm-gc:
 
 - P1 decoder is implemented and validated against the 22 upstream conformance
   fixtures, checked-in fixtures, focused decode tests, and local fuzz gates.
-- P2 q0/q1 encoder emits valid stored streams. These modes are excluded from
-  the q2..q11 ratio target unless product direction reopens stored-mode ratio
-  work.
+- P2 q0/q1 encoder emits valid compressed streams. The 2026-06-14 reopened
+  low-quality pass brought the measured Silesia 64 KiB/128 KiB q0/q1 rows into
+  the requested -7%..+7% band versus Google Brotli while improving the
+  practical speed/size balance.
 - P3 q2..q9 encoder is practically complete for the measured Silesia windows.
   Remaining work is broader release-corpus validation and regression policy,
   not mandatory C-reference Lloyd clustering.
@@ -40,8 +41,9 @@ JavaScript, and wasm-gc:
   as a first-class constraint.
 - q10/q11 do not require a full C-reference Zopfli backend if bounded parser,
   dictionary, block-layout, or shortest-path improvements can reach the target.
-- q0/q1 stored output remains valid behavior and is not part of the q2..q11
-  ratio target.
+- q0/q1 are measured against their reopened low-quality target on the
+  release-report Silesia windows; keep speed and size evidence together when
+  tuning these modes.
 - Since 2026-06-12 native release benchmarks build with default `clang -O2`
   (`native_cc: "default"`); the historical cc-o0 MOON_CC workaround is gone.
   Rows labelled `cc-o0` in older recorded data are not comparable to current
@@ -53,6 +55,12 @@ JavaScript, and wasm-gc:
   wasm-gc/native target-perf data plus encoded-size evidence.
 
 ## Active Work
+
+0. **Keep q0/q1 low-quality work under regression watch.**
+   The 2026-06-14 q0/q1 pass is accepted on the release-report Silesia slices.
+   Future work should broaden corpus coverage and keep checking q2..q11 for
+   obvious encoded-size or target-perf regressions when touching shared encoder
+   paths.
 
 1. **Broaden P3 release corpus.**
    Select representative non-Silesia text, binary, small-file, and synthetic
@@ -115,8 +123,8 @@ just brotli-fuzz-soak-bounded
 - Current release report: `docs/brotli_release_report.md`
 - Bench artifacts: `docs/current-bench/decode.jsonl`,
   `docs/current-bench/encode.jsonl`
-- Tooling entry points: `tools/brotli/README.md`, `tools/brotli/release/`,
-  `tools/brotli/bench/`, `tools/brotli/fuzz/`
+- Tooling entry points in the current tree: `tools/README.md`,
+  `tools/bench/`, `tools/encode/`, `tools/fuzz/`, and `tools/release/`
 - External references: `/Users/hustcer/iWork/refs/brotli`,
   `/Users/hustcer/iWork/refs/rust-brotli`
 
