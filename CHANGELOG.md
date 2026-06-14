@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.8.0
+
+### Changed
+
+- Changed Brotli q0/q1 encoding from stored-only meta-blocks to compressed
+  low-quality streams.
+- Tuned q0/q1 low-quality search and writer selection for a practical
+  speed/size balance while keeping the measured q2 guard rows unchanged.
+
+### Performance
+
+- On the Silesia 64 KiB and 128 KiB benchmark slices, q0/q1 encoded sizes are
+  now within +2.38% of Google Brotli in the measured rows.
+- In the same target-perf runs, q0 native encode min time was 3.95 ms versus
+  Google Brotli 4.21 ms on 64 KiB; q1 native encode min time was 4.85 ms
+  versus Google Brotli 4.30 ms on 64 KiB.
+
 ## v0.7.1
 
 ### Performance
