@@ -1060,7 +1060,7 @@ test "brotli_sync q10 bounded shortest-path cost model follows histograms" {
 }
 
 ///|
-test "brotli_sync q10 bounded shortest-path keeps a two-state beam" {
+test "brotli bounded shortest-path offer_state keeps the single best beam state" {
   let state_count = 4
   let costs = FixedArray::make(state_count, 9999)
   let cache0 = FixedArray::make(state_count, 0)
@@ -1132,15 +1132,15 @@ test "brotli_sync q10 bounded shortest-path keeps a two-state beam" {
     9,
     0,
   )
+  // beam_width is 1: offer_state keeps only the single cheapest state per
+  // position. Offering costs 30, then 10, then 20 must leave the slot holding
+  // the best (cost 10) candidate and its associated cache/back-pointers.
   let first = brotli_bounded_shortest_path_state_index(1, 0)
-  let second = brotli_bounded_shortest_path_state_index(1, 1)
   assert_eq(costs[first], 10)
-  assert_eq(costs[second], 20)
   assert_eq(cache0[first], 7)
-  assert_eq(cache0[second], 9)
   assert_eq(previous_slot[first], 1)
-  assert_eq(copy_length[second], 6)
-  assert_eq(copy_distance[second], 9)
+  assert_eq(copy_length[first], 5)
+  assert_eq(copy_distance[first], 7)
 }
 
 ///|

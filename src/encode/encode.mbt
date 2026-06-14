@@ -3026,8 +3026,8 @@ fn brotli_bounded_shortest_path_config(
     max_distance_cache_codes: config.max_distance_cache_codes,
     lazy_lookahead: 0,
     scan_step: 1,
-    max_commands: 12000,
-    max_input_length: 32768,
+    max_commands: 131072,
+    max_input_length: 131072,
     min_copy_ratio_percent: 8,
     require_dense_match_density: false,
     density_sample_step: config.density_sample_step,
@@ -3037,7 +3037,7 @@ fn brotli_bounded_shortest_path_config(
 }
 
 ///|
-let brotli_bounded_shortest_path_beam_width = 2
+let brotli_bounded_shortest_path_beam_width = 1
 
 ///|
 fn brotli_bounded_shortest_path_state_index(position : Int, slot : Int) -> Int {
@@ -3099,29 +3099,38 @@ fn brotli_bounded_shortest_path_offer_state(
   copy_output_length : Int,
 ) -> Unit {
   let first = brotli_bounded_shortest_path_state_index(position, 0)
-  let second = brotli_bounded_shortest_path_state_index(position, 1)
-  if cost < costs[first] {
-    costs[second] = costs[first]
-    state_cache0[second] = state_cache0[first]
-    state_cache1[second] = state_cache1[first]
-    state_cache2[second] = state_cache2[first]
-    state_cache3[second] = state_cache3[first]
-    previous_position[second] = previous_position[first]
-    previous_slot[second] = previous_slot[first]
-    choice_copy_length[second] = choice_copy_length[first]
-    choice_copy_distance[second] = choice_copy_distance[first]
-    choice_copy_output_length[second] = choice_copy_output_length[first]
+  if brotli_bounded_shortest_path_beam_width >= 2 {
+    let second = brotli_bounded_shortest_path_state_index(position, 1)
+    if cost < costs[first] {
+      costs[second] = costs[first]
+      state_cache0[second] = state_cache0[first]
+      state_cache1[second] = state_cache1[first]
+      state_cache2[second] = state_cache2[first]
+      state_cache3[second] = state_cache3[first]
+      previous_position[second] = previous_position[first]
+      previous_slot[second] = previous_slot[first]
+      choice_copy_length[second] = choice_copy_length[first]
+      choice_copy_distance[second] = choice_copy_distance[first]
+      choice_copy_output_length[second] = choice_copy_output_length[first]
+      brotli_bounded_shortest_path_store_state(
+        costs, state_cache0, state_cache1, state_cache2, state_cache3, previous_position,
+        previous_slot, choice_copy_length, choice_copy_distance, choice_copy_output_length,
+        first, cost, cache, from_position, from_slot, copy_length, copy_distance,
+        copy_output_length,
+      )
+    } else if cost < costs[second] {
+      brotli_bounded_shortest_path_store_state(
+        costs, state_cache0, state_cache1, state_cache2, state_cache3, previous_position,
+        previous_slot, choice_copy_length, choice_copy_distance, choice_copy_output_length,
+        second, cost, cache, from_position, from_slot, copy_length, copy_distance,
+        copy_output_length,
+      )
+    }
+  } else if cost < costs[first] {
     brotli_bounded_shortest_path_store_state(
       costs, state_cache0, state_cache1, state_cache2, state_cache3, previous_position,
       previous_slot, choice_copy_length, choice_copy_distance, choice_copy_output_length,
       first, cost, cache, from_position, from_slot, copy_length, copy_distance, copy_output_length,
-    )
-  } else if cost < costs[second] {
-    brotli_bounded_shortest_path_store_state(
-      costs, state_cache0, state_cache1, state_cache2, state_cache3, previous_position,
-      previous_slot, choice_copy_length, choice_copy_distance, choice_copy_output_length,
-      second, cost, cache, from_position, from_slot, copy_length, copy_distance,
-      copy_output_length,
     )
   }
 }
@@ -3147,21 +3156,24 @@ fn brotli_bounded_shortest_path_offer_matches(
   choice_copy_distance : FixedArray[Int],
   choice_copy_output_length : FixedArray[Int],
 ) -> Unit {
+  let next_cache : FixedArray[Int] = FixedArray::make(4, 0)
   for match_index in 0..<matches.length() {
     let match_ = matches[match_index]
     if match_.length < config.min_match_length {
       continue
     }
-    // Keep the DP bounded: several previous matches per position, and only a
-    // few representative copy lengths for each match. This grows the P4
-    // candidate graph without taking on full Zopfli search cost.
-    let bounded_lengths : FixedArray[Int] = [
-      config.min_match_length,
-      match_.length / 2,
-      match_.length,
-    ]
-    for i in 0..<bounded_lengths.length() {
-      let copy_length = bounded_lengths[i]
+    // Keep the DP bounded: several previous matches per position, and only two
+    // representative copy lengths per match (shortest legal and the full
+    // match). This grows the P4 candidate graph without taking on full Zopfli
+    // search cost. The lengths are selected inline (no per-match allocation)
+    // and `next_cache` is a single reused buffer (offer_state copies its
+    // values). The half-length midpoint was dropped after measuring a
+    // negligible ratio change for a real speed gain.
+    for i in 0..<2 {
+      let copy_length = match i {
+        0 => config.min_match_length
+        _ => match_.length
+      }
       if copy_length < config.min_match_length ||
         copy_length > match_.length ||
         position + copy_length > len {
@@ -3176,7 +3188,10 @@ fn brotli_bounded_shortest_path_offer_matches(
           current_cache,
           cost_model,
         )
-      let next_cache = brotli_copy_distance_cache(current_cache)
+      next_cache[0] = current_cache[0]
+      next_cache[1] = current_cache[1]
+      next_cache[2] = current_cache[2]
+      next_cache[3] = current_cache[3]
       let distance_code = brotli_compute_distance_code(
         match_.distance,
         position,
@@ -3240,6 +3255,10 @@ fn brotli_build_bounded_shortest_path_command_candidate(
   let choice_copy_distance = FixedArray::make(state_count, 0)
   let choice_copy_output_length = FixedArray::make(state_count, 0)
   costs[brotli_bounded_shortest_path_state_index(0, 0)] = 0
+  // Reused per-state distance-cache scratch buffer: overwritten at the start of
+  // every (position, slot) iteration and only ever read or value-copied by the
+  // offer helpers, so a single allocation replaces one per state.
+  let current_cache : FixedArray[Int] = FixedArray::make(4, 0)
   for position in 0..<len {
     for slot in 0..<brotli_bounded_shortest_path_beam_width {
       let state_index = brotli_bounded_shortest_path_state_index(position, slot)
@@ -3247,12 +3266,10 @@ fn brotli_build_bounded_shortest_path_command_candidate(
       if base_cost >= unreachable_cost {
         continue
       }
-      let current_cache : FixedArray[Int] = [
-        state_cache0[state_index],
-        state_cache1[state_index],
-        state_cache2[state_index],
-        state_cache3[state_index],
-      ]
+      current_cache[0] = state_cache0[state_index]
+      current_cache[1] = state_cache1[state_index]
+      current_cache[2] = state_cache2[state_index]
+      current_cache[3] = state_cache3[state_index]
       brotli_bounded_shortest_path_offer_state(
         costs,
         state_cache0,
@@ -3345,10 +3362,12 @@ fn brotli_build_bounded_shortest_path_command_candidate(
     }
   }
   let mut terminal_slot = 0
-  let terminal0 = brotli_bounded_shortest_path_state_index(len, 0)
-  let terminal1 = brotli_bounded_shortest_path_state_index(len, 1)
-  if costs[terminal1] < costs[terminal0] {
-    terminal_slot = 1
+  if brotli_bounded_shortest_path_beam_width >= 2 {
+    let terminal0 = brotli_bounded_shortest_path_state_index(len, 0)
+    let terminal1 = brotli_bounded_shortest_path_state_index(len, 1)
+    if costs[terminal1] < costs[terminal0] {
+      terminal_slot = 1
+    }
   }
   let terminal_index = brotli_bounded_shortest_path_state_index(
     len, terminal_slot,
@@ -6141,18 +6160,24 @@ fn brotli_try_compressed_chunk(
       let hq_config = brotli_high_quality_hash_config_for_quality(quality)
       if quality >= 10 {
         let hq_config = brotli_four_byte_hash_config(hq_config)
-        let best = brotli_try_compressed_command_candidate(
-          data,
-          brotli_build_bounded_shortest_path_command_candidate(
-            data, hq_config, base_offset, window_bits, distance_cache,
-          ),
-          is_last,
-          best,
-          quality,
-          allow_contexts,
-          initial_previous_byte_1,
-          initial_previous_byte_2,
-        )
+        // q11 spends its larger speed budget on the bounded optimal-parse
+        // candidate; q10 stays on the fast greedy mixed-dictionary path.
+        let best = if quality >= 11 {
+          brotli_try_compressed_command_candidate(
+            data,
+            brotli_build_bounded_shortest_path_command_candidate(
+              data, hq_config, base_offset, window_bits, distance_cache,
+            ),
+            is_last,
+            best,
+            quality,
+            allow_contexts,
+            initial_previous_byte_1,
+            initial_previous_byte_2,
+          )
+        } else {
+          best
+        }
         let mixed_candidate = brotli_build_mixed_dictionary_lz77_command_candidate(
           data, hq_config, base_offset, window_bits, distance_cache,
         )
@@ -6519,6 +6544,29 @@ fn brotli_encode_standard(
         )
         if opts.quality >= 10 {
           let hq_config = brotli_four_byte_hash_config(hq_config)
+          // q11 spends its larger speed budget on the bounded optimal-parse
+          // candidate; q10 stays on the fast greedy mixed-dictionary path.
+          if opts.quality >= 11 {
+            let dp_cache : FixedArray[Int] = [4, 11, 15, 16]
+            match
+              brotli_build_bounded_shortest_path_command_candidate(
+                data,
+                hq_config,
+                0,
+                opts.window_bits,
+                dp_cache,
+              ) {
+              Some(candidate) =>
+                best = brotli_try_compressed_commands(
+                  data,
+                  Some(candidate.commands),
+                  true,
+                  best,
+                  opts.quality,
+                )
+              None => ()
+            }
+          }
           let mixed_commands = brotli_build_mixed_dictionary_lz77_commands(
             data,
             hq_config,
