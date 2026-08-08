@@ -92,10 +92,7 @@ fn BrotliBlockTracker::resolve_type_code(
     code - 2
   }
   if block_type < 0 {
-    raise @common.fbr_err(
-      BrotliInvalidMetablock,
-      msg="negative block type",
-    )
+    raise @common.fbr_err(BrotliInvalidMetablock, msg="negative block type")
   }
   if block_type >= self.num_types {
     block_type -= self.num_types

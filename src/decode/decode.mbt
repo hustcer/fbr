@@ -152,10 +152,7 @@ fn BrotliOutputBuilder::ensure(
     )
   }
   if self.len > self.max_output_size - additional {
-    raise @common.fbr_err(
-      InvalidZipData,
-      msg="output exceeds max_output_size",
-    )
+    raise @common.fbr_err(InvalidZipData, msg="output exceeds max_output_size")
   }
   let needed = self.len + additional
   if needed <= self.buf.length() {
@@ -436,17 +433,11 @@ pub fn unbrotli_sync(
   opts? : UnbrotliOptions = UnbrotliOptions::default(),
 ) -> FixedArray[Byte] raise @common.FbrError {
   if data.length() > opts.max_input_size {
-    raise @common.fbr_err(
-      InvalidZipData,
-      msg="input exceeds max_input_size",
-    )
+    raise @common.fbr_err(InvalidZipData, msg="input exceeds max_input_size")
   }
   let out = brotli_decode_scaffold(data, opts)
   if out.length() > opts.max_output_size {
-    raise @common.fbr_err(
-      InvalidZipData,
-      msg="output exceeds max_output_size",
-    )
+    raise @common.fbr_err(InvalidZipData, msg="output exceeds max_output_size")
   }
   out
 }

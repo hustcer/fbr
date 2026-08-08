@@ -338,10 +338,7 @@ fn brotli_make_huffman_spec(
   alphabet_size_limit : Int,
 ) -> BrotliHuffmanSpec raise @common.FbrError {
   if count <= 0 || count > alphabet_size_limit {
-    raise @common.fbr_err(
-      BrotliInvalidHuffman,
-      msg="invalid encoder alphabet",
-    )
+    raise @common.fbr_err(BrotliInvalidHuffman, msg="invalid encoder alphabet")
   }
   let code_lengths = FixedArray::make(alphabet_size_limit, b'\x00')
   if count <= 4 {
@@ -458,10 +455,7 @@ fn brotli_make_weighted_huffman_spec(
       }
     }
     if first < 0 || second < 0 {
-      raise @common.fbr_err(
-        BrotliInvalidHuffman,
-        msg="invalid weighted tree",
-      )
+      raise @common.fbr_err(BrotliInvalidHuffman, msg="invalid weighted tree")
     }
     parents[first] = node
     parents[second] = node
@@ -520,10 +514,7 @@ fn brotli_huffman_payload_from_lengths(
   target : Int,
 ) -> BrotliCommandPrefix raise @common.FbrError {
   if target < 0 || target >= alphabet_size {
-    raise @common.fbr_err(
-      BrotliInvalidHuffman,
-      msg="target outside alphabet",
-    )
+    raise @common.fbr_err(BrotliInvalidHuffman, msg="target outside alphabet")
   }
   let count = FixedArray::make(@common.brotli_huffman_max_code_length + 1, 0)
   for symbol in 0..<alphabet_size {
@@ -557,10 +548,7 @@ fn brotli_huffman_payload_from_lengths(
       }
     }
   }
-  raise @common.fbr_err(
-    BrotliInvalidHuffman,
-    msg="target has no Huffman code",
-  )
+  raise @common.fbr_err(BrotliInvalidHuffman, msg="target has no Huffman code")
 }
 
 ///|
@@ -1767,10 +1755,7 @@ fn brotli_distance_prefix_for_distance(
   distance : Int,
 ) -> BrotliCommandPrefix raise @common.FbrError {
   if distance <= 0 {
-    raise @common.fbr_err(
-      BrotliInvalidDistance,
-      msg="invalid Brotli distance",
-    )
+    raise @common.fbr_err(BrotliInvalidDistance, msg="invalid Brotli distance")
   }
   let extra_bits = @common.brotli_log2_floor_plus_one(distance + 3) - 2
   let split = 3 << extra_bits
@@ -2040,10 +2025,7 @@ fn brotli_command_prefix_for_mode(
     }
     _ => ()
   }
-  raise @common.fbr_err(
-    BrotliInvalidMetablock,
-    msg="no Brotli command prefix",
-  )
+  raise @common.fbr_err(BrotliInvalidMetablock, msg="no Brotli command prefix")
 }
 
 ///|
@@ -6728,10 +6710,7 @@ fn brotli_encode_standard(
 ///|
 fn brotli_validate_options(opts : BrotliOptions) -> Unit raise @common.FbrError {
   if opts.quality < 0 || opts.quality > 11 {
-    raise @common.fbr_err(
-      InvalidZipData,
-      msg="Brotli quality must be 0..=11",
-    )
+    raise @common.fbr_err(InvalidZipData, msg="Brotli quality must be 0..=11")
   }
   if opts.max_input_size < 0 {
     raise @common.fbr_err(
@@ -6752,10 +6731,7 @@ pub fn brotli_sync(
 ) -> FixedArray[Byte] raise @common.FbrError {
   brotli_validate_options(opts)
   if data.length() > opts.max_input_size {
-    raise @common.fbr_err(
-      InvalidZipData,
-      msg="input exceeds max_input_size",
-    )
+    raise @common.fbr_err(InvalidZipData, msg="input exceeds max_input_size")
   }
   if opts.quality >= 10 && data.length() > 256 * 1024 * 1024 {
     raise @common.fbr_err(
@@ -6766,9 +6742,6 @@ pub fn brotli_sync(
   match opts.quality {
     0..=11 => brotli_encode_standard(data, opts)
     _ =>
-      raise @common.fbr_err(
-        InvalidZipData,
-        msg="Brotli quality must be 0..=11",
-      )
+      raise @common.fbr_err(InvalidZipData, msg="Brotli quality must be 0..=11")
   }
 }
