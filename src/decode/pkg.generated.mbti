@@ -30,4 +30,3 @@ pub fn UnbrotliStream::set_ondata(Self, (FixedArray[Byte], Bool) -> Unit) -> Uni
 // Type aliases
 
 // Traits
-

@@ -224,4 +224,3 @@ pub(all) struct FbrStreamHandler((FixedArray[Byte], Bool) -> Unit)
 // Type aliases
 
 // Traits
-

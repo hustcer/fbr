@@ -144,9 +144,7 @@ test "public Brotli error-code mapping stays aligned with default messages" {
   for i in 0..<codes.length() {
     inspect(codes[i], content=names[i])
     assert_eq(fbr_error_code_to_int(codes[i]), i)
-    guard fbr_err(codes[i]) is FbrError(code~, message~) else {
-      fail("expected FbrError")
-    }
+    guard fbr_err(codes[i]) is FbrError(code~, message~)
     assert_eq(code, codes[i])
     assert_eq(message, error_messages[i])
   }

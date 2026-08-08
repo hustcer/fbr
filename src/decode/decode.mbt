@@ -12,9 +12,9 @@ fn brotli_decode_window_bits(
       let m = reader.take_bits(3).reinterpret_as_int()
       match m {
         0 => 17
-        1 => raise @common.fbr_err(@common.BrotliLargeWindowNotSupported)
+        1 => raise @common.fbr_err(BrotliLargeWindowNotSupported)
         2..=7 => 8 + m
-        _ => raise @common.fbr_err(@common.BrotliInvalidWindowBits)
+        _ => raise @common.fbr_err(BrotliInvalidWindowBits)
       }
     }
   }
@@ -26,7 +26,7 @@ fn brotli_validate_window_bits(
 ) -> Unit raise @common.FbrError {
   if window_bits < @common.brotli_min_window_bits ||
     window_bits > @common.brotli_max_window_bits {
-    raise @common.fbr_err(@common.BrotliInvalidWindowBits)
+    raise @common.fbr_err(BrotliInvalidWindowBits)
   }
 }
 
@@ -147,13 +147,13 @@ fn BrotliOutputBuilder::ensure(
 ) -> Unit raise @common.FbrError {
   if additional < 0 {
     raise @common.fbr_err(
-      @common.BrotliInvalidMetablock,
+      BrotliInvalidMetablock,
       msg="negative Brotli output length",
     )
   }
   if self.len > self.max_output_size - additional {
     raise @common.fbr_err(
-      @common.InvalidZipData,
+      InvalidZipData,
       msg="output exceeds max_output_size",
     )
   }
@@ -162,7 +162,7 @@ fn BrotliOutputBuilder::ensure(
     return
   }
   if self.fixed {
-    raise @common.fbr_err(@common.InvalidZipData, msg="output buffer too small")
+    raise @common.fbr_err(InvalidZipData, msg="output buffer too small")
   }
   let mut capacity = self.buf.length()
   if capacity == 0 {
@@ -212,13 +212,13 @@ fn BrotliOutputBuilder::copy_from_distance(
 ) -> Unit raise @common.FbrError {
   if length < 0 {
     raise @common.fbr_err(
-      @common.BrotliInvalidMetablock,
+      BrotliInvalidMetablock,
       msg="negative Brotli copy length",
     )
   }
   if distance <= 0 || distance > self.len {
     raise @common.fbr_err(
-      @common.BrotliInvalidDistance,
+      BrotliInvalidDistance,
       msg="Brotli backward distance out of range",
     )
   }
@@ -285,7 +285,7 @@ fn brotli_decode_metablock_header(
     let reserved = reader.take_bits(1)
     if reserved != 0U {
       raise @common.fbr_err(
-        @common.BrotliReserved,
+        BrotliReserved,
         msg="reserved metadata meta-block bit set",
       )
     }
@@ -304,7 +304,7 @@ fn brotli_decode_metablock_header(
       let part = reader.take_bits(8).reinterpret_as_int()
       if i + 1 == size_bytes && size_bytes > 1 && part == 0 {
         raise @common.fbr_err(
-          @common.BrotliInvalidMetablock,
+          BrotliInvalidMetablock,
           msg="exuberant metadata length",
         )
       }
@@ -324,7 +324,7 @@ fn brotli_decode_metablock_header(
     let part = reader.take_bits(4).reinterpret_as_int()
     if i + 1 == size_nibbles && size_nibbles > 4 && part == 0 {
       raise @common.fbr_err(
-        @common.BrotliInvalidMetablock,
+        BrotliInvalidMetablock,
         msg="exuberant meta-block length",
       )
     }
@@ -333,7 +333,7 @@ fn brotli_decode_metablock_header(
   length += 1
   if length > @common.brotli_max_metablock_bytes {
     raise @common.fbr_err(
-      @common.BrotliInvalidMetablock,
+      BrotliInvalidMetablock,
       msg="Brotli meta-block too large",
     )
   }
@@ -419,7 +419,7 @@ fn brotli_decode_scaffold(
     }
   }
   raise @common.fbr_err(
-    @common.BrotliInvalidMetablock,
+    BrotliInvalidMetablock,
     msg="unreachable Brotli decoder state",
   )
 }
@@ -437,14 +437,14 @@ pub fn unbrotli_sync(
 ) -> FixedArray[Byte] raise @common.FbrError {
   if data.length() > opts.max_input_size {
     raise @common.fbr_err(
-      @common.InvalidZipData,
+      InvalidZipData,
       msg="input exceeds max_input_size",
     )
   }
   let out = brotli_decode_scaffold(data, opts)
   if out.length() > opts.max_output_size {
     raise @common.fbr_err(
-      @common.InvalidZipData,
+      InvalidZipData,
       msg="output exceeds max_output_size",
     )
   }

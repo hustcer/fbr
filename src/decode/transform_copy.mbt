@@ -7,7 +7,7 @@ fn BrotliOutputBuilder::copy_transformed_dictionary_word(
 ) -> Unit raise @common.FbrError {
   if transform_index < 0 || transform_index >= @common.brotli_transform_count() {
     raise @common.fbr_err(
-      @common.BrotliInvalidTransform,
+      BrotliInvalidTransform,
       msg="Brotli transform index out of range",
     )
   }
@@ -18,7 +18,7 @@ fn BrotliOutputBuilder::copy_transformed_dictionary_word(
   if transform_type == @common.brotli_transform_shift_first ||
     transform_type == @common.brotli_transform_shift_all {
     raise @common.fbr_err(
-      @common.BrotliInvalidTransform,
+      BrotliInvalidTransform,
       msg="Brotli shift transform is not supported",
     )
   }
@@ -45,7 +45,7 @@ fn BrotliOutputBuilder::copy_transformed_dictionary_word(
   }
   if source_length < 0 {
     raise @common.fbr_err(
-      @common.BrotliInvalidTransform,
+      BrotliInvalidTransform,
       msg="Brotli transform omits too much",
     )
   }

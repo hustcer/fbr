@@ -31,7 +31,7 @@ fn brotli_read_block_length(
   )
   if code < 0 || code >= @common.brotli_num_block_length_symbols {
     raise @common.fbr_err(
-      @common.BrotliInvalidMetablock,
+      BrotliInvalidMetablock,
       msg="invalid Brotli block length code",
     )
   }
@@ -56,13 +56,13 @@ fn BrotliBlockTracker::new_with_length(
 ) -> BrotliBlockTracker raise @common.FbrError {
   if num_types < 1 {
     raise @common.fbr_err(
-      @common.BrotliInvalidMetablock,
+      BrotliInvalidMetablock,
       msg="block type count must be positive",
     )
   }
   if initial_length < 1 {
     raise @common.fbr_err(
-      @common.BrotliInvalidMetablock,
+      BrotliInvalidMetablock,
       msg="block length must be positive",
     )
   }
@@ -93,7 +93,7 @@ fn BrotliBlockTracker::resolve_type_code(
   }
   if block_type < 0 {
     raise @common.fbr_err(
-      @common.BrotliInvalidMetablock,
+      BrotliInvalidMetablock,
       msg="negative block type",
     )
   }
@@ -138,13 +138,13 @@ fn BrotliBlockTracker::ensure_ready(
   }
   guard header.type_tree is Some(type_tree) else {
     raise @common.fbr_err(
-      @common.BrotliInvalidMetablock,
+      BrotliInvalidMetablock,
       msg="missing Brotli block type tree",
     )
   }
   guard header.length_tree is Some(length_tree) else {
     raise @common.fbr_err(
-      @common.BrotliInvalidMetablock,
+      BrotliInvalidMetablock,
       msg="missing Brotli block length tree",
     )
   }

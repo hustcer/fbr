@@ -21,13 +21,13 @@ fn brotli_read_huffman_tree_group(
 ) -> BrotliHuffmanTreeGroup raise @common.FbrError {
   if num_trees < 1 {
     raise @common.fbr_err(
-      @common.BrotliInvalidHuffman,
+      BrotliInvalidHuffman,
       msg="empty Brotli Huffman tree group",
     )
   }
   if alphabet_size_limit < 1 || alphabet_size_max < alphabet_size_limit {
     raise @common.fbr_err(
-      @common.BrotliInvalidHuffman,
+      BrotliInvalidHuffman,
       msg="invalid Brotli Huffman tree group alphabet",
     )
   }

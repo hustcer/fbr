@@ -13,7 +13,7 @@ fn brotli_read_simple_huffman_code(
     let value = reader.take_bits(max_bits).reinterpret_as_int()
     if value >= alphabet_size_limit {
       raise @common.fbr_err(
-        @common.BrotliInvalidHuffman,
+        BrotliInvalidHuffman,
         msg="simple Huffman symbol exceeds alphabet limit",
       )
     }
@@ -23,7 +23,7 @@ fn brotli_read_simple_huffman_code(
     for k in (i + 1)..<num_symbols_to_read {
       if symbols[i] == symbols[k] {
         raise @common.fbr_err(
-          @common.BrotliInvalidHuffman,
+          BrotliInvalidHuffman,
           msg="duplicate simple Huffman symbol",
         )
       }
@@ -59,7 +59,7 @@ fn brotli_read_code_length_code_lengths(
       num_codes += 1
       if space < 0 {
         raise @common.fbr_err(
-          @common.BrotliInvalidHuffman,
+          BrotliInvalidHuffman,
           msg="over-subscribed code-length-code lengths",
         )
       }
@@ -70,7 +70,7 @@ fn brotli_read_code_length_code_lengths(
   }
   if !(num_codes == 1 || space == 0) {
     raise @common.fbr_err(
-      @common.BrotliInvalidHuffman,
+      BrotliInvalidHuffman,
       msg="invalid code-length-code length space",
     )
   }
@@ -101,7 +101,7 @@ fn brotli_decode_symbol_code_lengths(
         space -= 32768 >> code_len
         if space < 0 {
           raise @common.fbr_err(
-            @common.BrotliInvalidHuffman,
+            BrotliInvalidHuffman,
             msg="over-subscribed Huffman code lengths",
           )
         }
@@ -114,7 +114,7 @@ fn brotli_decode_symbol_code_lengths(
         3
       } else {
         raise @common.fbr_err(
-          @common.BrotliInvalidHuffman,
+          BrotliInvalidHuffman,
           msg="invalid code-length repeat",
         )
       }
@@ -136,7 +136,7 @@ fn brotli_decode_symbol_code_lengths(
       let repeat_delta = repeat - old_repeat
       if symbol > alphabet_size - repeat_delta {
         raise @common.fbr_err(
-          @common.BrotliInvalidHuffman,
+          BrotliInvalidHuffman,
           msg="code-length repeat overflows alphabet",
         )
       }
@@ -148,7 +148,7 @@ fn brotli_decode_symbol_code_lengths(
         space -= repeat_delta << (15 - repeat_code_len)
         if space < 0 {
           raise @common.fbr_err(
-            @common.BrotliInvalidHuffman,
+            BrotliInvalidHuffman,
             msg="over-subscribed repeated Huffman code lengths",
           )
         }
@@ -159,7 +159,7 @@ fn brotli_decode_symbol_code_lengths(
   }
   if space != 0 {
     raise @common.fbr_err(
-      @common.BrotliInvalidHuffman,
+      BrotliInvalidHuffman,
       msg="under-subscribed Huffman code lengths",
     )
   }
@@ -229,7 +229,7 @@ fn brotli_read_symbol(
     if reader.byte_pos >= reader.byte_end {
       if reader.bits_avail == 0 {
         raise @common.fbr_err(
-          @common.UnexpectedEOF,
+          UnexpectedEOF,
           msg="brotli input ended during Huffman code",
         )
       }
@@ -248,14 +248,14 @@ fn brotli_read_symbol(
   let entry_bits = entry << 16 >> 16
   if entry_bits < 0 {
     raise @common.fbr_err(
-      @common.BrotliInvalidHuffman,
+      BrotliInvalidHuffman,
       msg="uninitialized Huffman table entry",
     )
   }
   if entry_bits <= root_bits {
     if entry_bits > reader.bits_avail {
       raise @common.fbr_err(
-        @common.UnexpectedEOF,
+        UnexpectedEOF,
         msg="brotli input ended during Huffman code",
       )
     }
@@ -277,7 +277,7 @@ fn brotli_read_symbol(
   let sub_bits = sub_entry << 16 >> 16
   if sub_bits < 0 {
     raise @common.fbr_err(
-      @common.BrotliInvalidHuffman,
+      BrotliInvalidHuffman,
       msg="uninitialized Brotli Huffman sub-table entry",
     )
   }

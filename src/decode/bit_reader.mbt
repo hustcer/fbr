@@ -80,7 +80,7 @@ fn BrotliBitReader::refill_to(
   while self.bits_avail < n {
     if self.byte_pos >= self.byte_end {
       raise @common.fbr_err(
-        @common.UnexpectedEOF,
+        UnexpectedEOF,
         msg="brotli input ended while reading bits need=\{n} available=\{self.bits_avail}",
       )
     }
@@ -114,7 +114,7 @@ fn BrotliBitReader::peek_bits(
 ) -> UInt raise @common.FbrError {
   if n < 0 || n > 24 {
     raise @common.fbr_err(
-      @common.BrotliInvalidMetablock,
+      BrotliInvalidMetablock,
       msg="invalid Brotli bit read width",
     )
   }
@@ -129,7 +129,7 @@ fn BrotliBitReader::drop_bits(
 ) -> Unit raise @common.FbrError {
   if n < 0 || n > self.bits_avail {
     raise @common.fbr_err(
-      @common.BrotliInvalidMetablock,
+      BrotliInvalidMetablock,
       msg="invalid Brotli bit drop width",
     )
   }
@@ -158,7 +158,7 @@ fn BrotliBitReader::align_to_byte(
   if extra > 0 {
     let padding = self.take_bits(extra)
     if padding != 0U {
-      raise @common.fbr_err(@common.BrotliInvalidPadding)
+      raise @common.fbr_err(BrotliInvalidPadding)
     }
   }
 }
@@ -172,7 +172,7 @@ fn BrotliBitReader::take_bytes(
 ) -> Unit raise @common.FbrError {
   self.align_to_byte()
   if offset < 0 || length < 0 || offset > out.length() - length {
-    raise @common.fbr_err(@common.InvalidZipData, msg="output buffer too small")
+    raise @common.fbr_err(InvalidZipData, msg="output buffer too small")
   }
   let mut dst = offset
   let end = offset + length
@@ -185,7 +185,7 @@ fn BrotliBitReader::take_bytes(
   let remaining = end - dst
   if remaining > self.byte_end - self.byte_pos {
     raise @common.fbr_err(
-      @common.UnexpectedEOF,
+      UnexpectedEOF,
       msg="brotli input ended while reading bytes",
     )
   }
@@ -209,12 +209,12 @@ fn BrotliBitReader::expect_final_padding_zero(
     // bits_avail <= 23), so the shift below is always in range.
     let mask = (1UL << self.bits_avail) - 1UL
     if (self.bit_buf & mask) != 0UL {
-      raise @common.fbr_err(@common.BrotliInvalidPadding)
+      raise @common.fbr_err(BrotliInvalidPadding)
     }
   }
   while self.byte_pos < self.byte_end {
     if self.buf[self.byte_pos] != b'\x00' {
-      raise @common.fbr_err(@common.BrotliInvalidPadding)
+      raise @common.fbr_err(BrotliInvalidPadding)
     }
     self.byte_pos += 1
   }

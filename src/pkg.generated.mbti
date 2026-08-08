@@ -40,4 +40,3 @@ pub using @decode {type UnbrotliOptions}
 pub using @decode {type UnbrotliStream}
 
 // Traits
-

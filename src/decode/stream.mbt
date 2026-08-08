@@ -47,7 +47,7 @@ pub fn UnbrotliStream::set_ondata(
   self : UnbrotliStream,
   handler : (FixedArray[Byte], Bool) -> Unit,
 ) -> Unit {
-  self.ondata = Some(@common.FbrStreamHandler(handler))
+  self.ondata = Some(FbrStreamHandler(handler))
 }
 
 ///|

@@ -28,7 +28,7 @@ fn brotli_take_short_code_validated(
     delta
   if distance <= 0 {
     raise @common.fbr_err(
-      @common.BrotliInvalidDistance,
+      BrotliInvalidDistance,
       msg="invalid Brotli short distance",
     )
   }

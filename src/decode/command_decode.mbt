@@ -92,7 +92,7 @@ fn brotli_decode_compressed_metablock_body(
     command_blocks.remaining -= 1
     if command.insert_length > remaining {
       raise @common.fbr_err(
-        @common.BrotliInvalidMetablock,
+        BrotliInvalidMetablock,
         msg="Brotli insert length exceeds meta-block",
       )
     }
@@ -114,7 +114,7 @@ fn brotli_decode_compressed_metablock_body(
           )
           if literal < 0 || literal > 255 {
             raise @common.fbr_err(
-              @common.BrotliInvalidMetablock,
+              BrotliInvalidMetablock,
               msg="Brotli literal out of byte range",
             )
           }
@@ -129,7 +129,7 @@ fn brotli_decode_compressed_metablock_body(
           )
           if literal < 0 || literal > 255 {
             raise @common.fbr_err(
-              @common.BrotliInvalidMetablock,
+              BrotliInvalidMetablock,
               msg="Brotli literal out of byte range",
             )
           }
@@ -168,7 +168,7 @@ fn brotli_decode_compressed_metablock_body(
         )
         if literal < 0 || literal > 255 {
           raise @common.fbr_err(
-            @common.BrotliInvalidMetablock,
+            BrotliInvalidMetablock,
             msg="Brotli literal out of byte range",
           )
         }
@@ -223,7 +223,7 @@ fn brotli_decode_compressed_metablock_body(
     let copied = output.len - output_before_copy
     if copied > remaining {
       raise @common.fbr_err(
-        @common.BrotliInvalidMetablock,
+        BrotliInvalidMetablock,
         msg="Brotli copy length exceeds meta-block",
       )
     }

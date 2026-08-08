@@ -30,4 +30,3 @@ pub fn BrotliStream::set_ondata(Self, (FixedArray[Byte], Bool) -> Unit) -> Unit
 // Type aliases
 
 // Traits
-
