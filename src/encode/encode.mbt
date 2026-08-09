@@ -6302,25 +6302,29 @@ fn brotli_try_compressed_chunk(
       } else {
         None
       }
-      let best = brotli_try_compressed_command_candidate(
-        data,
-        match shared_previous3 {
-          Some(previous) =>
-            brotli_build_simple_lz77_command_candidate_with_previous(
-              data, natural_config, distance_cache, previous,
-            )
-          None =>
-            brotli_build_simple_lz77_command_candidate(
-              data, natural_config, distance_cache,
-            )
-        },
-        is_last,
-        best,
-        quality,
-        allow_contexts,
-        initial_previous_byte_1,
-        initial_previous_byte_2,
-      )
+      let best = if quality < 4 {
+        brotli_try_compressed_command_candidate(
+          data,
+          match shared_previous3 {
+            Some(previous) =>
+              brotli_build_simple_lz77_command_candidate_with_previous(
+                data, natural_config, distance_cache, previous,
+              )
+            None =>
+              brotli_build_simple_lz77_command_candidate(
+                data, natural_config, distance_cache,
+              )
+          },
+          is_last,
+          best,
+          quality,
+          allow_contexts,
+          initial_previous_byte_1,
+          initial_previous_byte_2,
+        )
+      } else {
+        best
+      }
       let best = brotli_try_compressed_command_candidate(
         data,
         if use_natural4 {
@@ -6689,19 +6693,21 @@ fn brotli_encode_standard(
         } else {
           None
         }
-        best = brotli_try_compressed_commands(
-          data,
-          match shared_previous3 {
-            Some(previous) =>
-              brotli_build_simple_lz77_commands_with_previous(
-                data, natural_config, previous,
-              )
-            None => brotli_build_simple_lz77_commands(data, natural_config)
-          },
-          true,
-          best,
-          opts.quality,
-        )
+        if opts.quality < 4 {
+          best = brotli_try_compressed_commands(
+            data,
+            match shared_previous3 {
+              Some(previous) =>
+                brotli_build_simple_lz77_commands_with_previous(
+                  data, natural_config, previous,
+                )
+              None => brotli_build_simple_lz77_commands(data, natural_config)
+            },
+            true,
+            best,
+            opts.quality,
+          )
+        }
         best = brotli_try_compressed_commands(
           data,
           if use_natural4 {

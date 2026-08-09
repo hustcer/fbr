@@ -304,3 +304,14 @@ or durable findings now summarized in `findings.md`.
   when may_pay else hq4; drops the always-run plain hq4 parse).
   Variant probes: hq3-only 22,221 (+1.45% vs Google), hq3+hq4 22,117
   (+0.97%), hq3+mixed 21,397 (byte-identical to baseline, keeps -2.31%).
+- S4 RESOLVED as no-op: variant C (drop always-run hq4 at q9 inline) measured
+  ~0% because the baseline already skips the plain hq4 parse whenever the
+  mixed candidate wins (match-arm short circuit); silesia takes that arm.
+  Reverted. q9-64k profile instead showed the real cost split: ~39% match
+  search, ~30% dictionary machinery (transform_output_byte 13% +
+  find_identity_dictionary_match 9% + index build/allowed/add ~8%).
+- S8 in flight: dictionary index made process-cached (identity + mixed
+  min_output=8, also used by the q11 bounded DP at encode.mbt:3227) and
+  entry output bytes materialized into a flat pool at build so match
+  verification is a flat compare (no per-byte transform re-derivation).
+  q9/q10/q11 encoded SHAs verified byte-identical on 64k/128k.
