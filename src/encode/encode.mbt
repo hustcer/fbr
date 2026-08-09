@@ -6511,6 +6511,12 @@ fn brotli_encode_standard(
   let hash_config = brotli_hash_config_for_quality(opts.quality)
   if data.length() <= @common.brotli_max_metablock_bytes {
     let mut best : BrotliBitWriter? = None
+    // Large q2 inputs keep only the natural 3-byte and 4-byte candidates.
+    // The primary bounded parse, the literal-only candidates, and the
+    // identity-dictionary candidate never win on inputs dense enough for
+    // the natural low-quality profile, and the chunked q2 path already
+    // skips all of them for >64 KiB inputs.
+    let q2_natural_profile = opts.quality == 2 && data.length() >= 8192
     let shared_previous3 : FixedArray[Int]? = if opts.quality >= 4 &&
       opts.quality <= 8 &&
       data.length() >= 8192 {
@@ -6518,20 +6524,23 @@ fn brotli_encode_standard(
     } else {
       None
     }
-    best = brotli_try_compressed_commands(
-      data,
-      match shared_previous3 {
-        Some(previous) =>
-          brotli_build_simple_lz77_commands_with_previous(
-            data, hash_config, previous,
-          )
-        None => brotli_build_simple_lz77_commands(data, hash_config)
-      },
-      true,
-      best,
-      opts.quality,
-    )
-    if brotli_use_literal_only_lz77_candidate(opts.quality, data.length()) {
+    if !q2_natural_profile {
+      best = brotli_try_compressed_commands(
+        data,
+        match shared_previous3 {
+          Some(previous) =>
+            brotli_build_simple_lz77_commands_with_previous(
+              data, hash_config, previous,
+            )
+          None => brotli_build_simple_lz77_commands(data, hash_config)
+        },
+        true,
+        best,
+        opts.quality,
+      )
+    }
+    if !q2_natural_profile &&
+      brotli_use_literal_only_lz77_candidate(opts.quality, data.length()) {
       best = brotli_try_compressed_commands(
         data,
         brotli_build_literal_only_command(data),
@@ -6541,18 +6550,20 @@ fn brotli_encode_standard(
       )
       best = brotli_try_split_literal_only_metablock(data, true, best)
     }
-    best = brotli_try_compressed_commands(
-      data,
-      brotli_build_identity_dictionary_commands(
+    if !q2_natural_profile {
+      best = brotli_try_compressed_commands(
         data,
-        hash_config,
-        0,
-        opts.window_bits,
-      ),
-      true,
-      best,
-      opts.quality,
-    )
+        brotli_build_identity_dictionary_commands(
+          data,
+          hash_config,
+          0,
+          opts.window_bits,
+        ),
+        true,
+        best,
+        opts.quality,
+      )
+    }
     if data.length() >= 8192 {
       if opts.quality >= 9 {
         let hq_config = brotli_high_quality_hash_config_for_quality(
@@ -6751,6 +6762,19 @@ fn brotli_encode_standard(
           }
         }
       }
+    }
+    // The q2 natural profile skips the literal-only writers up front; when
+    // the natural candidates all fail (literal-heavy input with too few
+    // matches), fall back to them here so such inputs keep beating stored.
+    if q2_natural_profile && best is None {
+      best = brotli_try_compressed_commands(
+        data,
+        brotli_build_literal_only_command(data),
+        true,
+        best,
+        opts.quality,
+      )
+      best = brotli_try_split_literal_only_metablock(data, true, best)
     }
     match best {
       Some(compressed) => {
