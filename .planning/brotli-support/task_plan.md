@@ -56,6 +56,39 @@ JavaScript, and wasm-gc:
 
 ## Active Work
 
+-1. **2026-08-09 encode performance session (current).**
+   Goal: shrink the largest encode gaps vs Google (2026-08-09 report):
+   q4-q8 speed (native 3.1-4.7x at 128 KiB, wasm-gc 4.1-6.3x), q2 64 KiB
+   speed (2.57x), q9 64 KiB speed (2.47x, slower than q10), q3 size
+   (+7.78%/+7.0%). One strategy per attempt; verify with
+   `just encode-compare` (same-time tree-vs-HEAD); commit wins with
+   measured numbers; revert and negative-cache failures in findings.md.
+   Root-cause diagnosis (2026-08-09, from code reading):
+   - q4-q8 run 3-4 full LZ77 parses + one exact context8 writer pass per
+     candidate per chunk (Google: 1 parse + 1 writer). q4/q5/q8 add the
+     intermediate4 parse everywhere; q6/q7 only >64 KiB.
+   - Inline (<=64 KiB) vs chunked (>64 KiB) candidate sets diverge: inline
+     q2 runs ~4 parses + natural4 chain build while chunked q2 runs ONE
+     natural parse (context16-first shortcut both); inline q9 runs
+     hq + hq4 + mixed while chunked q9 runs hq only. Hence 64 KiB q2/q9
+     being slower than 128 KiB in absolute time.
+   - Per-position match search probes all 16 distance-cache codes at
+     q3..q9 with 4-byte compares and byte-at-a-time extension; hash is a
+     weak per-byte xor-multiply into 15 bits.
+   Strategy queue (S-numbers referenced in progress/findings):
+   S1 prune q4-q8 writer passes via cheap entropy estimate (top-1/top-2
+      exact); S2 drop per-quality losing parse candidates (needs candidate
+      win-rate instrumentation); S3 route q2 >=8192 through the chunked
+      single-candidate path; S4 align 64 KiB q9 candidate set with chunked
+      (measure size cost of dropping hq4/mixed first); S5 shared packed
+      4-byte word array per chunk for hashing/prefix-compare/word-batched
+      match extension (byte-identical output, all qualities); S6 dedup
+      distance-cache probe distances + boundary-byte pre-check in cache
+      probes (identical output); S7 q3-only natural min_match_length
+      10 -> 5/6 for size; S9 multiplicative hash upgrade (output changes,
+      full size verify). Defer: q10/q11 size (large negative cache),
+      skip-ahead scan_step, q6 64 KiB intermediate4.
+
 0. **Keep q0/q1 low-quality work under regression watch.**
    The 2026-06-14 q0/q1 pass is accepted on the release-report Silesia slices.
    Future work should broaden corpus coverage and keep checking q2..q11 for

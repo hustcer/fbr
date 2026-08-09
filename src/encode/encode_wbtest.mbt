@@ -2229,3 +2229,39 @@ test "literal-only command builder rejects inputs that should stay stored" {
   }
   assert_false(brotli_literal_only_may_beat_stored(noisy))
 }
+
+///|
+test "greedy distance cache probe schedule mirrors google quality tiers" {
+  // q4..q6 probe the 4 plain cache entries, q7..q8 add the cache[0]+/-1..3
+  // variants, and everything else keeps the caller's default. Mirrors
+  // Google Brotli's `num_last_distances_to_check` for the H5/H6 hashers.
+  for quality in 4..<=6 {
+    assert_eq(brotli_greedy_distance_cache_codes_for_quality(quality, 16), 4)
+  }
+  for quality in 7..<=8 {
+    assert_eq(brotli_greedy_distance_cache_codes_for_quality(quality, 16), 10)
+  }
+  assert_eq(brotli_greedy_distance_cache_codes_for_quality(3, 16), 16)
+  assert_eq(brotli_greedy_distance_cache_codes_for_quality(9, 16), 16)
+  assert_eq(brotli_greedy_distance_cache_codes_for_quality(11, 16), 16)
+
+  // The scheduled probe budgets flow into every greedy parser config, and
+  // q2 keeps its no-probe low-quality shape.
+  assert_eq(brotli_hash_config_for_quality(5).max_distance_cache_codes, 4)
+  assert_eq(
+    brotli_natural_hash_config_for_quality(6).max_distance_cache_codes,
+    4,
+  )
+  assert_eq(
+    brotli_natural_hash_config_for_quality(2).max_distance_cache_codes,
+    0,
+  )
+  assert_eq(
+    brotli_intermediate_hash_config_for_quality(8).max_distance_cache_codes,
+    10,
+  )
+  assert_eq(
+    brotli_high_quality_hash_config_for_quality(9).max_distance_cache_codes,
+    16,
+  )
+}

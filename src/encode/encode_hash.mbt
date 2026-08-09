@@ -19,6 +19,27 @@ priv struct BrotliHashConfig {
 }
 
 ///|
+/// Number of recent-distance short codes the greedy match search probes per
+/// position. Mirrors Google Brotli's `num_last_distances_to_check` schedule
+/// for the H5/H6 hashers: 4 plain cache entries at q4..q6, plus the
+/// `cache[0] +/- 1..3` variants at q7..q8, and the full 16-code set
+/// elsewhere. Codes 0..3 are the plain entries and 4..9/10..15 are the
+/// `cache[0]`/`cache[1]` delta variants in the same order Google probes
+/// them, so truncating the probe loop keeps identical candidate semantics.
+fn brotli_greedy_distance_cache_codes_for_quality(
+  quality : Int,
+  default_codes : Int,
+) -> Int {
+  if quality >= 4 && quality <= 6 {
+    4
+  } else if quality >= 7 && quality <= 8 {
+    10
+  } else {
+    default_codes
+  }
+}
+
+///|
 fn brotli_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
   {
     table_size: 32768,
@@ -27,7 +48,9 @@ fn brotli_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
     max_match_checks: 4,
     max_match_length: 4096,
     min_match_length: 4,
-    max_distance_cache_codes: @common.brotli_num_distance_short_codes,
+    max_distance_cache_codes: brotli_greedy_distance_cache_codes_for_quality(
+      quality, @common.brotli_num_distance_short_codes,
+    ),
     lazy_lookahead: brotli_greedy_lazy_lookahead_for_quality(quality, 3),
     scan_step: 1,
     max_commands: 1200,
@@ -45,7 +68,9 @@ fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
   let max_distance_cache_codes = if quality <= 2 {
     0
   } else {
-    @common.brotli_num_distance_short_codes
+    brotli_greedy_distance_cache_codes_for_quality(
+      quality, @common.brotli_num_distance_short_codes,
+    )
   }
   {
     table_size: 32768,
@@ -165,7 +190,9 @@ fn brotli_intermediate_hash_config_for_quality(
     } else {
       5
     },
-    max_distance_cache_codes: @common.brotli_num_distance_short_codes,
+    max_distance_cache_codes: brotli_greedy_distance_cache_codes_for_quality(
+      quality, @common.brotli_num_distance_short_codes,
+    ),
     lazy_lookahead: brotli_greedy_lazy_lookahead_for_quality(quality, 3),
     scan_step: 1,
     max_commands,
