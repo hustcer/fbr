@@ -79,7 +79,9 @@ fn brotli_bounded_suffix_tree_collect_matches(
   root : Int,
   position : Int,
   config : BrotliHashConfig,
-  matches : Array[BrotliHashMatchCandidate],
+  lengths : Array[Int],
+  distances : Array[Int],
+  start : Int,
 ) -> Unit {
   let mut node = root
   let mut checks = 0
@@ -90,8 +92,10 @@ fn brotli_bounded_suffix_tree_collect_matches(
       node,
       config.max_match_length,
     )
-    brotli_record_bounded_hash_match(
-      matches,
+    brotli_record_flat_hash_match(
+      lengths,
+      distances,
+      start,
       match_length,
       position - node,
       config.min_match_length,
@@ -108,33 +112,44 @@ fn brotli_bounded_suffix_tree_collect_matches(
 }
 
 ///|
+/// Compressed-sparse-row match table. The candidates for position `i` live at
+/// `lengths[offsets[i]:offsets[i + 1]]` and the parallel slice of `distances`.
+///
+/// The DP visits every position of the input, so a per-position
+/// `Array[BrotliHashMatchCandidate]` would allocate one array object per byte
+/// (plus one struct per candidate). Three flat buffers keep the object count
+/// constant regardless of input length.
+priv struct BrotliSuffixMatchTable {
+  offsets : FixedArray[Int]
+  lengths : Array[Int]
+  distances : Array[Int]
+}
+
+///|
 fn brotli_bounded_suffix_tree_match_table(
   data : FixedArray[Byte],
   config : BrotliHashConfig,
-) -> Array[Array[BrotliHashMatchCandidate]] {
-  let table : Array[Array[BrotliHashMatchCandidate]] = []
-  for _ in 0..<data.length() {
-    let matches : Array[BrotliHashMatchCandidate] = []
-    table.push(matches)
-  }
-  let left_child = FixedArray::make(data.length(), -1)
-  let right_child = FixedArray::make(data.length(), -1)
+) -> BrotliSuffixMatchTable {
+  let len = data.length()
+  let offsets = FixedArray::make(len + 1, 0)
+  let lengths : Array[Int] = []
+  let distances : Array[Int] = []
+  let left_child = FixedArray::make(len, -1)
+  let right_child = FixedArray::make(len, -1)
   let mut root = -1
-  for position in 0..<data.length() {
+  for position in 0..<len {
+    let start = lengths.length()
+    offsets[position] = start
     if root >= 0 {
       brotli_bounded_suffix_tree_collect_matches(
-        data,
-        left_child,
-        right_child,
-        root,
-        position,
-        config,
-        table[position],
+        data, left_child, right_child, root, position, config, lengths, distances,
+        start,
       )
     }
     root = brotli_bounded_suffix_tree_insert(
       data, left_child, right_child, root, position, config,
     )
   }
-  table
+  offsets[len] = lengths.length()
+  { offsets, lengths, distances }
 }

@@ -3137,7 +3137,8 @@ fn brotli_bounded_shortest_path_offer_state(
 
 ///|
 fn brotli_bounded_shortest_path_offer_matches(
-  matches : Array[BrotliHashMatchCandidate],
+  match_lengths : ArrayView[Int],
+  match_distances : ArrayView[Int],
   len : Int,
   position : Int,
   slot : Int,
@@ -3155,11 +3156,12 @@ fn brotli_bounded_shortest_path_offer_matches(
   choice_copy_length : FixedArray[Int],
   choice_copy_distance : FixedArray[Int],
   choice_copy_output_length : FixedArray[Int],
+  next_cache : FixedArray[Int],
 ) -> Unit {
-  let next_cache : FixedArray[Int] = FixedArray::make(4, 0)
-  for match_index in 0..<matches.length() {
-    let match_ = matches[match_index]
-    if match_.length < config.min_match_length {
+  for match_index in 0..<match_lengths.length() {
+    let match_length = match_lengths[match_index]
+    let match_distance = match_distances[match_index]
+    if match_length < config.min_match_length {
       continue
     }
     // Keep the DP bounded: several previous matches per position, and only two
@@ -3172,50 +3174,30 @@ fn brotli_bounded_shortest_path_offer_matches(
     for i in 0..<2 {
       let copy_length = match i {
         0 => config.min_match_length
-        _ => match_.length
+        _ => match_length
       }
       if copy_length < config.min_match_length ||
-        copy_length > match_.length ||
+        copy_length > match_length ||
         position + copy_length > len {
         continue
       }
       let end = position + copy_length
       let copy_cost = base_cost +
         brotli_bounded_shortest_path_copy_cost(
-          copy_length,
-          match_.distance,
-          position,
-          current_cache,
-          cost_model,
+          copy_length, match_distance, position, current_cache, cost_model,
         )
       next_cache[0] = current_cache[0]
       next_cache[1] = current_cache[1]
       next_cache[2] = current_cache[2]
       next_cache[3] = current_cache[3]
       let distance_code = brotli_compute_distance_code(
-        match_.distance,
-        position,
-        next_cache,
+        match_distance, position, next_cache,
       )
-      brotli_update_distance_cache(next_cache, match_.distance, distance_code)
+      brotli_update_distance_cache(next_cache, match_distance, distance_code)
       brotli_bounded_shortest_path_offer_state(
-        costs,
-        state_cache0,
-        state_cache1,
-        state_cache2,
-        state_cache3,
-        previous_position,
-        previous_slot,
-        choice_copy_length,
-        choice_copy_distance,
-        choice_copy_output_length,
-        end,
-        copy_cost,
-        next_cache,
-        position,
-        slot,
-        copy_length,
-        match_.distance,
+        costs, state_cache0, state_cache1, state_cache2, state_cache3, previous_position,
+        previous_slot, choice_copy_length, choice_copy_distance, choice_copy_output_length,
+        end, copy_cost, next_cache, position, slot, copy_length, match_distance,
         0,
       )
     }
@@ -3259,6 +3241,13 @@ fn brotli_build_bounded_shortest_path_command_candidate(
   // every (position, slot) iteration and only ever read or value-copied by the
   // offer helpers, so a single allocation replaces one per state.
   let current_cache : FixedArray[Int] = FixedArray::make(4, 0)
+  // `next_cache` is the same idea one level down: `offer_matches` fills it per
+  // candidate and `offer_state` copies its values out.
+  let next_cache : FixedArray[Int] = FixedArray::make(4, 0)
+  // Hash-chain candidates are collected into one reusable pair of flat buffers
+  // (cleared per position) instead of a fresh array of candidate structs.
+  let match_lengths : Array[Int] = []
+  let match_distances : Array[Int] = []
   for position in 0..<len {
     for slot in 0..<brotli_bounded_shortest_path_beam_width {
       let state_index = brotli_bounded_shortest_path_state_index(position, slot)
@@ -3290,16 +3279,14 @@ fn brotli_build_bounded_shortest_path_command_candidate(
         0,
         0,
       )
-      let matches = brotli_bounded_previous_hash_matches_with_cache(
-        data, previous, position, config, current_cache,
+      match_lengths.clear()
+      match_distances.clear()
+      brotli_bounded_previous_hash_matches_flat(
+        data, previous, position, config, current_cache, match_lengths, match_distances,
       )
       brotli_bounded_shortest_path_offer_matches(
-        matches, len, position, slot, base_cost, current_cache, config, cost_model,
-        costs, state_cache0, state_cache1, state_cache2, state_cache3, previous_position,
-        previous_slot, choice_copy_length, choice_copy_distance, choice_copy_output_length,
-      )
-      brotli_bounded_shortest_path_offer_matches(
-        suffix_matches[position],
+        match_lengths[:],
+        match_distances[:],
         len,
         position,
         slot,
@@ -3317,6 +3304,31 @@ fn brotli_build_bounded_shortest_path_command_candidate(
         choice_copy_length,
         choice_copy_distance,
         choice_copy_output_length,
+        next_cache,
+      )
+      let suffix_from = suffix_matches.offsets[position]
+      let suffix_to = suffix_matches.offsets[position + 1]
+      brotli_bounded_shortest_path_offer_matches(
+        suffix_matches.lengths[suffix_from:suffix_to],
+        suffix_matches.distances[suffix_from:suffix_to],
+        len,
+        position,
+        slot,
+        base_cost,
+        current_cache,
+        config,
+        cost_model,
+        costs,
+        state_cache0,
+        state_cache1,
+        state_cache2,
+        state_cache3,
+        previous_position,
+        previous_slot,
+        choice_copy_length,
+        choice_copy_distance,
+        choice_copy_output_length,
+        next_cache,
       )
       let is_word_start = brotli_dictionary_word_byte(data[position]) &&
         (position == 0 || !brotli_dictionary_word_byte(data[position - 1]))

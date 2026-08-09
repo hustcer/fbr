@@ -19,12 +19,6 @@ priv struct BrotliHashConfig {
 }
 
 ///|
-priv struct BrotliHashMatchCandidate {
-  length : Int
-  distance : Int
-}
-
-///|
 fn brotli_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
   {
     table_size: 32768,
@@ -403,8 +397,15 @@ fn brotli_distance_cache_candidate(
 }
 
 ///|
-fn brotli_record_bounded_hash_match(
-  matches : Array[BrotliHashMatchCandidate],
+/// Flat parallel-array form of the bounded hash-match recorder. The candidates
+/// for one position occupy `lengths[start:]` / `distances[start:]`, so the
+/// distance dedup only rescans that run. Used by the bounded shortest-path DP,
+/// which walks every position of the input and cannot afford one
+/// `Array` (plus one struct per candidate) per position.
+fn brotli_record_flat_hash_match(
+  lengths : Array[Int],
+  distances : Array[Int],
+  start : Int,
   length : Int,
   distance : Int,
   min_match_length : Int,
@@ -412,30 +413,36 @@ fn brotli_record_bounded_hash_match(
   if length < min_match_length || distance <= 0 {
     return
   }
-  for i in 0..<matches.length() {
-    if matches[i].distance == distance {
-      if length > matches[i].length {
-        matches[i] = { length, distance }
+  for i in start..<distances.length() {
+    if distances[i] == distance {
+      if length > lengths[i] {
+        lengths[i] = length
       }
       return
     }
   }
-  matches.push({ length, distance })
+  lengths.push(length)
+  distances.push(distance)
 }
 
 ///|
-fn brotli_bounded_previous_hash_matches_with_cache(
+/// Appends the bounded hash-chain candidates for `position` to `lengths` /
+/// `distances`, starting at their current end. Callers that run over a whole
+/// input reuse one pair of buffers and `clear()` them per position.
+fn brotli_bounded_previous_hash_matches_flat(
   data : FixedArray[Byte],
   previous : FixedArray[Int],
   position : Int,
   config : BrotliHashConfig,
   distance_cache : FixedArray[Int],
-) -> Array[BrotliHashMatchCandidate] {
-  let matches : Array[BrotliHashMatchCandidate] = []
+  lengths : Array[Int],
+  distances : Array[Int],
+) -> Unit {
+  let start = lengths.length()
   let len = data.length()
   let hash_bytes = if config.hash_bytes >= 4 { 4 } else { 3 }
   if position + hash_bytes > len {
-    return matches
+    return
   }
   let max_match_length = config.max_match_length
   let b0 = data[position]
@@ -464,8 +471,10 @@ fn brotli_bounded_previous_hash_matches_with_cache(
               data[position + length] == data[candidate + length] {
           length += 1
         }
-        brotli_record_bounded_hash_match(
-          matches,
+        brotli_record_flat_hash_match(
+          lengths,
+          distances,
+          start,
           length,
           distance,
           config.min_match_length,
@@ -498,8 +507,10 @@ fn brotli_bounded_previous_hash_matches_with_cache(
             data[position + length] == data[candidate + length] {
         length += 1
       }
-      brotli_record_bounded_hash_match(
-        matches,
+      brotli_record_flat_hash_match(
+        lengths,
+        distances,
+        start,
         length,
         position - candidate,
         config.min_match_length,
@@ -508,7 +519,6 @@ fn brotli_bounded_previous_hash_matches_with_cache(
     candidate = previous[candidate]
     checked += 1
   }
-  matches
 }
 
 ///|

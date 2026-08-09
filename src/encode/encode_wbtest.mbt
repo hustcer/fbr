@@ -987,16 +987,18 @@ test "brotli_sync q10 bounded shortest-path enumerates multiple matches" {
   )
   let previous = brotli_previous_match_positions(input, config)
   let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
-  let matches = brotli_bounded_previous_hash_matches_with_cache(
-    input, previous, 14, config, distance_cache,
+  let lengths : Array[Int] = []
+  let distances : Array[Int] = []
+  brotli_bounded_previous_hash_matches_flat(
+    input, previous, 14, config, distance_cache, lengths, distances,
   )
   let mut saw_distance_7 = false
   let mut saw_distance_14 = false
-  for i in 0..<matches.length() {
-    if matches[i].distance == 7 && matches[i].length >= 6 {
+  for i in 0..<lengths.length() {
+    if distances[i] == 7 && lengths[i] >= 6 {
       saw_distance_7 = true
     }
-    if matches[i].distance == 14 && matches[i].length >= 6 {
+    if distances[i] == 14 && lengths[i] >= 6 {
       saw_distance_14 = true
     }
   }
@@ -1016,14 +1018,13 @@ test "brotli_sync q10 bounded suffix tree enumerates matches" {
     ),
   )
   let table = brotli_bounded_suffix_tree_match_table(input, config)
-  let matches = table[14]
   let mut saw_distance_7 = false
   let mut saw_distance_14 = false
-  for i in 0..<matches.length() {
-    if matches[i].distance == 7 && matches[i].length >= 6 {
+  for i in table.offsets[14]..<table.offsets[15] {
+    if table.distances[i] == 7 && table.lengths[i] >= 6 {
       saw_distance_7 = true
     }
-    if matches[i].distance == 14 && matches[i].length >= 6 {
+    if table.distances[i] == 14 && table.lengths[i] >= 6 {
       saw_distance_14 = true
     }
   }
@@ -2144,38 +2145,47 @@ test "hash match helpers cover four-byte and malformed previous-table paths" {
 
   let previous4 = brotli_previous_match_positions(data, config4)
   assert_eq(previous4[6], 0)
-  let matches = brotli_bounded_previous_hash_matches_with_cache(
+  let lengths : Array[Int] = []
+  let distances : Array[Int] = []
+  brotli_bounded_previous_hash_matches_flat(
     data,
     previous4,
     6,
     brotli_bounded_shortest_path_config(config4),
     [4, 11, 15, 16],
+    lengths,
+    distances,
   )
-  assert_true(matches.length() > 0)
-  assert_eq(matches[0].distance, 6)
+  assert_true(lengths.length() > 0)
+  assert_eq(distances[0], 6)
 
   let malformed_previous = FixedArray::make(1, -1)
-  let no_matches = brotli_bounded_previous_hash_matches_with_cache(
+  let no_lengths : Array[Int] = []
+  let no_distances : Array[Int] = []
+  brotli_bounded_previous_hash_matches_flat(
     data,
     malformed_previous,
     6,
     brotli_bounded_shortest_path_config(config4),
     [99, 100, 101, 102],
+    no_lengths,
+    no_distances,
   )
-  assert_eq(no_matches.length(), 0)
+  assert_eq(no_lengths.length(), 0)
 }
 
 ///|
 test "bounded hash match recorder keeps the longest match per distance" {
-  let matches : Array[BrotliHashMatchCandidate] = []
-  brotli_record_bounded_hash_match(matches, 3, 4, 4)
-  assert_eq(matches.length(), 0)
-  brotli_record_bounded_hash_match(matches, 4, 4, 4)
-  brotli_record_bounded_hash_match(matches, 7, 4, 4)
-  brotli_record_bounded_hash_match(matches, 5, 4, 4)
-  assert_eq(matches.length(), 1)
-  assert_eq(matches[0].length, 7)
-  assert_eq(matches[0].distance, 4)
+  let lengths : Array[Int] = []
+  let distances : Array[Int] = []
+  brotli_record_flat_hash_match(lengths, distances, 0, 3, 4, 4)
+  assert_eq(lengths.length(), 0)
+  brotli_record_flat_hash_match(lengths, distances, 0, 4, 4, 4)
+  brotli_record_flat_hash_match(lengths, distances, 0, 7, 4, 4)
+  brotli_record_flat_hash_match(lengths, distances, 0, 5, 4, 4)
+  assert_eq(lengths.length(), 1)
+  assert_eq(lengths[0], 7)
+  assert_eq(distances[0], 4)
 }
 
 ///|
