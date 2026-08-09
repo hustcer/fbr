@@ -12,7 +12,7 @@ The benchmark entry point is the reproducible way to regenerate these results.
 - Encode tables include compressed size and time. Decode tables measure decoding Google-produced `.br` streams and report time only, with compressed size shown for context.
 - q0 and q1 currently emit valid stored streams and are not intended to match Google Brotli's low-quality compression ratio.
 - q10 stays on the fast greedy high-quality path: much faster than Google but still larger in the high-quality range.
-- q11 runs a bounded optimal-parse pass for single chunks up to 128 KiB, trading encode speed (kept within ~250% of Google) for a smaller stream than q10; it is still larger than Google's full Zopfli output.
+- q11 runs a bounded optimal-parse pass for every chunk up to 1 MiB, trading encode speed for a smaller stream than q10; it is still larger than Google's full Zopfli output. Its encode cost grows with input: about 2.1x Google at 128 KiB, and roughly 2.4x-2.7x between 256 KiB and 1 MiB, so q11 is the one quality that is not held to the ~250% encode-time ceiling.
 
 ## Environment
 

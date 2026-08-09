@@ -3026,8 +3026,12 @@ fn brotli_bounded_shortest_path_config(
     max_distance_cache_codes: config.max_distance_cache_codes,
     lazy_lookahead: 0,
     scan_step: 1,
-    max_commands: 131072,
-    max_input_length: 131072,
+    // The DP is q11-only and the standard/chunked paths both cap a chunk at
+    // 1 MiB, so this budget lets every q11 chunk qualify. Below it, q11 would
+    // silently fall back to the greedy path and emit byte-identical output to
+    // q10 for every input between 128 KiB and 1 MiB.
+    max_commands: 1048576,
+    max_input_length: 1048576,
     min_copy_ratio_percent: 8,
     require_dense_match_density: false,
     density_sample_step: config.density_sample_step,
