@@ -27,9 +27,12 @@ JavaScript, and wasm-gc:
 - P3 q2..q9 encoder is practically complete for the measured Silesia windows.
   Remaining work is broader release-corpus validation and regression policy,
   not mandatory C-reference Lloyd clustering.
-- P4 q10/q11 encoder is valid but remains outside the revised 5% size target.
-  The latest recorded 1 MiB Silesia overhead is about q10 +9.05% and
-  q11 +10.49%.
+- P4 q10/q11 encoder is valid. As of 2026-06-15 q11 runs a bounded
+  optimal-parse DP (q11-only) for single chunks up to 128 KiB: Silesia 64 KiB
+  q11 +9.14% (was +11.21%) and 128 KiB q11 +8.01% (was +10.10%), with encode
+  time within the 250% ceiling (native ~2.0-2.2x Google). q10 stays on the
+  fast greedy path and is unchanged. Reaching the original -7%..+3.5% size
+  target still needs an efficient Zopfli backend (de-scoped); see findings.md.
 - Release tooling exists for conformance, ratio, target-perf, decoder fuzz,
   encoder roundtrip fuzz, deterministic generated fuzz corpus, package checks,
   and aggregate release-candidate gates.
@@ -106,10 +109,14 @@ JavaScript, and wasm-gc:
    percentage-only gate for very small inputs.
 
 3. **Close or re-scope P4 q10/q11.**
-   Start with low-cost exact-costed changes: better q10/q11 parser scoring,
-   guarded mixed-dictionary subsets, reuse of existing block-layout candidates,
-   and distance-cache-aware selection. Escalate to larger bounded
-   shortest-path/Zopfli-style work only if those cheaper candidates stall.
+   Partially done (2026-06-15): q11 now runs a bounded optimal-parse DP
+   (q11-only, single chunks <=128 KiB) and improved to +9.14%/+8.01% on
+   Silesia 64 KiB/128 KiB within the 250% speed ceiling; q10 unchanged.
+   Remaining: (a) let q11 use <=128 KiB chunks so inputs >128 KiB also benefit;
+   (b) the original -7%..+3.5% target needs an efficient H10 + O(n) ZopfliNode
+   + iterated full command cost-model backend (large, previously de-scoped).
+   The bounded-DP cost-model iteration and deep-search levers were measured and
+   are insufficient on their own; see findings.md negative cache.
 
 4. **Keep decode optimization conservative.**
    The decode hot path has a large negative cache in `findings.md`, including

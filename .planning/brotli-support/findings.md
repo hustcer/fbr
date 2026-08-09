@@ -144,11 +144,265 @@ reference, not a full session transcript.
   q2 to 301 bytes versus Google 293 (+2.73%) and q3..q9 to 272 bytes, with q9
   just over the line versus Google 259 (+5.02%).
 
-## P4 q10/q11 Guidance
+## P4 q10/q11 Root-Cause Diagnostic (2026-06-15)
+
+- The gap is in PARSING (match selection), not entropy coding. Evidence from
+  the 2026-06-13 release report, Silesia 64 KiB:
+  - q9: Google 21,904 vs MoonBit 21,397 (MoonBit BEATS Google q9 by -2.31%).
+  - q10: Google 19,463 vs MoonBit 21,302 (+9.45%).
+  - q11: Google 19,154 vs MoonBit 21,302 (+11.21%).
+  - Google jumps 21,904 -> 19,463 from q9 to q10 (-11%). MoonBit barely moves
+    21,397 -> 21,302 (-0.4%). Since MoonBit's q9 entropy coding already beats
+    Google's q9, the entropy/Huffman/context/block-split stack is competitive;
+    the missing 9-11% is the optimal (Zopfli-style) parse that Google switches
+    on at q10/q11 and MoonBit does not yet match.
+- Current code state (confirmed by reading src/encode/encode.mbt):
+  - q10/q11 dispatch DOES call `brotli_build_bounded_shortest_path_command_candidate`
+    (line ~6164) but `brotli_bounded_shortest_path_config` sets
+    `max_input_length: 32768` (line ~3048), so the DP returns None for the
+    64 KiB/128 KiB benchmark chunks. The committed q10/q11 output is the fast
+    greedy mixed-dictionary result (21,302 / 38,565), not the DP.
+  - The DP cost model (`brotli_bounded_shortest_path_copy_cost`, line ~2984)
+    uses a FLAT command/length base cost of `8 + length_extra_bits +
+    distance_bits`. It does not model real command-symbol entropy, and the
+    whole DP is a SINGLE pass with a cost model seeded from one greedy parse
+    (`brotli_bounded_shortest_path_cost_model`). Google q11 iterates the cost
+    model to convergence; that iteration is the untried high-leverage lever.
+  - beam width = 2 (`brotli_bounded_shortest_path_beam_width`). A 4-element
+    `current_cache` FixedArray is allocated per position per slot inside the
+    DP loop (line ~3268) -> heavy GC pressure, a likely speed cost.
+- Speed budget is large and currently unused: committed q10/q11 ~12 ms (64 KiB)
+  / ~21 ms (128 KiB) native vs Google q11 69 ms / 147 ms. The 250% ceiling is
+  ~172 ms (64 KiB) / ~368 ms (128 KiB). The rejected DP activation was 439 ms
+  (64 KiB), i.e. ~2.5x over the 64 KiB ceiling, so a viable DP needs both a
+  ratio gain (past +6.66%) AND a ~2.5x speedup.
+- Strategy order for this pass (user instruction: size first, then speed):
+  Phase 1 chase the -7%..+3.5% size target (cheap to measure via
+  `tools/encode/verify.nu`); Phase 2 optimize speed to <=250% of Google.
+  Untried levers, highest leverage first: (1) iterate the DP cost model
+  (re-seed from the DP's own output and re-parse), (2) real command-symbol
+  cost in the cost model, (3) remove per-position allocations / beam=1 trial
+  for speed.
+
+## P4 q10/q11 2026-06-15 measured results (this session)
+
+- DP single-pass live baseline (max_input_length raised to 131072,
+  max_commands 131072): 128 KiB q10 = 37,814 bytes (+6.67%), reproducing the
+  prior reverted trial exactly. 64 KiB still 21,302 because 64 KiB uses the
+  `brotli_encode_standard` inline path (line ~6538, mixed-dict only, no DP),
+  while 128 KiB routes through `brotli_encode_chunked_standard` ->
+  `brotli_try_compressed_chunk` which has the DP (line ~6164).
+- FAILED attempt 1 — DP cost-model iteration (Zopfli re-seed, 2 passes):
+  128 KiB q10 37,814 -> 37,806 (8 bytes, +6.67% -> +6.65%). Negligible. Root
+  cause: `brotli_bounded_shortest_path_cost_model_from_commands` only refines
+  literal_bits and distance_bits; the command/copy-length cost in
+  `brotli_bounded_shortest_path_copy_cost` is a FLAT 8, so iteration never
+  refines command structure. Reverted (kept the unused `cost_model_override?`
+  param for possible reuse).
+- DECISIVE speed finding — DP single-pass 128 KiB q10 encode time
+  (`target-perf.nu --repeats 20 --samples 3`): native 580.2 ms, wasm-gc
+  502.8 ms vs Google 55.6 ms. That is 10.4x (native) / 9.0x (wasm-gc) of
+  Google = ~1040% / 900%, far above the 250% ceiling (q10 128 KiB budget
+  ~137 ms). The DP is strictly dominated: slower than Google's real Zopfli AND
+  worse ratio (+6.6% vs 0). It is UNCOMMITTABLE on speed as architected.
+  Note q11's budget is looser (Google 147 ms -> 368 ms ceiling), so the DP is
+  only ~1.6x over for q11; a q11-only slower-better path is the one place the
+  DP could fit on speed, but it still misses the size target at +6.6%.
+- Working conclusion: the +3.5% size target requires true Zopfli-quality
+  optimal parsing (Google's q9->q10 -11% jump is exactly that). The available
+  bounded-DP plateaus ~+6.6% and is 10x over budget; entropy coding is already
+  competitive (MoonBit q9 beats Google q9), so there is no 9% to recover
+  there. Reaching the target appears to need the H10 + ZopfliNode + iterated
+  full cost model backend the plan explicitly de-scoped, which would also
+  stress the speed budget.
+- Feasibility probe — DP deep search (max_match_checks 32->256,
+  max_match_length 4096->65536, single pass): 128 KiB q10 37,814 -> 37,501
+  (+6.67% -> +5.79%, 313 bytes). So match-finding depth IS a real lever
+  (more than iteration's 8 bytes), but it still misses +3.5% by ~2.3 points
+  (~812 bytes short) and makes the already-10x-over-budget DP ~8x more
+  match work, i.e. far slower. Combining deep search + iteration + a full
+  command cost model might close more size but every lever raises an
+  already-uncommittable encode time.
+- DECISION POINT (2026-06-15): size target (+3.5%) and speed ceiling (<=250%)
+  are mutually exclusive under the current architecture. The shallow DP fits
+  only q11's looser budget (~1.6x over, a possible q11-only path) at +6.6%
+  size, which misses the target; reaching the size target needs deep
+  search + iteration that pushes encode time to ~15-20x Google. The only way
+  to get BOTH is Google's efficient Zopfli (H10 binary tree makes deep search
+  cheap + clean O(n) shortest-path), a large de-scoped rewrite. All
+  experimental encode.mbt edits were reverted; the tree is back to the
+  committed fast greedy q10/q11 (+8.79%/+9.45%). Surfaced the fork to the user
+  rather than burning the remaining attempt budget on negative-cache tweaks.
+- OUTCOME (2026-06-15): user chose the q11-partial path. LANDED a committable
+  q11 improvement. What worked:
+  - Gate the bounded optimal-parse DP to q11 ONLY (site A chunked path
+    `quality >= 11`; site B `brotli_encode_standard` inline path adds a q11 DP
+    candidate). q10 untouched -> q0..q10 byte-identical (zero regression).
+  - Raise DP `max_input_length` 32768 -> 131072 and `max_commands` -> 131072 so
+    64k/128k single chunks qualify. (Inputs whose chunk exceeds 131072 fall
+    back to greedy; q11 chunk size is 1 MiB, so >128 KiB inputs are not
+    improved yet — see future work.)
+  - beam_width 2 -> 1: ratio cost is only 11 bytes (64k) / 18 bytes (128k) but
+    halves DP work. The beam-2 distance-cache divergence almost never pays here.
+    This is the single biggest speed lever and is essentially ratio-free.
+  - Remove per-(match,length) `next_cache` + per-match `bounded_lengths`
+    allocations (reuse one 4-int buffer; inline length selection) and reuse the
+    main-loop `current_cache` buffer. Pure refactors, size unchanged.
+  - Drop the half-length DP representative (3 -> 2 lengths). Costs 1-3 bytes,
+    real speed gain.
+  - Net: native 128k q11 598.9 ms -> 330.7 ms.
+- LANDED results (just bench 2026-06-15): q11 64k 20,904 (+9.14%, was +11.21%),
+  native 2.02x / wasm-gc 1.97x Google; q11 128k 37,833 (+8.01%, was +10.10%),
+  native 2.2x / wasm-gc 2.09x Google. All four cells within the 250% ceiling
+  (not the 150% preference). q10 and q0..q9 unchanged. Validated: moon fmt,
+  moon check --target all, moon test --target all (165), conformance (21),
+  roundtrip fuzz q10/q11 (80 cases), report regenerated.
+- The beam-2 code path is kept behind `brotli_bounded_shortest_path_beam_width
+  >= 2` guards (offer_state + terminal) so beam can be re-enabled without
+  rewriting the helper; the wbtest was updated to assert the live beam=1
+  single-best-state behavior.
+- Future work (recorded, not done): (1) let q11 use <=128 KiB chunks so larger
+  inputs also get the DP within budget; (2) the only path to the original
+  -7%..+3.5% target is an efficient H10 + O(n) ZopfliNode + iterated full
+  command cost-model backend.
+
+## P5 Efficient Zopfli backend blueprint (2026-06-15, from c/enc)
+
+Goal: rewrite a proper Zopfli backend for q11 (H10-style matches + O(n)
+shortest path + iterated full cost model). Reference: brotli
+`c/enc/backward_references_hq.c` + `hash_to_binary_tree_inc.h`.
+
+- q11 = `BrotliCreateHqZopfliBackwardReferences`: precompute all matches per
+  position, then run EXACTLY 2 iterations:
+  - iter 0: cost model = `ZopfliCostModelSetFromLiteralCosts` (per-literal
+    entropy estimate; heuristic cmd cost `log2(11+i)`, dist cost `log2(20+i)`).
+  - iter 1: cost model = `ZopfliCostModelSetFromCommands` (real literal/cmd/dist
+    histograms from iter-0 commands, via SetCost entropy).
+  Each iter: reset nodes/dist_cache, run ZopfliIterate (the DP), then
+  BrotliZopfliCreateCommands. Final = iter-1 commands.
+- Cost model (`SetCost`): per-symbol Shannon bits `cost[i]=log2(sum)-log2(hist[i])`,
+  missing symbol = `log2(missing_sum)+2`, min 1 bit. Literals get a CUMULATIVE
+  prefix-sum array `literal_costs_[0..n]` so the cost of inserting literals
+  [from,to) is O(1) = `literal_costs_[to]-literal_costs_[from]` (with a float
+  carry term for precision). Also `min_cost_cmd_` = min over cmd costs.
+- DP node (`ZopfliNode`): per end-position store length(+code modifier),
+  distance, insert_length(+short dist code), cost, and a backtrack `next`/
+  `shortcut`. `nodes[0].cost=0`.
+- O(n) magic = `StartPosQueue`: keeps the 8 lowest-`costdiff` start positions
+  (costdiff = node_cost - literal_costs(0,pos)). For each pos, `UpdateNodes`
+  only starts commands FROM those <=8 queued starts (not all O(n) starts).
+  `MaxZopfliCandidates` start positions tried (q11 small, e.g. <=4); for k>=2
+  only last-distance matches are tried.
+- `UpdateNodes(pos)`: (1) EvaluateNode pushes pos to queue if reachable cheaply
+  and computes its distance cache via ComputeDistanceCache/Shortcut; (2) for
+  each queued start: inscode=GetInsertLengthCode(pos-start),
+  base_cost=start_costdiff+insert_extra+literal_costs(0,pos); try the 16
+  distance-cache short codes (each: find match len, for each l update
+  nodes[pos+l] if cost cheaper) then (k<2) all H10 matches with normal distance
+  codes. cost = cmd_cost(cmdcode)+copy_extra+dist_cost+base/dist_cost.
+- `ComputeMinimumCopyLength`: skip lengths already reached at <= min possible
+  future cost; `skip`/`BROTLI_LONG_COPY_QUICK_STEP` fast-forwards long copies
+  (EvaluateNode-only) to stay O(n). `MaxZopfliLen` q11=325 collapses very long
+  matches to a single candidate + skip.
+- Backtrack (`ComputeShortestPathFromNodes` + `BrotliZopfliCreateCommands`):
+  walk nodes[].next to emit (insert_len, copy_len, distance, dist_code),
+  updating the real distance cache (dist_code 0 / dictionary refs do NOT update
+  the ring).
+- MoonBit reuse plan: use the existing `brotli_bounded_suffix_tree_match_table`
+  (a suffix BST = morally H10) as the per-position match source; reuse the
+  existing command/distance prefix encoders, BrotliEncodeCommand, and the
+  meta-block writer (`brotli_write_best_lz77_metablock`). New code only needs
+  the cost model + StartPosQueue DP + node backtrack -> command list. Plan to
+  put it in a new file `src/encode/zopfli.mbt`, wired as a q11 candidate that
+  replaces the bounded-DP candidate.
+
+## P5 Zopfli rewrite ATTEMPT OUTCOME (2026-06-15) — reverted, not shipped
+
+- Implemented the full backend in `src/encode/zopfli.mbt` (~700 lines): SetCost
+  entropy cost model, sliding-window per-literal cost
+  (`BrotliEstimateBitCostsForLiterals` non-UTF8 port), set-from-commands model,
+  StartPosQueue (ring buffer, 8 slots), UpdateNodes DP with last-distance +
+  new-match loops, ComputeDistanceShortcut/Cache, ComputeMinimumCopyLength,
+  node backtrack to commands, 2-iteration driver. It COMPILES on all targets
+  and produces VALID streams (roundtrip verified on synthetic data; the
+  pipeline roundtrips through the Google decoder fine).
+- Match source: hash chains (`brotli_bounded_previous_hash_matches_with_cache`)
+  + suffix tree, deduped by distance, then a Pareto transform (sort by distance
+  asc, keep strictly-increasing length) to get the H10 invariant. The table is
+  rich: ~1.06M matches over 49,253/65,536 non-empty positions, maxlen 355. So
+  match finding is NOT the problem.
+- PROBLEM: the parse quality is WORSE than the existing bounded-DP and even the
+  greedy mixed path. On Silesia 64 KiB q11:
+  - iter 0 (heuristic/windowed cost): 4,103 commands, 55% copy coverage,
+    written 26,511 bytes.
+  - iter 1 (cost from iter-0 commands): DEGENERATES to ~400 commands
+    (~92% literals), written ~35 KB.
+  - vs bounded-DP 20,904 and mixed 21,302. So the new backend never wins; the
+    final q11 output stayed 21,302 (mixed) because the Zopfli candidate is
+    larger than mixed.
+- Bugs found and fixed during the attempt (kept in the notes for a retry):
+  - set-from-commands distance histogram must count the ACTUAL distance code
+    (implicit last-distance commands, command symbol < 128, use short code 0),
+    otherwise cost_dist[0] becomes the missing-symbol cost (~13.5 bits) and the
+    DP avoids cheap last-distance copies. Fixed.
+  - the match list must satisfy the H10 invariant (nearest distance per length)
+    or the DP's running-length loop assigns far distances to short lengths.
+    Fixed with the distance-sorted Pareto transform.
+  - global literal histogram is too flat; switched iter-0 to the sliding-window
+    estimate. Small effect here.
+  - the `k >= 2` "last-distance only" restriction starved new-match coverage;
+    removing it lifted copy coverage 37% -> 55% but still not enough.
+- UNRESOLVED root cause (for a future retry): the StartPosQueue DP still finds
+  fewer/worse copies than the beam-based bounded-DP that uses the SAME matches,
+  and it skews toward explicit/far distances, so the written stream is larger.
+  iter-1's collapse is a SYMPTOM of a suboptimal iter-0 (its literal/command
+  distribution poisons the from-commands model). Likely suspects to check next:
+  (a) the StartPosQueue is not retaining the optimal recent start positions
+  (verify costdiff signs/ordering and `at(k)` ring indexing against a tiny
+  hand-traced example); (b) distance-cost calibration vs the context-modeling
+  writer; (c) the UTF8 windowed literal-cost variant
+  (`EstimateBitCostsForLiteralsUTF8`) for text; (d) the `skip` long-copy
+  fast-forward was omitted (correctness ok, but interacts with the queue).
+- DECISION (2026-06-15): reverted the wiring to the working bounded-DP
+  (q11 64k 20,904 / 128k 37,833, within the 250% budget — the shipped win, zero
+  regression) and removed `src/encode/zopfli.mbt` + the debug test +
+  the `moonbitlang/core/math` import. The source tree is byte-identical to
+  commit 9007367 again. A future Zopfli retry should start from this blueprint
+  and the bug list above, and validate iter-0 beats greedy on real 64 KiB data
+  BEFORE wiring iterations.
+
+## P5b bounded-DP + full cost model ATTEMPT OUTCOME (2026-06-15) — reverted
+
+- Per the user's pivot (keep the working beam bounded-DP, upgrade its cost
+  model), added an entropy copy-length-code cost (`copy_code_bits[24]`,
+  default 8) to `BrotliBoundedShortestPathCostModel`, built it in
+  `cost_model_from_commands`, used it in `copy_cost` (replacing the flat 8),
+  added a `cost_model_override?` param, and wired a 2-pass iteration in both q11
+  dispatch sites (seed from greedy, re-seed from the first DP output).
+- RESULT: a wash / slightly negative. Silesia 64k q11 20,904 -> 20,991
+  (+87 B, a small regression) and 128k 37,833 -> 37,808 (-25 B). The copy-code
+  entropy changed the greedy-seed pass's parse and slightly hurt 64k; the
+  iteration recovered little. Consistent with the long-standing finding that
+  cost-model tweaks on the bounded-DP are a wash ("minor writer/cost changes
+  have not moved q10/q11 size"). Reverted to the committed bounded-DP.
+- COMBINED CONCLUSION (both 2026-06-15 attempts): the +3.5% size target is not
+  reachable via either a from-scratch StartPosQueue Zopfli (parse-quality bugs,
+  worse than greedy) or bounded-DP cost-model upgrades (a wash). The bounded-DP
+  at q11 64k 20,904 (+9.06%) / 128k 37,833 (+7.96%), within the 250% speed
+  budget, is the practical ceiling of the current match+parse machinery.
+  Reaching Google's q11 (19,154 / 35,027) needs its exact H10 binary-tree match
+  finder + ZopfliNode shortest path tuned to parity — a large effort that this
+  session's from-scratch port did not achieve to quality. Recommend keeping the
+  shipped bounded-DP q11 win; treat closing the rest of the gap as a separate,
+  larger project.
 
 - Minor writer selection changes have not moved q10/q11 size; reaching 5%
   probably requires a material command-stream improvement or distinct q11
   parser behavior.
+- 2026-06-14 user constraint for the resumed q10/q11 pass: try at most ten
+  independent strategies before stopping if no useful result appears. Test one
+  strategy at a time. Commit only when an improvement is real, and keep encode
+  time within 250% of Google Brotli, preferably within 150%.
 - Try low-cost exact-costed changes first:
   guarded mixed-dictionary subsets, improved high-quality parser scoring,
   distance-cache-aware match selection, and reuse of q4+ block-layout
@@ -162,6 +416,70 @@ reference, not a full session transcript.
   shortest-path seed, q10-only wider transform subset `[1, 4, 16, 28, 47]`,
   384/512 hash-chain checks, 1 MiB DP prototype, and plain q10/q11 1.5-2 MiB
   chunk-size promotion.
+- Rejected q10/q11 trial (2026-06-14): limiting the context8-first writer
+  shortcut to q3..q9 so q10/q11 would exact-compare later split/context
+  candidates did not change Silesia 64 KiB output at all. q10/q11 remained
+  21,302 bytes with the same SHA-256, so the later writer candidates did not
+  beat context8 on that command stream. Do not retry unchanged; it only adds
+  writer passes.
+- Rejected q10/q11 DP tuning trials (2026-06-14): adding bounded shortest-path
+  representative copy lengths `[8, 16, 32, 64, 128]` on top of
+  `min/half/full` saved only 4 bytes on Silesia 64 KiB while increasing search
+  cost. Raising the bounded beam width from 2 to 4 saved 0 bytes on the same
+  row. Keep the two-state `min/half/full` DP shape unless a different cost
+  model or candidate source changes the tradeoff.
+- Rejected q10/q11 DP activation trial (2026-06-14): enabling the existing
+  bounded shortest-path candidate for 64 KiB and 128 KiB direct q10/q11 input
+  produced real but insufficient size wins and an unacceptable speed hit.
+  Best 64 KiB combination tested (DP + approximate command-symbol cost +
+  q10/q11 min match 3 + mixed transform 49 + mixed cost seed) reached only
+  20,760 bytes versus Google q10 19,463 (+6.66%), while
+  `target-perf.nu --repeats 5 --samples 1` measured native 439.98 ms and
+  wasm-gc 352.50 ms versus Google 34.31 ms. Do not land this bounded-DP
+  activation unchanged; it misses the size target and is 10x+ slower.
+- Rejected q10/q11 DP micro-tweaks from the same trial: lowering high-quality
+  min match length 5 -> 4 saved only about 45 bytes on Silesia 64 KiB q10;
+  4 -> 3 saved only another 11 bytes and slowed search further. Adding mixed
+  dictionary transform 49 (`ing `) saved only about 3 bytes. Using mixed
+  dictionary commands as the DP cost-model seed saved about 1 byte. Reopening
+  these knobs needs a different parser design, not another isolated retry.
+- Rejected q10/q11 greedy parser tie-break (2026-06-14): for
+  `max_match_checks >= 256`, allowing equal-length hash-chain candidates to
+  replace the incumbent when they had a smaller estimated distance code did
+  not change Silesia 64 KiB q10/q11 output or SHA-256. Do not retry unchanged;
+  the current Silesia command stream has no useful equal-length cheaper-distance
+  substitutions on that row.
+- Rejected q10/q11 strategy 1 (2026-06-14 constrained loop): replacing the
+  q10/q11 greedy "longest match wins" rule with an official-style
+  distance-aware backward-reference score, including score-based lazy
+  lookahead, worsened Silesia 64 KiB q10/q11 from 21,302 to 21,311 bytes.
+  `moon check src/encode --target all` passed before the ratio run, but the
+  size result regressed and the source change was reverted. Do not retry this
+  plain scoring replacement unchanged.
+- Rejected q10/q11 strategy 2 (2026-06-14 constrained loop): adding a 3-byte
+  high-quality candidate before the current q10/q11 4-byte high-quality mixed
+  candidate produced identical Silesia 64 KiB q10/q11 output, 21,302 bytes with
+  the same SHA-256. `moon check src/encode --target all` passed; the source
+  change was reverted. Do not retry plain 3-byte HQ candidate competition
+  unchanged.
+- Rejected q10/q11 strategy 3 (2026-06-14 constrained loop): making q10/q11
+  lazy matching less aggressive by requiring `next_length > current_length +
+  skipped_literals` worsened Silesia 64 KiB q10/q11 from 21,302 to 21,388
+  bytes. `moon check src/encode --target all` passed; the source change was
+  reverted. Keep the existing `next_length > current_length` lazy rule unless
+  a broader parser redesign changes the tradeoff.
+- Rejected q10/q11 strategy 4 (2026-06-14 constrained loop): raising
+  high-quality q10/q11 lazy lookahead from 3 to 4 worsened Silesia 64 KiB
+  q10/q11 from 21,302 to 21,424 bytes. `moon check src/encode --target all`
+  passed; the source change was reverted. Do not spend more attempts on plain
+  deeper lazy lookahead unless combined with a different parser cost model.
+- Rejected q10/q11 strategy 5 (2026-06-14 constrained loop): adding the bounded
+  suffix-tree match table as an extra greedy match source did improve Silesia
+  64 KiB q10/q11 by 5 bytes, from 21,302 to 21,297, but it missed the size
+  target and exceeded the user performance ceiling. `target-perf.nu` on
+  64 KiB q10 measured native 115.89 ms and wasm-gc 104.30 ms versus Google
+  38.49 ms, i.e. 270%..301% of Google and above the 250% hard limit. Source
+  was reverted; do not retry suffix-tree-as-greedy-source unchanged.
 
 ## Release And Fuzz Tooling
 
