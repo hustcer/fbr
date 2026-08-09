@@ -4,7 +4,7 @@ const default_silesia_2m = "target/brotli-bench/silesia-2m.bin"
 const default_silesia_1m = "target/brotli-bench/silesia-1m.bin"
 
 def elapsed-ms [started: datetime]: nothing -> int {
-  (date now) - $started | into int | $in / 1_000_000
+  (date now) - $started | into int | $in / 1_000_000 | into int
 }
 
 def run-step [name: string, action: closure]: nothing -> record {

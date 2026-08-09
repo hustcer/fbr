@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.8.1
+
+### Changed
+
+- Migrated the module manifest from `moon.mod.json` to `moon.mod` and updated
+  the codebase for the current MoonBit formatter and checker without changing
+  the public API.
+- Enabled the bounded optimal-parse pass for q11 chunks up to 1 MiB. On the
+  measured Silesia inputs, q11 output decreased from 21,302 to 20,904 bytes at
+  64 KiB and from 264,341 to 256,952 bytes at 1 MiB, with higher encode time.
+
+### Performance
+
+- Reduced q2 encode time by 11.3% on native and 13.4% on wasm-gc for the
+  measured 64 KiB input, with encoded size unchanged.
+- Adjusted recent-distance probing for q4-q8. Across the measured 64 KiB and
+  128 KiB rows, aggregate encode time decreased by 10.6% and aggregate encoded
+  size increased by 0.116%.
+
+### Tools and docs
+
+- Updated the release benchmark report and checked-in benchmark data.
+- Fixed the release validation script for Nushell 0.114 strict return-type
+  checking by returning elapsed milliseconds as an integer.
+
 ## v0.8.0
 
 ### Changed
