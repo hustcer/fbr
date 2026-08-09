@@ -2265,3 +2265,42 @@ test "greedy distance cache probe schedule mirrors google quality tiers" {
     16,
   )
 }
+
+///|
+test "dictionary index pool matches transform machinery and caches" {
+  // The cached mixed index materializes each entry's transformed output
+  // bytes at build time; sampled entries must re-derive to the same bytes
+  // through the per-byte transform machinery it replaced.
+  let index = brotli_mixed_dictionary_encode_index_min8()
+  let mut checked = 0
+  let mut bucket = 0
+  while checked < 200 && bucket < brotli_dictionary_encode_hash_size {
+    let mut entry = index.table[bucket]
+    while entry >= 0 && checked < 200 {
+      let length = index.lengths[entry]
+      let output_length = index.output_lengths[entry]
+      let offset = index.output_offsets[entry]
+      for i in 0..<output_length {
+        assert_eq(
+          index.output_pool[offset + i],
+          brotli_dictionary_transform_output_byte(
+            length,
+            index.word_indices[entry],
+            index.transforms[entry],
+            i,
+          ),
+        )
+      }
+      checked += 1
+      entry = index.next[entry]
+    }
+    bucket += 1
+  }
+  assert_true(checked == 200)
+  // The process-lifetime cache hands back one built index per profile.
+  let again = brotli_mixed_dictionary_encode_index_min8()
+  assert_true(physical_equal(index, again))
+  let identity = brotli_identity_dictionary_encode_index()
+  let identity_again = brotli_identity_dictionary_encode_index()
+  assert_true(physical_equal(identity, identity_again))
+}
