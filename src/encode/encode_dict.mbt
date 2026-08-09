@@ -6,6 +6,59 @@ priv struct BrotliDictionaryEncodeIndex {
   output_lengths : FixedArray[Int]
   word_indices : FixedArray[Int]
   transforms : FixedArray[Int]
+  /// Start of each entry's transformed output bytes in `output_pool`.
+  output_offsets : FixedArray[Int]
+  /// Every entry's transformed output bytes, materialized once at build
+  /// time so match verification is a flat byte compare instead of
+  /// re-running the per-byte transform machinery.
+  output_pool : FixedArray[Byte]
+}
+
+///|
+/// Growable variant used while building an index: entries append their
+/// transformed output bytes to `pool`, which is frozen into the final
+/// index's `output_pool`.
+priv struct BrotliDictionaryIndexBuilder {
+  table : FixedArray[Int]
+  next : FixedArray[Int]
+  lengths : FixedArray[Int]
+  output_lengths : FixedArray[Int]
+  word_indices : FixedArray[Int]
+  transforms : FixedArray[Int]
+  output_offsets : FixedArray[Int]
+  pool : Array[Byte]
+}
+
+///|
+fn brotli_dictionary_index_builder_new(
+  total : Int,
+) -> BrotliDictionaryIndexBuilder {
+  {
+    table: FixedArray::make(brotli_dictionary_encode_hash_size, -1),
+    next: FixedArray::make(total, -1),
+    lengths: FixedArray::make(total, 0),
+    output_lengths: FixedArray::make(total, 0),
+    word_indices: FixedArray::make(total, 0),
+    transforms: FixedArray::make(total, 0),
+    output_offsets: FixedArray::make(total, 0),
+    pool: [],
+  }
+}
+
+///|
+fn brotli_dictionary_index_builder_finish(
+  builder : BrotliDictionaryIndexBuilder,
+) -> BrotliDictionaryEncodeIndex {
+  {
+    table: builder.table,
+    next: builder.next,
+    lengths: builder.lengths,
+    output_lengths: builder.output_lengths,
+    word_indices: builder.word_indices,
+    transforms: builder.transforms,
+    output_offsets: builder.output_offsets,
+    output_pool: FixedArray::from_array(builder.pool),
+  }
 }
 
 ///|
@@ -326,42 +379,21 @@ fn brotli_dictionary_transform_allowed(
 }
 
 ///|
-fn brotli_dictionary_hash_word(
-  length : Int,
-  word_index : Int,
-  transform_index : Int,
-) -> Int {
-  let output_length = brotli_dictionary_transform_output_length(
-    length, transform_index,
-  )
-  let mut hash = brotli_dictionary_hash_update(17, output_length)
-  for i in 0..<output_length {
-    hash = brotli_dictionary_hash_update(
-      hash,
-      brotli_dictionary_transform_output_byte(
-        length, word_index, transform_index, i,
-      ).to_int(),
-    )
-  }
-  hash & brotli_dictionary_encode_hash_mask
-}
-
-///|
 fn brotli_add_dictionary_encode_entry(
-  index : BrotliDictionaryEncodeIndex,
+  builder : BrotliDictionaryIndexBuilder,
   entry : Int,
   length : Int,
   word_index : Int,
   transform_index : Int,
 ) -> Int {
   brotli_add_dictionary_encode_entry_with_min_output(
-    index, entry, length, word_index, transform_index, @common.brotli_dictionary_min_word_length,
+    builder, entry, length, word_index, transform_index, @common.brotli_dictionary_min_word_length,
   )
 }
 
 ///|
 fn brotli_add_dictionary_encode_entry_with_min_output(
-  index : BrotliDictionaryEncodeIndex,
+  builder : BrotliDictionaryIndexBuilder,
   entry : Int,
   length : Int,
   word_index : Int,
@@ -377,26 +409,32 @@ fn brotli_add_dictionary_encode_entry_with_min_output(
   if !brotli_dictionary_transform_allowed(length, word_index, transform_index) {
     return entry
   }
-  let hash = brotli_dictionary_hash_word(length, word_index, transform_index)
-  index.lengths[entry] = length
-  index.output_lengths[entry] = output_length
-  index.word_indices[entry] = word_index
-  index.transforms[entry] = transform_index
-  index.next[entry] = index.table[hash]
-  index.table[hash] = entry
+  // Materialize the transformed output bytes once, feeding the entry hash
+  // and the shared verification pool in the same pass.
+  let offset = builder.pool.length()
+  let mut hash = brotli_dictionary_hash_update(17, output_length)
+  for i in 0..<output_length {
+    let value = brotli_dictionary_transform_output_byte(
+      length, word_index, transform_index, i,
+    )
+    hash = brotli_dictionary_hash_update(hash, value.to_int())
+    builder.pool.push(value)
+  }
+  let hash = hash & brotli_dictionary_encode_hash_mask
+  builder.lengths[entry] = length
+  builder.output_lengths[entry] = output_length
+  builder.word_indices[entry] = word_index
+  builder.transforms[entry] = transform_index
+  builder.output_offsets[entry] = offset
+  builder.next[entry] = builder.table[hash]
+  builder.table[hash] = entry
   entry + 1
 }
 
 ///|
 fn brotli_build_dictionary_encode_index() -> BrotliDictionaryEncodeIndex {
   let total = brotli_dictionary_encode_entry_capacity()
-  let table = FixedArray::make(brotli_dictionary_encode_hash_size, -1)
-  let next = FixedArray::make(total, -1)
-  let lengths = FixedArray::make(total, 0)
-  let output_lengths = FixedArray::make(total, 0)
-  let word_indices = FixedArray::make(total, 0)
-  let transforms = FixedArray::make(total, 0)
-  let index = { table, next, lengths, output_lengths, word_indices, transforms }
+  let builder = brotli_dictionary_index_builder_new(total)
   let mut entry = 0
   for
     length in @common.brotli_dictionary_min_word_length..<=@common.brotli_dictionary_max_word_length {
@@ -406,14 +444,14 @@ fn brotli_build_dictionary_encode_index() -> BrotliDictionaryEncodeIndex {
       for word_index in 0..<word_count {
         for transform_index in 0..<@common.brotli_transform_count() {
           entry = brotli_add_dictionary_encode_entry(
-            index, entry, length, word_index, transform_index,
+            builder, entry, length, word_index, transform_index,
           )
         }
       }
     }
   }
   ignore(entry)
-  index
+  brotli_dictionary_index_builder_finish(builder)
 }
 
 ///|
@@ -421,13 +459,7 @@ fn brotli_build_dictionary_encode_index_min_output(
   min_output_length : Int,
 ) -> BrotliDictionaryEncodeIndex {
   let total = brotli_dictionary_mixed_encode_entry_capacity()
-  let table = FixedArray::make(brotli_dictionary_encode_hash_size, -1)
-  let next = FixedArray::make(total, -1)
-  let lengths = FixedArray::make(total, 0)
-  let output_lengths = FixedArray::make(total, 0)
-  let word_indices = FixedArray::make(total, 0)
-  let transforms = FixedArray::make(total, 0)
-  let index = { table, next, lengths, output_lengths, word_indices, transforms }
+  let builder = brotli_dictionary_index_builder_new(total)
   let mut entry = 0
   for
     length in @common.brotli_dictionary_min_word_length..<=@common.brotli_dictionary_max_word_length {
@@ -437,7 +469,7 @@ fn brotli_build_dictionary_encode_index_min_output(
       for word_index in 0..<word_count {
         for i in 0..<brotli_dictionary_same_length_transforms.length() {
           entry = brotli_add_dictionary_encode_entry_with_min_output(
-            index,
+            builder,
             entry,
             length,
             word_index,
@@ -447,7 +479,7 @@ fn brotli_build_dictionary_encode_index_min_output(
         }
         for i in 0..<brotli_dictionary_mixed_extra_transforms.length() {
           entry = brotli_add_dictionary_encode_entry_with_min_output(
-            index,
+            builder,
             entry,
             length,
             word_index,
@@ -459,7 +491,48 @@ fn brotli_build_dictionary_encode_index_min_output(
     }
   }
   ignore(entry)
-  index
+  brotli_dictionary_index_builder_finish(builder)
+}
+
+///|
+/// Process-lifetime cache for the two dictionary encode indexes. Both are
+/// pure functions of the static Brotli dictionary tables, so a cached
+/// value is never stale; caching mirrors Google Brotli's compile-time
+/// static dictionary hash and removes the dominant per-call cost of the
+/// dictionary candidates (rebuilding ~200k transform entries).
+priv struct BrotliDictionaryIndexCache {
+  mut identity : BrotliDictionaryEncodeIndex?
+  mut mixed_min8 : BrotliDictionaryEncodeIndex?
+}
+
+///|
+let brotli_dictionary_index_cache : BrotliDictionaryIndexCache = {
+  identity: None,
+  mixed_min8: None,
+}
+
+///|
+fn brotli_identity_dictionary_encode_index() -> BrotliDictionaryEncodeIndex {
+  match brotli_dictionary_index_cache.identity {
+    Some(index) => index
+    None => {
+      let index = brotli_build_dictionary_encode_index()
+      brotli_dictionary_index_cache.identity = Some(index)
+      index
+    }
+  }
+}
+
+///|
+fn brotli_mixed_dictionary_encode_index_min8() -> BrotliDictionaryEncodeIndex {
+  match brotli_dictionary_index_cache.mixed_min8 {
+    Some(index) => index
+    None => {
+      let index = brotli_build_dictionary_encode_index_min_output(8)
+      brotli_dictionary_index_cache.mixed_min8 = Some(index)
+      index
+    }
+  }
 }
 
 ///|
@@ -501,19 +574,19 @@ fn brotli_mixed_dictionary_may_pay(data : FixedArray[Byte]) -> Bool {
 }
 
 ///|
-fn brotli_dictionary_word_matches(
+/// Compares input bytes at `position` against one index entry's
+/// materialized output bytes. Equivalent to re-deriving each byte through
+/// the transform machinery, but a flat pool compare.
+fn brotli_dictionary_entry_matches(
+  index : BrotliDictionaryEncodeIndex,
+  entry : Int,
   data : FixedArray[Byte],
   position : Int,
-  length : Int,
-  output_length : Int,
-  word_index : Int,
-  transform_index : Int,
 ) -> Bool {
+  let offset = index.output_offsets[entry]
+  let output_length = index.output_lengths[entry]
   for i in 0..<output_length {
-    let expected = brotli_dictionary_transform_output_byte(
-      length, word_index, transform_index, i,
-    )
-    if data[position + i] != expected {
+    if data[position + i] != index.output_pool[offset + i] {
       return false
     }
   }
@@ -560,14 +633,7 @@ fn brotli_find_identity_dictionary_match(
       while entry >= 0 {
         let length = index.lengths[entry]
         if index.output_lengths[entry] == output_length &&
-          brotli_dictionary_word_matches(
-            data,
-            position,
-            length,
-            output_length,
-            index.word_indices[entry],
-            index.transforms[entry],
-          ) {
+          brotli_dictionary_entry_matches(index, entry, data, position) {
           let max_distance = brotli_encoder_max_distance(
             global_position, window_bits,
           )
@@ -601,7 +667,7 @@ fn brotli_build_identity_dictionary_commands(
   if base_offset != 0 {
     return None
   }
-  let index = brotli_build_dictionary_encode_index()
+  let index = brotli_identity_dictionary_encode_index()
   let commands : Array[BrotliEncodeCommand] = []
   let mut literal_start = 0
   let mut position = 0
@@ -704,7 +770,7 @@ fn brotli_build_mixed_dictionary_lz77_commands_with_distance_cache(
   if !brotli_has_compressible_match_density(data, hash_config) {
     return None
   }
-  let index = brotli_build_dictionary_encode_index_min_output(8)
+  let index = brotli_mixed_dictionary_encode_index_min8()
   let commands : Array[BrotliEncodeCommand] = []
   let max_commands = brotli_effective_max_commands(hash_config, data.length())
   let previous = brotli_previous_match_positions(data, hash_config)

@@ -3224,7 +3224,7 @@ fn brotli_build_bounded_shortest_path_command_candidate(
   let len = data.length()
   let previous = brotli_previous_match_positions(data, config)
   let suffix_matches = brotli_bounded_suffix_tree_match_table(data, config)
-  let index = brotli_build_dictionary_encode_index_min_output(8)
+  let index = brotli_mixed_dictionary_encode_index_min8()
   let cost_model = brotli_bounded_shortest_path_cost_model(
     data, config, distance_cache,
   )

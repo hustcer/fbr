@@ -273,3 +273,34 @@ or durable findings now summarized in `findings.md`.
   import. Tree is byte-identical to commit 9007367. Recommend keeping the
   bounded-DP; a future Zopfli retry should validate iter-0 beats greedy on real
   64k BEFORE wiring iterations.
+
+## 2026-08-09 — encode performance session (feature/perf)
+
+- Goal: attack the largest encode gaps vs Google from the fresh 2026-08-09
+  release report (regenerated this morning at 7fb66e5): q4-q8 speed
+  (native 3.1x-4.7x / wasm-gc 4.1x-6.3x at 128 KiB), q2 64 KiB 2.57x,
+  q9 64 KiB 2.47x (slower than q10 in absolute time), q3 size +7.78%/+7.0%.
+- Read the current dispatch end-to-end and recorded the root-cause diagnosis
+  plus strategy queue S1-S9 in task_plan.md. Baseline for all comparisons:
+  HEAD 7fb66e5; per-strategy verification via `just encode-compare`
+  (interleaved same-time tree-vs-HEAD), full `just bench` only for accepted
+  work.
+- LANDED S6' (5be16c5): quality-scheduled greedy distance-cache probes
+  (q4-q6 -> 4 codes, q7-q8 -> 10, others unchanged), mirroring Google's
+  num_last_distances_to_check with identical probe order. encode-compare
+  q4-q8: aggregate time -10.6%, all 20 cells improved (q4-q6
+  -10.2..-15.1%, q7-q8 -5.0..-7.0%); size +0.04..+0.18% per row.
+  Added wbtest for the schedule.
+- LANDED S3 (30914d9): large (>=8192 B) inline q2 inputs now run only the
+  natural 3/4-byte candidates, with the literal-only writer pair demoted
+  to a fallback when every natural candidate fails; primary parse and
+  identity-dictionary candidates skipped (never won there; chunked q2
+  already omits them). q2 64k: native -11.3%, wasm-gc -13.4%, bytes
+  identical (25,087/46,290). Initial full-routing attempt (route q2>=8192
+  through chunked single-candidate path) was REJECTED: 64k q2 grew
+  25,087 -> 25,419 (+5.14% vs Google, over the 5% gate) because the
+  natural4 candidate earns 332 B there; recorded to avoid retrying.
+- S4 in flight: q9 inline 64k candidate dedup (variant C: hq3 + mixed
+  when may_pay else hq4; drops the always-run plain hq4 parse).
+  Variant probes: hq3-only 22,221 (+1.45% vs Google), hq3+hq4 22,117
+  (+0.97%), hq3+mixed 21,397 (byte-identical to baseline, keeps -2.31%).
