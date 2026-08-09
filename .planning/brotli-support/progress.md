@@ -336,3 +336,17 @@ or durable findings now summarized in `findings.md`.
   working set from ~5 B to ~9 B (data + previous + words), costing more
   in cache pressure than the wider compares save. Do not retry unless the
   design REPLACES an existing per-position array rather than adding one.
+- LANDED S1 (5dfd8eb): q4-q8 intermediate 3-byte/4-byte parses pre-ranked
+  by a deterministic integer h_tree bit estimate; only the winner gets an
+  exact writer pass. Sizes identical everywhere measured; encode-compare
+  q4-q8 aggregate -3.85% (double-candidate cells -3.5..-7.3% native).
+- LANDED S7 (e4ae2ac): q3-only natural min_match_length 10 -> 6.
+  silesia q3: 64k 25,789 -> 23,012 (+7.78% -> -3.83% vs Google), 128k
+  46,950 -> 41,956 (+7.0% -> -4.38%); time neutral; q2 untouched.
+- Full `just bench` checkpoint running to regenerate the release report
+  after the six landed optimizations.
+- Full `just bench` checkpoint complete; regenerated report committed as
+  7ae7a9c. Roundtrip fuzz q2-q8 (280/280) and conformance (21/21) pass.
+  Session summary: six landed optimizations, four rejected trials
+  (q2 rerouting, q9 variant C, primary-parse skip, word array), all
+  recorded in findings.md. Planning files updated; session closed.
