@@ -86,8 +86,8 @@ fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
     max_match_length: 16384,
     min_match_length: if quality == 0 {
       8
-    } else if quality == 1 {
-      10
+    } else if quality == 3 {
+      6
     } else {
       10
     },
