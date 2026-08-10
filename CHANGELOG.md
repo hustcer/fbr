@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.8.2
+
+### Performance
+
+- Removed the natural 3-byte LZ77 parse candidate and its writer pass from
+  q4-q8; q3 and below keep it. In the interleaved same-time comparison against
+  v0.8.1, aggregate q4-q8 encode time decreased by 20.6%: native 64 KiB and
+  128 KiB rows by 16.5%-25.5%, wasm-gc rows by 16.3%-23.6%. Encoded size was
+  unchanged on every measured row, including Silesia 2 MiB. Candidates are
+  selected by exact cost, so dropping one can only leave output unchanged or
+  larger; no measured input regressed.
+- Cached the identity and mixed static-dictionary encode indexes for the
+  process lifetime and materialized each entry's transformed output bytes into
+  a flat pool, replacing per-byte transform re-derivation during match
+  verification. In the same-time comparison, q10 encode time decreased by
+  16.4% (native) and 13.5% (wasm-gc) on 64 KiB and by 10.5% and 7.8% on
+  128 KiB; q9 64 KiB decreased by 10.8% and 11.9%; q11 rows decreased by 0.8%
+  to 5.2%. Encoded output is byte-identical. Once a dictionary candidate has
+  run, the caches retain about 2.4 MB (mixed) and 7.9 MB (identity) for the
+  process lifetime; nothing is retained before that.
+
+### Tests
+
+- Added white-box coverage verifying that the materialized dictionary output
+  pool matches the per-byte transform machinery it replaced, and that both
+  index caches return the same instance on repeat calls.
+
 ## v0.8.1
 
 ### Changed
