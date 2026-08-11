@@ -2304,3 +2304,14 @@ test "dictionary index pool matches transform machinery and caches" {
   let identity_again = brotli_identity_dictionary_encode_index()
   assert_true(physical_equal(identity, identity_again))
 }
+
+///|
+test "q3 natural profile searches shorter matches than q1/q2" {
+  // q3 accepts 6-byte natural matches (closer to Google H3's short-match
+  // reach); q1/q2 keep the 10-byte minimum that protects their fast
+  // low-quality profiles, and q0 keeps its dedicated 8-byte minimum.
+  assert_eq(brotli_natural_hash_config_for_quality(0).min_match_length, 8)
+  assert_eq(brotli_natural_hash_config_for_quality(1).min_match_length, 10)
+  assert_eq(brotli_natural_hash_config_for_quality(2).min_match_length, 10)
+  assert_eq(brotli_natural_hash_config_for_quality(3).min_match_length, 6)
+}
