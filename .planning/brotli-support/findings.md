@@ -271,3 +271,70 @@ code-shape-bound.
 - Manual Brotli temp-test harnesses must not run concurrently. Moon test
   discovery sees all `src/*_wbtest.mbt` files, so generated-test writes must be
   serialized.
+
+## 2026-08-09 encode performance session — durable facts
+
+Six accepted optimizations (commits 5be16c5, 91a67c6, 9c5b38d, 7a8c1b1,
+5dfd8eb, e4ae2ac; report regenerated in 7ae7a9c). Post-session native
+slowdowns vs Google: 64k q4-q8 = 1.06x-1.61x (was 1.93x-3.21x), 128k
+q4-q8 = 1.74x-2.3x (was 3.08x-4.7x), q2 64k 2.17x, q9 64k 1.88x,
+q10 0.35x, q11 1.77x-1.96x. q3 size: 64k -3.83% / 128k -4.38% vs Google
+(was +7.78%/+7.0%).
+
+Accepted-strategy facts worth keeping:
+
+- Distance-cache probe schedule (5be16c5): greedy configs now probe 4
+  cache codes at q4-q6, 10 at q7-q8, 16 elsewhere, mirroring Google's
+  num_last_distances_to_check; our code order already matches
+  PrepareDistanceCache, so truncation preserves semantics. Cost:
+  +0.04..+0.18% size on q4-q8 rows; the only remaining intentional size
+  drift.
+- Large inline q2 (>=8192) runs only natural 3/4-byte candidates with a
+  literal-only fallback when both fail (91a67c6). Full rerouting of q2
+  through the chunked single-candidate path was REJECTED: the natural4
+  candidate earns 332 B on silesia-64k (25,087 vs 25,419, +5.14% vs
+  Google, over the 5% gate).
+- Dictionary encode indexes (identity + mixed min_output=8) are pure
+  static data; they are now process-cached and every entry's transformed
+  output bytes are materialized into a flat pool at build time
+  (9c5b38d). Retained memory after first use: mixed ~2.4 MB, identity
+  ~7.9 MB. The q11 bounded DP shares the mixed cache. Match verification
+  is a flat pool compare; brotli_dictionary_hash_word was removed.
+- The natural 3-byte parse NEVER wins at q4-q8 (intermediate dominates);
+  it is skipped there (7a8c1b1). Verified byte-identical on
+  silesia-64k/128k/2m and periodic-allbytes.
+- q4-q8 intermediate 3-byte vs 4-byte candidates are pre-ranked by a
+  deterministic integer bit estimate (h_tree code lengths + extra bits,
+  brotli_estimate_command_stream_bits); only the winner is written
+  exactly (5dfd8eb). Estimator ranked identically to the exact writer on
+  every measured input; ties keep the 3-byte candidate.
+- q3 natural min_match_length is 6 (q0=8, q1/q2=10) (e4ae2ac). This
+  single knob moved q3 from the worst q2-q9 size cell to beating Google,
+  time-neutral, because earlier matches reduce probed positions.
+- q5 and q6 produce identical streams on the measured slices (their
+  intermediate configs converged: 16 checks, min 5, 4 cache codes).
+
+New rejected-trial cache entries (do not retry unchanged):
+
+- q2 full chunked rerouting (see above, +332 B on 64k).
+- q9 inline variant C (hq3 + mixed-only when may_pay): measured 0%
+  because the baseline match-arm already skips the plain hq4 parse when
+  mixed wins; silesia takes that arm. The real q9-64k cost split was
+  ~39% match search / ~30% dictionary machinery (fixed by 9c5b38d).
+- Skipping the primary bounded parse at q4-q8 >=8192: 0% (aggregate
+  -0.47%). The 90% match-density prescan already rejects the primary
+  candidate after a cheap step-256 sampled scan on these inputs.
+- Packed 4-byte word array for prefix compares + word-batched match
+  extension (greedy + DP matchers): byte-identical output but aggregate
+  -0.2% (wash); q3 -3..-4% was the only consistent win while q4-q8
+  regressed +0.9..+2.3% at 128k. The boundary-byte pre-check already
+  rejects most candidates with one byte compare, average extensions are
+  short, and a third per-position array (data + previous + words) costs
+  more in cache pressure than wide compares save. Only retry a design
+  that REPLACES an existing per-position array.
+
+Profiling note: macOS `sample` on a moon-built release binary works well
+for encode attribution (xctrace is unavailable without full Xcode); the
+throwaway FFI file-reading probe main must be deleted before running
+verify.nu or `just lint`, because its `extern "c"` block breaks the JS
+build that verify.nu depends on.
