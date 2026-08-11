@@ -315,3 +315,24 @@ or durable findings now summarized in `findings.md`.
   entry output bytes materialized into a flat pool at build so match
   verification is a flat compare (no per-byte transform re-derivation).
   q9/q10/q11 encoded SHAs verified byte-identical on 64k/128k.
+- LANDED V1 (7a8c1b1): skip the natural LZ77 parse at q4..q8 (intermediate
+  strictly dominates; sizes identical on silesia-64k/128k/2m + periodic).
+  encode-compare q4-q8 aggregate -20.6%, all 20 cells -16..-25%.
+- REJECTED V2 (2026-08-09): also skipping the primary bounded parse at
+  q4..q8 >=8192 measured 0% (aggregate -0.47%, cells +-noise). Root
+  cause: the 90% match-density prescan already rejects the primary
+  candidate on these inputs after a cheap step-256 sample scan, so the
+  truncated parse never runs. Do not retry; the primary candidate is
+  effectively free on large non-dense inputs.
+- REJECTED S5 (2026-08-09): packed 4-byte word array (FixedArray[UInt],
+  incremental build per parse) for prefix compares + word-batched match
+  extension in both greedy and DP matchers. Byte-identical output
+  (verified q0-q11 64k SHAs + 128k spot SHAs), but encode-compare across
+  the full q0-q11 matrix measured aggregate -0.2% (wash): q3 -3.2..-4.4%
+  was the only consistent win; q4-q8 regressed +0.9..+2.3% at 128k on
+  both targets. Root cause: the boundary-byte pre-check already rejects
+  most chain candidates with one byte compare, average extensions are
+  short, and the extra 4 B/byte words array raises the per-position
+  working set from ~5 B to ~9 B (data + previous + words), costing more
+  in cache pressure than the wider compares save. Do not retry unless the
+  design REPLACES an existing per-position array rather than adding one.

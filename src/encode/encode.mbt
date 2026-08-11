@@ -5998,6 +5998,114 @@ fn brotli_use_intermediate_lz77_candidate(_quality : Int) -> Bool {
 }
 
 ///|
+/// Deterministic single-tree bit-cost estimate for one LZ77 command
+/// stream: Huffman code lengths built from the stream's own literal,
+/// command, and distance histograms (integer `h_tree` lengths, no
+/// floating point) plus every command's extra bits. Used to rank
+/// same-source parse candidates so only the winner pays the exact
+/// meta-block writer pass; the ranking tie goes to the earlier
+/// candidate, matching the writer-order preference it replaces.
+fn brotli_estimate_command_stream_bits(
+  data : FixedArray[Byte],
+  commands : Array[BrotliEncodeCommand],
+) -> Int {
+  let literal_frequencies = FixedArray::make(
+    @common.brotli_num_literal_symbols, 0,
+  )
+  let command_frequencies = FixedArray::make(
+    @common.brotli_num_command_symbols, 0,
+  )
+  let distance_frequencies = FixedArray::make(
+    @common.brotli_distance_alphabet_size(0, 0, 24),
+    0,
+  )
+  let mut extra_bits = 0
+  for i in 0..<commands.length() {
+    let command = commands[i]
+    for j in 0..<command.insert_length {
+      literal_frequencies[data[command.insert_start + j].to_int()] += 1
+    }
+    command_frequencies[command.command.symbol] += 1
+    extra_bits += command.command.insert_extra_bits +
+      command.command.copy_extra_bits
+    if brotli_command_uses_distance_symbol(command) {
+      distance_frequencies[command.distance_prefix.symbol] += 1
+      extra_bits += command.distance_prefix.insert_extra_bits
+    }
+  }
+  let literal_bits = brotli_bounded_shortest_path_bits_from_frequencies(
+    literal_frequencies, 8,
+  )
+  let command_bits = brotli_bounded_shortest_path_bits_from_frequencies(
+    command_frequencies, 8,
+  )
+  let distance_bits = brotli_bounded_shortest_path_bits_from_frequencies(
+    distance_frequencies, 6,
+  )
+  let mut total = extra_bits
+  for symbol in 0..<literal_frequencies.length() {
+    if literal_frequencies[symbol] > 0 {
+      total += literal_frequencies[symbol] * literal_bits[symbol]
+    }
+  }
+  for symbol in 0..<command_frequencies.length() {
+    if command_frequencies[symbol] > 0 {
+      total += command_frequencies[symbol] * command_bits[symbol]
+    }
+  }
+  for symbol in 0..<distance_frequencies.length() {
+    if distance_frequencies[symbol] > 0 {
+      total += distance_frequencies[symbol] * distance_bits[symbol]
+    }
+  }
+  total
+}
+
+///|
+/// Keeps the command-candidate whose estimated bit cost is lower, so only
+/// one of two same-source parses reaches the exact writer. Ties keep
+/// `first`, mirroring the strict `<` replacement rule of the exact
+/// writer-order comparison this pre-selection replaces.
+fn brotli_pick_estimated_command_candidate(
+  data : FixedArray[Byte],
+  first : BrotliCommandCandidate?,
+  second : BrotliCommandCandidate?,
+) -> BrotliCommandCandidate? {
+  match (first, second) {
+    (Some(a), Some(b)) =>
+      if brotli_estimate_command_stream_bits(data, b.commands) <
+        brotli_estimate_command_stream_bits(data, a.commands) {
+        second
+      } else {
+        first
+      }
+    (Some(_), None) => first
+    (None, _) => second
+  }
+}
+
+///|
+/// Plain command-array form of `brotli_pick_estimated_command_candidate`
+/// for the inline (single meta-block) path.
+fn brotli_pick_estimated_commands(
+  data : FixedArray[Byte],
+  first : Array[BrotliEncodeCommand]?,
+  second : Array[BrotliEncodeCommand]?,
+) -> Array[BrotliEncodeCommand]? {
+  match (first, second) {
+    (Some(a), Some(b)) =>
+      if brotli_estimate_command_stream_bits(data, b) <
+        brotli_estimate_command_stream_bits(data, a) {
+        second
+      } else {
+        first
+      }
+    (Some(_), None) => first
+    (None, _) => second
+  }
+}
+
+///|
 fn brotli_use_intermediate_four_byte_candidate(
   quality : Int,
   data_length : Int,
@@ -6350,21 +6458,49 @@ fn brotli_try_compressed_chunk(
         initial_previous_byte_2,
       )
       if quality >= 4 && brotli_use_intermediate_lz77_candidate(quality) {
+        // Build both intermediate parses first, rank them with the
+        // deterministic bit-cost estimate, and give only the winner an
+        // exact writer pass.
         let intermediate_config = brotli_intermediate_hash_config_for_quality(
           quality,
         )
-        let best = brotli_try_compressed_command_candidate(
-          data,
-          match shared_previous3 {
+        let intermediate3 = match shared_previous3 {
+          Some(previous) =>
+            brotli_build_simple_lz77_command_candidate_with_previous(
+              data, intermediate_config, distance_cache, previous,
+            )
+          None =>
+            brotli_build_simple_lz77_command_candidate(
+              data, intermediate_config, distance_cache,
+            )
+        }
+        let intermediate4 = if brotli_use_intermediate_four_byte_candidate(
+            quality,
+            data.length(),
+          ) {
+          match shared_previous4 {
             Some(previous) =>
               brotli_build_simple_lz77_command_candidate_with_previous(
-                data, intermediate_config, distance_cache, previous,
+                data,
+                brotli_four_byte_hash_config(intermediate_config),
+                distance_cache,
+                previous,
               )
             None =>
               brotli_build_simple_lz77_command_candidate(
-                data, intermediate_config, distance_cache,
+                data,
+                brotli_four_byte_hash_config(intermediate_config),
+                distance_cache,
               )
-          },
+          }
+        } else {
+          None
+        }
+        brotli_try_compressed_command_candidate(
+          data,
+          brotli_pick_estimated_command_candidate(
+            data, intermediate3, intermediate4,
+          ),
           is_last,
           best,
           quality,
@@ -6372,34 +6508,6 @@ fn brotli_try_compressed_chunk(
           initial_previous_byte_1,
           initial_previous_byte_2,
         )
-        if brotli_use_intermediate_four_byte_candidate(quality, data.length()) {
-          brotli_try_compressed_command_candidate(
-            data,
-            match shared_previous4 {
-              Some(previous) =>
-                brotli_build_simple_lz77_command_candidate_with_previous(
-                  data,
-                  brotli_four_byte_hash_config(intermediate_config),
-                  distance_cache,
-                  previous,
-                )
-              None =>
-                brotli_build_simple_lz77_command_candidate(
-                  data,
-                  brotli_four_byte_hash_config(intermediate_config),
-                  distance_cache,
-                )
-            },
-            is_last,
-            best,
-            quality,
-            allow_contexts,
-            initial_previous_byte_1,
-            initial_previous_byte_2,
-          )
-        } else {
-          best
-        }
       } else {
         best
       }
@@ -6728,44 +6836,42 @@ fn brotli_encode_standard(
         )
         if opts.quality >= 4 &&
           brotli_use_intermediate_lz77_candidate(opts.quality) {
+          // Mirrors the chunked path: rank the two intermediate parses with
+          // the deterministic bit-cost estimate and write only the winner.
           let intermediate_config = brotli_intermediate_hash_config_for_quality(
             opts.quality,
           )
-          best = brotli_try_compressed_commands(
-            data,
-            match shared_previous3 {
+          let intermediate3 = match shared_previous3 {
+            Some(previous) =>
+              brotli_build_simple_lz77_commands_with_previous(
+                data, intermediate_config, previous,
+              )
+            None => brotli_build_simple_lz77_commands(data, intermediate_config)
+          }
+          let intermediate4 = if use_intermediate4 {
+            match shared_previous4 {
               Some(previous) =>
                 brotli_build_simple_lz77_commands_with_previous(
-                  data, intermediate_config, previous,
+                  data,
+                  brotli_four_byte_hash_config(intermediate_config),
+                  previous,
                 )
               None =>
-                brotli_build_simple_lz77_commands(data, intermediate_config)
-            },
+                brotli_build_simple_lz77_commands(
+                  data,
+                  brotli_four_byte_hash_config(intermediate_config),
+                )
+            }
+          } else {
+            None
+          }
+          best = brotli_try_compressed_commands(
+            data,
+            brotli_pick_estimated_commands(data, intermediate3, intermediate4),
             true,
             best,
             opts.quality,
           )
-          if use_intermediate4 {
-            best = brotli_try_compressed_commands(
-              data,
-              match shared_previous4 {
-                Some(previous) =>
-                  brotli_build_simple_lz77_commands_with_previous(
-                    data,
-                    brotli_four_byte_hash_config(intermediate_config),
-                    previous,
-                  )
-                None =>
-                  brotli_build_simple_lz77_commands(
-                    data,
-                    brotli_four_byte_hash_config(intermediate_config),
-                  )
-              },
-              true,
-              best,
-              opts.quality,
-            )
-          }
         }
       }
     }
