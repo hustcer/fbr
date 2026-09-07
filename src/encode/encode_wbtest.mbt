@@ -1843,7 +1843,11 @@ test "brotli_sync enforces max_input_size" {
   let input : FixedArray[Byte] = [1, 2]
   assert_brotli_error(
     () => {
-      brotli_sync(input, opts={ quality: 1, window_bits: 22, max_input_size: 1 })
+      brotli_sync(input, opts={
+        quality: 1,
+        window_bits: 22,
+        max_input_size: 1,
+      })
     },
     InvalidZipData,
   )

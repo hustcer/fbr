@@ -750,7 +750,7 @@ fn brotli_build_mixed_dictionary_lz77_command_candidate(
     brotli_build_mixed_dictionary_lz77_commands_with_distance_cache(
       data, hash_config, base_offset, window_bits, chunk_cache,
     ) {
-    Some(commands) => Some({ commands, distance_cache: chunk_cache })
+    Some(commands) => Some({ commands, distance_cache: chunk_cache, })
     None => None
   }
 }

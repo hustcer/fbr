@@ -7,7 +7,7 @@ pub(all) struct BrotliDistanceRing {
 
 ///|
 pub fn BrotliDistanceRing::new() -> BrotliDistanceRing {
-  { distances: [16, 15, 11, 4], index: 0, last_distance_context: 0 }
+  { distances: [16, 15, 11, 4], index: 0, last_distance_context: 0, }
 }
 
 ///|

@@ -16,7 +16,7 @@ pub(all) struct BrotliStream {
 pub fn BrotliStream::new(
   opts? : BrotliOptions = BrotliOptions::default(),
 ) -> BrotliStream {
-  { ondata: None, opts, chunks: [] }
+  { ondata: None, opts, chunks: [], }
 }
 
 ///|

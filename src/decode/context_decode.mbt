@@ -37,7 +37,7 @@ fn brotli_read_context_map(
   let num_trees = brotli_decode_var_len_uint8(reader) + 1
   let context_map = FixedArray::make(context_map_size, b'\x00')
   if num_trees <= 1 {
-    return { num_trees, map: context_map }
+    return { num_trees, map: context_map, }
   }
   let max_run_length_prefix = if reader.take_bits(1) == 1U {
     reader.take_bits(4).reinterpret_as_int() + 1
@@ -83,7 +83,7 @@ fn brotli_read_context_map(
   if reader.take_bits(1) != 0U {
     brotli_inverse_move_to_front(context_map)
   }
-  { num_trees, map: context_map }
+  { num_trees, map: context_map, }
 }
 
 ///|

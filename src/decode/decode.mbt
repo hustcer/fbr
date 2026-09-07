@@ -124,7 +124,7 @@ fn BrotliOutputBuilder::new(
 ) -> BrotliOutputBuilder {
   match opts.out {
     Some(out) =>
-      { buf: out, len: 0, fixed: true, max_output_size: opts.max_output_size }
+      { buf: out, len: 0, fixed: true, max_output_size: opts.max_output_size, }
     None => {
       let initial = brotli_initial_output_capacity(
         opts.max_output_size,
@@ -335,7 +335,7 @@ fn brotli_decode_metablock_header(
     )
   }
   let is_uncompressed = if is_last { false } else { reader.take_bits(1) == 1U }
-  { is_last, is_empty: false, is_metadata: false, is_uncompressed, length }
+  { is_last, is_empty: false, is_metadata: false, is_uncompressed, length, }
 }
 
 ///|

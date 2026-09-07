@@ -63,7 +63,7 @@ priv struct BrotliCompressedChunk {
 
 ///|
 fn BrotliBitWriter::new(capacity : Int) -> BrotliBitWriter {
-  { buf: FixedArray::make(capacity, b'\x00'), bit_pos: 0 }
+  { buf: FixedArray::make(capacity, b'\x00'), bit_pos: 0, }
 }
 
 ///|
@@ -908,7 +908,7 @@ fn brotli_collect_unique_literals(
       count += 1
     }
   }
-  Some({ symbols, count })
+  Some({ symbols, count, })
 }
 
 ///|
@@ -931,7 +931,7 @@ fn brotli_collect_unique_literals_range(
   if count == 0 {
     None
   } else {
-    Some({ symbols, count })
+    Some({ symbols, count, })
   }
 }
 
@@ -1047,7 +1047,7 @@ fn brotli_collect_command_literals_range(
   if count == 0 {
     None
   } else {
-    Some({ symbols, count })
+    Some({ symbols, count, })
   }
 }
 
@@ -1205,7 +1205,7 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context16(
     if counts[tree] == 0 {
       return None
     }
-    literal_sets.push({ symbols: symbols[tree], count: counts[tree] })
+    literal_sets.push({ symbols: symbols[tree], count: counts[tree], })
   }
   Some((literal_sets, frequencies))
 }
@@ -1249,7 +1249,7 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context8(
     if counts[tree] == 0 {
       return None
     }
-    literal_sets.push({ symbols: symbols[tree], count: counts[tree] })
+    literal_sets.push({ symbols: symbols[tree], count: counts[tree], })
   }
   Some((literal_sets, frequencies, literal_trees))
 }
@@ -1291,7 +1291,7 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context4(
     if counts[tree] == 0 {
       return None
     }
-    literal_sets.push({ symbols: symbols[tree], count: counts[tree] })
+    literal_sets.push({ symbols: symbols[tree], count: counts[tree], })
   }
   Some((literal_sets, frequencies))
 }
@@ -1333,7 +1333,7 @@ fn brotli_collect_command_literals_and_frequencies_by_utf8_context(
     if counts[tree] == 0 {
       return None
     }
-    literal_sets.push({ symbols: symbols[tree], count: counts[tree] })
+    literal_sets.push({ symbols: symbols[tree], count: counts[tree], })
   }
   Some((literal_sets, frequencies))
 }
@@ -2639,7 +2639,7 @@ fn brotli_build_simple_lz77_command_candidate(
     brotli_build_simple_lz77_commands_with_distance_cache(
       data, hash_config, chunk_cache,
     ) {
-    Some(commands) => Some({ commands, distance_cache: chunk_cache })
+    Some(commands) => Some({ commands, distance_cache: chunk_cache, })
     None => None
   }
 }
@@ -2664,7 +2664,7 @@ fn brotli_build_simple_lz77_command_candidate_with_previous(
     brotli_build_simple_lz77_commands_with_distance_cache_and_previous(
       data, hash_config, chunk_cache, previous,
     ) {
-    Some(commands) => Some({ commands, distance_cache: chunk_cache })
+    Some(commands) => Some({ commands, distance_cache: chunk_cache, })
     None => None
   }
 }
@@ -3495,7 +3495,7 @@ fn brotli_build_bounded_shortest_path_command_candidate(
   if copy_bytes * 100 < len * config.min_copy_ratio_percent {
     return None
   }
-  Some({ commands, distance_cache: candidate_cache })
+  Some({ commands, distance_cache: candidate_cache, })
 }
 
 ///|
@@ -5943,11 +5943,11 @@ fn brotli_try_compressed_command_candidate(
       match best {
         Some(best) =>
           if writer.bit_pos < best.writer.bit_pos {
-            Some({ writer, distance_cache: candidate.distance_cache })
+            Some({ writer, distance_cache: candidate.distance_cache, })
           } else {
             Some(best)
           }
-        None => Some({ writer, distance_cache: candidate.distance_cache })
+        None => Some({ writer, distance_cache: candidate.distance_cache, })
       }
     }
     None => best

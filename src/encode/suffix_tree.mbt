@@ -151,5 +151,5 @@ fn brotli_bounded_suffix_tree_match_table(
     )
   }
   offsets[len] = lengths.length()
-  { offsets, lengths, distances }
+  { offsets, lengths, distances, }
 }

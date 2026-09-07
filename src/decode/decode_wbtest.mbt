@@ -471,7 +471,7 @@ test "brotli_read_context_map decodes direct map values" {
 
 ///|
 test "brotli_context_map_tree_index rejects invalid mapped tree" {
-  let context_map = BrotliContextMap::{ num_trees: 1, map: [1, 0, 0, 0] }
+  let context_map = BrotliContextMap::{ num_trees: 1, map: [1, 0, 0, 0], }
   assert_fbr_error(
     () => {
       brotli_context_map_tree_index(
@@ -820,7 +820,7 @@ test "compressed body switches literal blocks" {
     distance_postfix_bits: 0,
     num_direct_distance_codes: 0,
     context_modes: [0, 0],
-    literal_context_map: { num_trees: 2, map: literal_map },
+    literal_context_map: { num_trees: 2, map: literal_map, },
     distance_context_map: {
       num_trees: 1,
       map: FixedArray::make(1 << brotli_distance_context_bits, b'\x00'),
@@ -893,7 +893,7 @@ test "compressed body selects literal tree by LSB context" {
     distance_postfix_bits: 0,
     num_direct_distance_codes: 0,
     context_modes: [0],
-    literal_context_map: { num_trees: 2, map: literal_map },
+    literal_context_map: { num_trees: 2, map: literal_map, },
     distance_context_map: {
       num_trees: 1,
       map: FixedArray::make(1 << brotli_distance_context_bits, b'\x00'),
@@ -1563,7 +1563,7 @@ test "dictionary transforms reject over-omit cases" {
 
 ///|
 test "context map indexing rejects negative and out-of-range contexts" {
-  let context_map = BrotliContextMap::{ num_trees: 2, map: [0, 1, 0, 1] }
+  let context_map = BrotliContextMap::{ num_trees: 2, map: [0, 1, 0, 1], }
   assert_fbr_error(
     () => brotli_context_map_tree_index(context_map, -1, 1, 0),
     BrotliInvalidContextMap,
@@ -1693,7 +1693,7 @@ test "compressed body general path tracks context across literals" {
     distance_postfix_bits: 0,
     num_direct_distance_codes: 0,
     context_modes: [0],
-    literal_context_map: { num_trees: 2, map: literal_map },
+    literal_context_map: { num_trees: 2, map: literal_map, },
     distance_context_map: {
       num_trees: 1,
       map: FixedArray::make(1 << brotli_distance_context_bits, b'\x00'),
