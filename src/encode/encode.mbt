@@ -3023,6 +3023,7 @@ fn brotli_bounded_shortest_path_config(
       config.max_match_length
     },
     min_match_length: config.min_match_length,
+    max_backward_distance: config.max_backward_distance,
     max_distance_cache_codes: config.max_distance_cache_codes,
     lazy_lookahead: 0,
     scan_step: 1,
@@ -6191,7 +6192,10 @@ fn brotli_try_compressed_chunk(
   // non-first chunks they come from the previous chunk, not from zero padding.
   let allow_contexts = true
   if quality == 0 {
-    let natural_config = brotli_natural_hash_config_for_quality(quality)
+    let natural_config = brotli_natural_hash_config_for_quality(
+      quality,
+      window_bits~,
+    )
     return brotli_try_compressed_command_candidate(
       data,
       brotli_build_simple_lz77_command_candidate(
@@ -6206,7 +6210,10 @@ fn brotli_try_compressed_chunk(
     )
   }
   if quality <= 2 && data.length() >= 8192 {
-    let natural_config = brotli_natural_hash_config_for_quality(quality)
+    let natural_config = brotli_natural_hash_config_for_quality(
+      quality,
+      window_bits~,
+    )
     return brotli_try_compressed_command_candidate(
       data,
       brotli_build_simple_lz77_command_candidate(
@@ -6281,7 +6288,10 @@ fn brotli_try_compressed_chunk(
   )
   if quality >= 2 && data.length() >= 8192 {
     if quality >= 9 {
-      let hq_config = brotli_high_quality_hash_config_for_quality(quality)
+      let hq_config = brotli_high_quality_hash_config_for_quality(
+        quality,
+        window_bits~,
+      )
       if quality >= 10 {
         let hq_config = brotli_four_byte_hash_config(hq_config)
         // q11 spends its larger speed budget on the bounded optimal-parse
@@ -6392,7 +6402,10 @@ fn brotli_try_compressed_chunk(
         best
       }
     } else {
-      let natural_config = brotli_natural_hash_config_for_quality(quality)
+      let natural_config = brotli_natural_hash_config_for_quality(
+        quality,
+        window_bits~,
+      )
       let use_natural4 = brotli_use_natural_four_byte_candidate(
         quality,
         data.length(),
@@ -6463,6 +6476,7 @@ fn brotli_try_compressed_chunk(
         // exact writer pass.
         let intermediate_config = brotli_intermediate_hash_config_for_quality(
           quality,
+          window_bits~,
         )
         let intermediate3 = match shared_previous3 {
           Some(previous) =>
@@ -6526,7 +6540,10 @@ fn brotli_encode_chunked_standard(
   let chunk_count = (data.length() + chunk_size - 1) / chunk_size
   let writer = BrotliBitWriter::new(data.length() + 8 + chunk_count * 16)
   brotli_encode_window_bits(writer, opts.window_bits)
-  let hash_config = brotli_hash_config_for_quality(opts.quality)
+  let hash_config = brotli_hash_config_for_quality(
+    opts.quality,
+    window_bits=opts.window_bits,
+  )
   let distance_cache : FixedArray[Int] = [4, 11, 15, 16]
   let mut offset = 0
   let mut wrote_last = false
@@ -6620,7 +6637,10 @@ fn brotli_encode_standard(
   if opts.quality <= 1 {
     return brotli_encode_chunked_standard(data, opts)
   }
-  let hash_config = brotli_hash_config_for_quality(opts.quality)
+  let hash_config = brotli_hash_config_for_quality(
+    opts.quality,
+    window_bits=opts.window_bits,
+  )
   if data.length() <= @common.brotli_max_metablock_bytes {
     let mut best : BrotliBitWriter? = None
     // Large q2 inputs keep only the natural 3-byte and 4-byte candidates.
@@ -6680,6 +6700,7 @@ fn brotli_encode_standard(
       if opts.quality >= 9 {
         let hq_config = brotli_high_quality_hash_config_for_quality(
           opts.quality,
+          window_bits=opts.window_bits,
         )
         if opts.quality >= 10 {
           let hq_config = brotli_four_byte_hash_config(hq_config)
@@ -6780,6 +6801,7 @@ fn brotli_encode_standard(
       } else {
         let natural_config = brotli_natural_hash_config_for_quality(
           opts.quality,
+          window_bits=opts.window_bits,
         )
         let use_natural4 = brotli_use_natural_four_byte_candidate(
           opts.quality,
@@ -6840,6 +6862,7 @@ fn brotli_encode_standard(
           // the deterministic bit-cost estimate and write only the winner.
           let intermediate_config = brotli_intermediate_hash_config_for_quality(
             opts.quality,
+            window_bits=opts.window_bits,
           )
           let intermediate3 = match shared_previous3 {
             Some(previous) =>

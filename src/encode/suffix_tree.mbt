@@ -92,17 +92,23 @@ fn brotli_bounded_suffix_tree_collect_matches(
       node,
       config.max_match_length,
     )
-    brotli_record_flat_hash_match(
-      lengths,
-      distances,
-      start,
-      match_length,
-      position - node,
-      config.min_match_length,
-    )
+    let distance = position - node
+    let in_window = distance > 0 && distance <= config.max_backward_distance
+    if in_window {
+      brotli_record_flat_hash_match(
+        lengths,
+        distances,
+        start,
+        match_length,
+        distance,
+        config.min_match_length,
+      )
+    }
     if compare < 0 {
       node = left_child[node]
-    } else if compare > 0 {
+    } else if compare > 0 || !in_window {
+      // Equal suffixes are inserted on the right. An expired node may still
+      // have a more recent, usable match below it.
       node = right_child[node]
     } else {
       return

@@ -5,6 +5,7 @@ priv struct BrotliHashConfig {
   hash_bytes : Int
   max_match_checks : Int
   max_match_length : Int
+  max_backward_distance : Int
   min_match_length : Int
   max_distance_cache_codes : Int
   lazy_lookahead : Int
@@ -40,13 +41,17 @@ fn brotli_greedy_distance_cache_codes_for_quality(
 }
 
 ///|
-fn brotli_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
+fn brotli_hash_config_for_quality(
+  quality : Int,
+  window_bits? : Int = 22,
+) -> BrotliHashConfig {
   {
     table_size: 32768,
     table_mask: 32767,
     hash_bytes: 3,
     max_match_checks: 4,
     max_match_length: 4096,
+    max_backward_distance: (1 << window_bits) - @common.brotli_window_gap,
     min_match_length: 4,
     max_distance_cache_codes: brotli_greedy_distance_cache_codes_for_quality(
       quality, @common.brotli_num_distance_short_codes,
@@ -64,7 +69,10 @@ fn brotli_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
 }
 
 ///|
-fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
+fn brotli_natural_hash_config_for_quality(
+  quality : Int,
+  window_bits? : Int = 22,
+) -> BrotliHashConfig {
   let max_distance_cache_codes = if quality <= 2 {
     0
   } else {
@@ -72,6 +80,14 @@ fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
       quality, @common.brotli_num_distance_short_codes,
     )
   }
+  let min_match_length = if quality == 0 {
+    8
+  } else if quality == 3 {
+    6
+  } else {
+    10
+  }
+  let max_input_length = if quality <= 9 { 2097152 } else { 1048576 }
   {
     table_size: 32768,
     table_mask: 32767,
@@ -84,13 +100,8 @@ fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
       8
     },
     max_match_length: 16384,
-    min_match_length: if quality == 0 {
-      8
-    } else if quality == 3 {
-      6
-    } else {
-      10
-    },
+    max_backward_distance: (1 << window_bits) - @common.brotli_window_gap,
+    min_match_length,
     max_distance_cache_codes,
     lazy_lookahead: if quality <= 2 {
       1
@@ -98,12 +109,14 @@ fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
       brotli_greedy_lazy_lookahead_for_quality(quality, 3)
     },
     scan_step: 1,
-    max_commands: 52000,
-    max_input_length: if quality <= 9 {
-      2097152
+    // Every copy consumes at least min_match_length bytes. Allow all q3
+    // copies in the largest block, plus a possible final literal command.
+    max_commands: if quality == 3 {
+      max_input_length / min_match_length + 1
     } else {
-      1048576
+      52000
     },
+    max_input_length,
     min_copy_ratio_percent: 12,
     require_dense_match_density: false,
     density_sample_step: 256,
@@ -115,6 +128,7 @@ fn brotli_natural_hash_config_for_quality(quality : Int) -> BrotliHashConfig {
 ///|
 fn brotli_high_quality_hash_config_for_quality(
   quality : Int,
+  window_bits? : Int = 22,
 ) -> BrotliHashConfig {
   // q10/q11: deeper search (256 checks, 131,072-entry table) to spend the
   // high-quality CPU budget on more candidate matches.
@@ -143,6 +157,7 @@ fn brotli_high_quality_hash_config_for_quality(
     hash_bytes: 3,
     max_match_checks,
     max_match_length: 16384,
+    max_backward_distance: (1 << window_bits) - @common.brotli_window_gap,
     min_match_length,
     max_distance_cache_codes: @common.brotli_num_distance_short_codes,
     lazy_lookahead,
@@ -164,6 +179,7 @@ fn brotli_high_quality_hash_config_for_quality(
 ///|
 fn brotli_intermediate_hash_config_for_quality(
   quality : Int,
+  window_bits? : Int = 22,
 ) -> BrotliHashConfig {
   let max_match_checks = if quality <= 4 {
     8
@@ -185,6 +201,7 @@ fn brotli_intermediate_hash_config_for_quality(
     hash_bytes: 3,
     max_match_checks,
     max_match_length: 16384,
+    max_backward_distance: (1 << window_bits) - @common.brotli_window_gap,
     min_match_length: if quality <= 4 {
       6
     } else {
@@ -213,6 +230,7 @@ fn brotli_four_byte_hash_config(config : BrotliHashConfig) -> BrotliHashConfig {
     hash_bytes: 4,
     max_match_checks: config.max_match_checks,
     max_match_length: config.max_match_length,
+    max_backward_distance: config.max_backward_distance,
     min_match_length: config.min_match_length,
     max_distance_cache_codes: config.max_distance_cache_codes,
     lazy_lookahead: config.lazy_lookahead,
@@ -249,10 +267,9 @@ fn brotli_effective_max_commands(
   config : BrotliHashConfig,
   data_length : Int,
 ) -> Int {
-  // q2..q8 keep their historical command budgets for <=1 MiB chunks. Larger
-  // P3 chunks scale the budget with input length so the candidate does not
-  // fall back to stored output just because two formerly separate chunks are
-  // costed together.
+  // Profiles with a per-MiB budget scale it for larger chunks, so combining
+  // two chunks does not discard a parse. q3 already budgets for all copies
+  // in its largest supported block and needs no further scaling.
   if config.max_input_length > 1048576 &&
     config.max_commands < 300000 &&
     data_length > 1048576 {
@@ -472,6 +489,7 @@ fn brotli_bounded_previous_hash_matches_flat(
     return
   }
   let max_match_length = config.max_match_length
+  let max_distance = Int::min(position, config.max_backward_distance)
   let b0 = data[position]
   let b1 = data[position + 1]
   let b2 = data[position + 2]
@@ -479,7 +497,7 @@ fn brotli_bounded_previous_hash_matches_flat(
   let max_cache_codes = config.max_distance_cache_codes
   for code in 0..<max_cache_codes {
     let distance = brotli_distance_cache_candidate(distance_cache, code)
-    if distance > 0 && distance <= position {
+    if distance > 0 && distance <= max_distance {
       let candidate = position - distance
       let match_ok = if hash_bytes >= 4 {
         data[candidate] == b0 &&
@@ -516,7 +534,8 @@ fn brotli_bounded_previous_hash_matches_flat(
     -1
   }
   let mut checked = 0
-  while candidate >= 0 && checked < max_match_checks {
+  let min_candidate = position - max_distance
+  while candidate >= min_candidate && checked < max_match_checks {
     let match_ok = if hash_bytes >= 4 {
       data[candidate] == b0 &&
       data[candidate + 1] == b1 &&
@@ -561,6 +580,7 @@ fn brotli_longest_previous_hash_match_with_cache(
     return (0, 0)
   }
   let max_match_length = config.max_match_length
+  let max_distance = Int::min(position, config.max_backward_distance)
   let b0 = data[position]
   let b1 = data[position + 1]
   let b2 = data[position + 2]
@@ -577,7 +597,7 @@ fn brotli_longest_previous_hash_match_with_cache(
   let max_cache_codes = config.max_distance_cache_codes
   for code in 0..<max_cache_codes {
     let distance = brotli_distance_cache_candidate(distance_cache, code)
-    if distance > 0 && distance <= position {
+    if distance > 0 && distance <= max_distance {
       let candidate = position - distance
       if data[candidate] == b0 &&
         data[candidate + 1] == b1 &&
@@ -605,7 +625,9 @@ fn brotli_longest_previous_hash_match_with_cache(
     -1
   }
   let mut checked = 0
-  while candidate >= 0 && checked < max_match_checks {
+  // Chain positions decrease, so all remaining candidates are also expired.
+  let min_candidate = position - max_distance
+  while candidate >= min_candidate && checked < max_match_checks {
     // Boundary-byte pre-check: a candidate can only beat the incumbent if its
     // common prefix with `position` is at least `best_length + 1` bytes, which
     // requires the byte at offset `best_length` to match. If it differs the
