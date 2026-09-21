@@ -10,6 +10,9 @@ pub(all) struct BrotliOptions {
 } derive(Debug)
 
 ///|
+pub extend BrotliOptions with Debug::{to_repr}
+
+///|
 /// Return the default Brotli compression options.
 pub fn BrotliOptions::default() -> BrotliOptions {
   {

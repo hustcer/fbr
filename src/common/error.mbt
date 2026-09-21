@@ -35,6 +35,15 @@ pub(all) enum FbrErrorCode {
 } derive(Eq, Debug)
 
 ///|
+pub extend FbrErrorCode with Eq::{equal, not_equal}
+
+///|
+pub extend FbrErrorCode with Debug::{to_repr}
+
+///|
+pub extend FbrErrorCode with Show::{output, to_string}
+
+///|
 /// Write the symbolic error-code name, such as `"BrotliInvalidHuffman"`.
 pub impl Show for FbrErrorCode with fn output(self, logger) {
   match self {

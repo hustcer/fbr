@@ -18,6 +18,7 @@ pub(all) struct BrotliOptions {
   max_input_size : Int
 } derive(@debug.Debug)
 pub fn BrotliOptions::default() -> Self
+pub fn BrotliOptions::to_repr(Self) -> @debug.Repr
 
 pub(all) struct BrotliStream {
   mut ondata : @common.FbrStreamHandler?

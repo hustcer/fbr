@@ -15,6 +15,9 @@ pub(all) struct UnbrotliOptions {
 } derive(Debug)
 
 ///|
+pub extend UnbrotliOptions with Debug::{to_repr}
+
+///|
 /// Return the default Brotli decompression options.
 pub fn UnbrotliOptions::default() -> UnbrotliOptions {
   {

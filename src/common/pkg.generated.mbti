@@ -217,6 +217,11 @@ pub(all) enum FbrErrorCode {
   BrotliReserved
   BrotliInvalidPadding
 } derive(Eq, @debug.Debug)
+pub fn FbrErrorCode::equal(Self, Self) -> Bool
+pub fn FbrErrorCode::not_equal(Self, Self) -> Bool
+pub fn FbrErrorCode::output(Self, &Logger) -> Unit
+pub fn FbrErrorCode::to_repr(Self) -> @debug.Repr
+pub fn FbrErrorCode::to_string(Self) -> String
 pub impl Show for FbrErrorCode
 
 pub(all) struct FbrStreamHandler((FixedArray[Byte], Bool) -> Unit)
